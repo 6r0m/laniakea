@@ -1,11 +1,11 @@
 # Milestone 2 - classes, functions and calls
 
-**Status:** NOT APPROVED. Starts only after M1 is accepted and the F1 gate is met.
+**Status:** NOT APPROVED. Milestone 1 is implemented; this starts only when the operator approves it and the F1 gate is met.
 **Scope:** module -> class -> function scopes with `inherits`, `overrides` and statically resolved `calls` edges, from clangd
 over a compile database built in the tool's own copy of the project.
-**Depends on:** [m1_build_graph.md](m1_build_graph.md) for decisions D1-D6, the workspace contract, the graph model and the
-invariants. They are not restated here.
-**Evidence appendix:** [evidence.md](evidence.md), sections 1, 3 and 5.
+**Depends on:** [the architecture](../docs/architecture/README.md) for the decisions, invariants, graph model and workspace.
+They are not restated here.
+**Evidence appendix:** [prior-art-audits.md](../docs/prior-art-audits.md), sections 1, 3 and 5.
 
 ## Contents
 
@@ -24,7 +24,7 @@ definition. The coverage of every fact must be honest.
 
 ## Authority register
 
-Inherits D1-D6, Q1-Q4 and A1-A5 from M1.
+The accepted decisions in [structure.md](../docs/architecture/structure.md) apply unchanged.
 
 - **A6 [ACTIVE]** The function layer is usable when a small known-good fixture, and a selected proof path in the private
   validation project, both have complete coverage, reported per module. Any broader threshold is a maintainer decision, made
@@ -34,7 +34,7 @@ Inherits D1-D6, Q1-Q4 and A1-A5 from M1.
 
 ## Verified evidence
 
-Measured on 2026-11-02 against the private validation project, at concurrency 8. Generic outcomes only (D6).
+Measured on 2026-11-02 against the private validation project, at concurrency 8. Generic outcomes only: no data from that project enters this repository.
 
 ### Verified facts
 
@@ -106,7 +106,7 @@ Measured on 2026-11-02 against the private validation project, at concurrency 8.
                                -> class and function scopes in the same run folder
 ```
 
-**Failure policy (D2).**
+**Failure policy (missing analysis never reads as absence).**
 - Ignore the indexer's exit code. Take TU status from `Failed to run action on <file>` and the `[n/N]` count.
 - Index clean TUs first and label their facts `resolved`.
 - Index each failed TU alone, label its facts `partial`, and badge the node.
@@ -114,7 +114,7 @@ Measured on 2026-11-02 against the private validation project, at concurrency 8.
   runtime call.
 - Always publish with coverage. Abort only on a tool hash mismatch, a TU count mismatch, or an unknown record type.
 
-**Quality measures (D2).** Four are reported separately, per module: index execution, diagnostics, symbol resolution, and
+**Quality measures.** Four are reported separately, per module: index execution, diagnostics, symbol resolution, and
 relationship correctness against known-good cases. No single percentage stands in for them.
 
 **Alternatives considered.**

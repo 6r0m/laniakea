@@ -1,0 +1,160 @@
+{
+ "export": {
+  "Configuration": "Development",
+  "Modules": {
+   "AssetTools": {
+    "Directory": "<engine>/Engine/Source/Developer/AssetTools",
+    "Name": "AssetTools",
+    "Rules": "<engine>/Engine/Source/Developer/AssetTools/AssetTools.Build.cs",
+    "Type": "CPlusPlus"
+   },
+   "Core": {
+    "Directory": "<engine>/Engine/Source/Runtime/Core",
+    "Name": "Core",
+    "Rules": "<engine>/Engine/Source/Runtime/Core/Core.Build.cs",
+    "Type": "CPlusPlus"
+   },
+   "CoreUObject": {
+    "Directory": "<engine>/Engine/Source/Runtime/CoreUObject",
+    "Name": "CoreUObject",
+    "Rules": "<engine>/Engine/Source/Runtime/CoreUObject/CoreUObject.Build.cs",
+    "Type": "CPlusPlus"
+   },
+   "EditorScriptingUtilities": {
+    "Directory": "<engine>/Engine/Plugins/Editor/EditorScriptingUtilities/Source/EditorScriptingUtilities",
+    "Name": "EditorScriptingUtilities",
+    "Rules": "<engine>/Engine/Plugins/Editor/EditorScriptingUtilities/Source/EditorScriptingUtilities/EditorScriptingUtilities.Build.cs",
+    "Type": "CPlusPlus"
+   },
+   "Engine": {
+    "Directory": "<engine>/Engine/Source/Runtime/Engine",
+    "Name": "Engine",
+    "Rules": "<engine>/Engine/Source/Runtime/Engine/Engine.Build.cs",
+    "Type": "CPlusPlus"
+   },
+   "SampleCore": {
+    "CircularlyReferencedModules": [],
+    "Directory": "<project>/Plugins/SampleCore/Source/SampleCore",
+    "DynamicallyLoadedModules": [],
+    "Name": "SampleCore",
+    "PCHUsage": "UseExplicitOrSharedPCHs",
+    "PrivateDependencyModules": [],
+    "PrivateIncludePathModules": [],
+    "PublicDependencyModules": [
+     "Core",
+     "CoreUObject",
+     "Engine"
+    ],
+    "PublicIncludePathModules": [
+     "Core",
+     "CoreUObject",
+     "Engine"
+    ],
+    "Rules": "<project>/Plugins/SampleCore/Source/SampleCore/SampleCore.Build.cs",
+    "Type": "CPlusPlus"
+   },
+   "SampleEditor": {
+    "CircularlyReferencedModules": [],
+    "Directory": "<project>/Plugins/SampleEditor/Source/SampleEditor",
+    "DynamicallyLoadedModules": [
+     "Settings"
+    ],
+    "Name": "SampleEditor",
+    "PCHUsage": "UseExplicitOrSharedPCHs",
+    "PrivateDependencyModules": [
+     "Engine",
+     "UnrealEd",
+     "EditorScriptingUtilities",
+     "SampleGameplay",
+     "SampleCore"
+    ],
+    "PrivateIncludePathModules": [
+     "AssetTools"
+    ],
+    "PublicDependencyModules": [
+     "Core",
+     "CoreUObject"
+    ],
+    "PublicIncludePathModules": [
+     "Core",
+     "CoreUObject"
+    ],
+    "Rules": "<project>/Plugins/SampleEditor/Source/SampleEditor/SampleEditor.Build.cs",
+    "Type": "CPlusPlus"
+   },
+   "SampleGameplay": {
+    "CircularlyReferencedModules": [],
+    "Directory": "<project>/Plugins/SampleGameplay/Source/SampleGameplay",
+    "DynamicallyLoadedModules": [],
+    "Name": "SampleGameplay",
+    "PCHUsage": "UseExplicitOrSharedPCHs",
+    "PrivateDependencyModules": [],
+    "PrivateIncludePathModules": [],
+    "PublicDependencyModules": [
+     "Core",
+     "CoreUObject",
+     "Engine",
+     "SampleCore"
+    ],
+    "PublicIncludePathModules": [
+     "Core",
+     "CoreUObject",
+     "Engine",
+     "SampleCore"
+    ],
+    "Rules": "<project>/Plugins/SampleGameplay/Source/SampleGameplay/SampleGameplay.Build.cs",
+    "Type": "CPlusPlus"
+   },
+   "SampleProject": {
+    "CircularlyReferencedModules": [],
+    "Directory": "<project>/Source/SampleProject",
+    "DynamicallyLoadedModules": [],
+    "Name": "SampleProject",
+    "PCHUsage": "UseExplicitOrSharedPCHs",
+    "PrivateDependencyModules": [
+     "SampleGameplay"
+    ],
+    "PrivateIncludePathModules": [],
+    "PublicDependencyModules": [
+     "Core",
+     "CoreUObject",
+     "Engine"
+    ],
+    "PublicIncludePathModules": [
+     "Core",
+     "CoreUObject",
+     "Engine"
+    ],
+    "Rules": "<project>/Source/SampleProject/SampleProject.Build.cs",
+    "Type": "CPlusPlus"
+   },
+   "Settings": {
+    "Directory": "<engine>/Engine/Source/Developer/Settings",
+    "Name": "Settings",
+    "Rules": "<engine>/Engine/Source/Developer/Settings/Settings.Build.cs",
+    "Type": "CPlusPlus"
+   },
+   "UnrealEd": {
+    "Directory": "<engine>/Engine/Source/Editor/UnrealEd",
+    "Name": "UnrealEd",
+    "Rules": "<engine>/Engine/Source/Editor/UnrealEd/UnrealEd.Build.cs",
+    "Type": "CPlusPlus"
+   }
+  },
+  "Name": "SampleProjectEditor",
+  "Platform": "Win64",
+  "ProjectFile": "<project>/SampleProject.uproject"
+ },
+ "targets": [
+  {
+   "default": false,
+   "name": "SampleProject",
+   "type": "Game"
+  },
+  {
+   "default": false,
+   "name": "SampleProjectEditor",
+   "type": "Editor"
+  }
+ ]
+}

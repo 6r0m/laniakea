@@ -1,14 +1,27 @@
 # Laniakea
 
-An interactive architecture explorer for Unreal Engine C++ projects. It is generated from source and build rules, and shows
-project -> plugins -> modules with typed dependency edges and jump to source. It runs from its own clone against a project you
-choose, and the project needs nothing installed or configured for it.
+Explore an Unreal Engine C++ project like a star map: its plugins, its modules and the dependencies between them,
+with jump to source. The graph is generated from the project's own build rules, never drawn by hand, and the project
+needs nothing installed or configured.
 
-| concern | owner |
+Needs Python 3.9 or later and an installed Unreal Engine 5. Clone the repository, then run:
+
+```text
+python laniakea.py up path/to/YourProject.uproject
+```
+
+The first run exports the project's Editor target with Unreal Build Tool, which takes seconds, then opens the viewer
+on `127.0.0.1`. Double-click a square node to open it. Everything Laniakea learns stays in its own ignored
+`workspace/` folder; the project is only read.
+
+| concern | where |
 |---|---|
-| rules for agents and contributors: privacy, workspace, Git identity | [AGENTS.md](AGENTS.md) |
-| planned work in flight | [todo/](todo/README.md) |
+| how it works | [docs](docs/README.md) |
+| rules for contributors and agents | [AGENTS.md](AGENTS.md) |
+| planned work | [todo](todo/README.md) |
 
-Status: design only. There is no code yet, so nothing here runs.
+Copyright (C) 2026 6r0m. Licensed under the GNU Affero General Public License, version 3 or later; see
+[LICENSE](LICENSE). Third-party code is listed in [THIRD_PARTY.md](THIRD_PARTY.md).
 
-Unreal Engine is a trademark of Epic Games. Laniakea is independent and is not affiliated with or endorsed by Epic Games.
+Unreal Engine is a trademark of Epic Games. Laniakea is independent and is not affiliated with or endorsed by Epic
+Games.

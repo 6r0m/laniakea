@@ -1,0 +1,21 @@
+{
+ "schema": "laniakea.graph/1",
+ "nodes": [
+  {"id": "app", "level": "project", "label": "app", "parent": null, "boundary": false, "status": "in-target"},
+  {"id": "app.core", "level": "package", "label": "core", "parent": "app", "boundary": false, "status": "in-target"},
+  {"id": "app.core.db", "level": "module", "label": "db", "parent": "app.core", "boundary": false, "status": "in-target",
+   "source": {"root": "project", "path": "app/core/db.py", "line": 1}},
+  {"id": "app.core.models", "level": "module", "label": "models", "parent": "app.core", "boundary": false, "status": "in-target"},
+  {"id": "app.web", "level": "package", "label": "web", "parent": "app", "boundary": false, "status": "in-target"},
+  {"id": "app.web.views", "level": "module", "label": "views", "parent": "app.web", "boundary": false, "status": "in-target"},
+  {"id": "stdlib", "level": "project", "label": "standard library", "parent": null, "boundary": true, "status": "in-target"},
+  {"id": "stdlib.sqlite3", "level": "module", "label": "sqlite3", "parent": "stdlib", "boundary": true, "status": "in-target"}
+ ],
+ "edges": [
+  {"id": "imports:app.core.db->stdlib.sqlite3", "type": "imports", "source": "app.core.db", "target": "stdlib.sqlite3", "status": "declared", "origin": "imports"},
+  {"id": "imports:app.core.models->app.core.db", "type": "imports", "source": "app.core.models", "target": "app.core.db", "status": "declared", "origin": "imports"},
+  {"id": "imports:app.web.views->app.core.models", "type": "imports", "source": "app.web.views", "target": "app.core.models", "status": "declared", "origin": "imports"},
+  {"id": "imports.rollup:app.core->stdlib", "type": "imports.rollup", "source": "app.core", "target": "stdlib", "status": "derived", "origin": "rollup"},
+  {"id": "imports.rollup:app.web->app.core", "type": "imports.rollup", "source": "app.web", "target": "app.core", "status": "derived", "origin": "rollup"}
+ ]
+}

@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "laniakea/graph.v1.schema.json",
+  "title": "Laniakea graph, schema v1",
+  "description": "graph.json of a run. $defs also own the shard and manifest shapes written beside it.",
+  "type": "object",
+  "required": ["schema", "nodes", "edges"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "laniakea.graph/1"},
+    "nodes": {"type": "array", "items": {"$ref": "#/$defs/node"}},
+    "edges": {"type": "array", "items": {"$ref": "#/$defs/edge"}}
+  },
+  "$defs": {
+    "node": {
+      "type": "object",
+      "required": ["id", "level", "label", "parent", "boundary", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string"},
+        "level": {"type": "string", "description": "One of the manifest's levels."},
+        "label": {"type": "string"},
+        "parent": {"type": ["string", "null"], "description": "Containment: the id of the enclosing node."},
+        "boundary": {"type": "boolean", "description": "Outside the analysed project; shown only where project nodes touch it."},
+        "status": {"enum": ["in-target", "not-in-target", "not-analysed"]},
+        "source": {"$ref": "#/$defs/location"},
+        "attrs": {"type": "object"}
+      }
+    },
+    "location": {
+      "type": "object",
+      "required": ["root", "path"],
+      "additionalProperties": false,
+      "properties": {
+        "root": {"type": "string", "description": "A root name; its absolute path lives only in the workspace."},
+        "path": {"type": "string", "description": "Relative to the root, with forward slashes."},
+        "line": {"type": "integer"}
+      }
+    },
+    "edge": {
+      "type": "object",
+      "required": ["id", "type", "source", "target", "status", "origin"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string"},
+        "type": {"type": "string", "description": "One of the manifest's edge types."},
+        "source": {"type": "string"},
+        "target": {"type": "string"},
+        "status": {"enum": ["declared", "derived", "resolved", "partial"]},
+        "origin": {"type": "string", "description": "The id of the manifest source that produced the edge."},
+        "attrs": {"type": "object"}
+      }
+    },
+    "shard": {
+      "type": "object",
+      "required": ["schema", "scope", "title", "parents", "members", "nodes", "edges", "drill"],
+      "additionalProperties": false,
+      "properties": {
+        "schema": {"const": "laniakea.shard/1"},
+        "scope": {"type": "string", "description": "The id of the node this scope opens."},
+        "title": {"type": "string"},
+        "parents": {"type": "array", "items": {"$ref": "#/$defs/crumb"}},
+        "members": {"type": "array", "items": {"type": "string"}},
+        "nodes": {"type": "array", "items": {"$ref": "#/$defs/node"}},
+        "edges": {"type": "array", "items": {"$ref": "#/$defs/edge"}},
+        "drill": {"type": "object", "additionalProperties": {"type": "string"}, "description": "Node id to shard file."}
+      }
+    },
+    "crumb": {
+      "type": "object",
+      "required": ["title", "file"],
+      "additionalProperties": false,
+      "properties": {"title": {"type": "string"}, "file": {"type": "string"}}
+    },
+    "manifest": {
+      "type": "object",
+      "required": ["schema", "run", "created_utc", "tool", "profile", "project", "levels", "edge_types", "target",
+                   "sources", "inputs", "coverage", "entry"],
+      "additionalProperties": false,
+      "properties": {
+        "schema": {"const": "laniakea.manifest/1"},
+        "run": {"type": "string"},
+        "created_utc": {"type": "string"},
+        "tool": {"$ref": "#/$defs/tool"},
+        "profile": {"type": "string"},
+        "project": {"type": "string"},
+        "levels": {"type": "array", "items": {"type": "string"}},
+        "edge_types": {"type": "array", "items": {"$ref": "#/$defs/edgeType"}},
+        "target": {"type": "object"},
+        "sources": {"type": "array", "items": {"$ref": "#/$defs/tool"}},
+        "inputs": {"type": "object", "additionalProperties": {"type": "string"}, "description": "Build input path to sha256."},
+        "coverage": {"$ref": "#/$defs/coverage"},
+        "entry": {"type": "string", "description": "The shard file the viewer opens first."}
+      }
+    },
+    "tool": {
+      "type": "object",
+      "required": ["id", "name", "version"],
+      "additionalProperties": false,
+      "properties": {"id": {"type": "string"}, "name": {"type": "string"}, "version": {"type": "string"}}
+    },
+    "edgeType": {
+      "type": "object",
+      "required": ["id", "label", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string"},
+        "label": {"type": "string"},
+        "status": {"enum": ["declared", "derived", "resolved", "partial"]}
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "required": ["analysed", "not_analysed", "counts"],
+      "additionalProperties": false,
+      "properties": {
+        "analysed": {"type": "array", "items": {"type": "string"}},
+        "not_analysed": {"type": "array", "items": {"type": "string"}},
+        "counts": {"type": "object", "additionalProperties": {"type": "integer"}}
+      }
+    }
+  }
+}

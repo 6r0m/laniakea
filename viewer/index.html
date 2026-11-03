@@ -1,0 +1,36 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Laniakea</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header>
+    <h1>Laniakea</h1>
+    <label>Project <select id="target"></select></label>
+    <nav id="crumbs" aria-label="Scope"></nav>
+    <label>Layout
+      <select id="layout">
+        <option value="auto">auto</option>
+        <option value="breadthfirst">hierarchy</option>
+        <option value="concentric">rings</option>
+        <option value="grid">grid</option>
+        <option value="cose">force</option>
+      </select>
+    </label>
+  </header>
+  <div id="banner" role="status" hidden></div>
+  <main>
+    <aside id="filters" aria-label="Filters"></aside>
+    <div id="graph" aria-label="Dependency graph; double-click a square node to open it"></div>
+    <aside id="details" aria-live="polite"></aside>
+  </main>
+  <footer id="coverage"></footer>
+  <script src="vendor/cytoscape.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

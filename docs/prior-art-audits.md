@@ -1,11 +1,10 @@
-# Laniakea - evidence appendix
+# Prior-art audits
 
-Prior-art and engine audits behind [m1_build_graph.md](m1_build_graph.md) and [m2_function_layer.md](m2_function_layer.md).
-
-These are the final reports of independent audits run on 2026-11-02. Sections 1-4 are verbatim apart from ASCII normalization
-and labels for source-build-only files. Section 5 is condensed, with details of the private validation project removed (D6).
-A report is a claim set: its own VERIFIED/UNVERIFIED tags apply, and a plan's `## Verified evidence` wins wherever they differ.
-The architecture review is not reproduced; its accepted points are in the plans.
+A record, not current truth: the final reports of independent audits run on 2026-11-02, which the comparison in
+[prior-art.md](prior-art.md) summarises. Sections 1-4 are verbatim apart from ASCII normalization and labels for
+source-build-only files. Section 5 is condensed, with details of a private validation project removed. A report is a
+claim set: its own VERIFIED/UNVERIFIED tags apply, and where it disagrees with [the architecture](architecture/README.md),
+the architecture describes the system. The architecture review that followed is not reproduced.
 
 Later measurement overrides these points:
 
@@ -13,7 +12,7 @@ Later measurement overrides these points:
 - Section 3 says `UnrealAssetStringify` was not found. The binary ships in `Engine/Binaries/Win64`.
 - Section 5 infers that UHT `-Json` fails. Measured: rc=6, object cycle.
 
-Later decisions supersede these recommendations, and each plan's `## Decision` is authoritative:
+Later decisions supersede these recommendations:
 
 - Section 1 ranks the Sourcetrail fork as the first viewer to test. It is now only an optional experiment; the fallback is
   prerendered Graphviz SVG per scope.

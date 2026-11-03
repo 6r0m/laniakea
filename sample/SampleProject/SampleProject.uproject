@@ -1,0 +1,27 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "5.8",
+	"Category": "",
+	"Description": "Synthetic project for Laniakea tests. It contains no engine code.",
+	"Modules": [
+		{
+			"Name": "SampleProject",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "SampleCore",
+			"Enabled": true
+		},
+		{
+			"Name": "SampleGameplay",
+			"Enabled": true
+		},
+		{
+			"Name": "SampleEditor",
+			"Enabled": true
+		}
+	]
+}

@@ -4,6 +4,4 @@ Planned work in flight. Each plan is one change; it is deleted once its durable 
 
 | change | file |
 |---|---|
-| milestone 1: project, plugin and module graph, viewer, privacy gates | [m1_build_graph.md](m1_build_graph.md) |
 | milestone 2: classes, functions and calls; not approved | [m2_function_layer.md](m2_function_layer.md) |
-| prior-art and engine audits both plans rely on | [evidence.md](evidence.md) |

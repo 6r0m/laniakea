@@ -1,0 +1,15 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "Sample Core",
+	"Description": "Base types for the sample.",
+	"Category": "Sample",
+	"Modules": [
+		{
+			"Name": "SampleCore",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}

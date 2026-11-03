@@ -1,0 +1,2 @@
+# LF everywhere: the pre-push hook is a shell script, and a CRLF checkout would break it.
+* text=auto eol=lf

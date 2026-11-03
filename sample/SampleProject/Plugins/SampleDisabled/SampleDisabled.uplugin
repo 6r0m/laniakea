@@ -1,0 +1,16 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "Sample Disabled",
+	"Description": "Off by default and not enabled by the project, so no target includes it.",
+	"Category": "Sample",
+	"EnabledByDefault": false,
+	"Modules": [
+		{
+			"Name": "SampleDisabled",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}
