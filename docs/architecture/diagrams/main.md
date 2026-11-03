@@ -13,7 +13,7 @@ flowchart LR
         Server["loopback server"] -->|"reads latest runs"| Workspace
         Viewer["viewer page"] -->|"HTTP on 127.0.0.1"| Server
     end
-    Profile -->|"reads .uproject, .uplugin, build inputs"| Project[("analysed project, read-only")]
+    Profile -->|"reads .uproject, .uplugin, build inputs"| Project[("analysed project")]
     Profile -->|"-Mode=QueryTargets, -Mode=JsonExport"| UBT[("engine: Unreal Build Tool")]
     UBT -->|"evaluates rules; refreshes its own caches"| Project
     Viewer -->|"vscode://file links"| Editor[("code editor")]

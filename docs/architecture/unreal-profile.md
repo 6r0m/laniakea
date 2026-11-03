@@ -16,15 +16,14 @@ How `laniakea/unreal/` reads a project, and the engine behaviour it is built aro
 ## Finding the engine
 
 1. `--engine <root>`, which is stored in the target.
-2. Otherwise `EngineAssociation`, resolved the way `Engine/Source/Developer/DesktopPlatform/Private/` does:
-   - launcher engines from `UnrealEngineLauncher/LauncherInstalled.dat` in the application settings folder;
-   - source builds from the `SOFTWARE\Epic Games\Unreal Engine\Builds` registry key on Windows, or `[Installations]` in
-     `UnrealEngine/Install.ini` elsewhere.
+2. Otherwise `EngineAssociation`, resolved the way `Engine/Source/Developer/DesktopPlatform/Private/Windows/` does:
+   - launcher engines from `%PROGRAMDATA%\Epic\UnrealEngineLauncher\LauncherInstalled.dat`;
+   - source builds from the `SOFTWARE\Epic Games\Unreal Engine\Builds` registry key.
 3. An empty association means the project sits inside an engine tree, which is searched upward.
 
 UBT needs the engine's bundled .NET; a system `dotnet` fails. The profile runs
-`Engine/Binaries/ThirdParty/DotNet/<version>/<host>-<arch>/dotnet` with the environment the engine's `GetDotnetPath`
-scripts set, choosing the newest bundled version. It calls `dotnet` directly rather than through `RunDotnet.bat`,
+`Engine/Binaries/ThirdParty/DotNet/<version>/win-<arch>/dotnet.exe` with the environment the engine's
+`GetDotnetPath.bat` sets, choosing the newest bundled version. It calls `dotnet` directly rather than through `RunDotnet.bat`,
 which would re-parse every argument through `cmd.exe`.
 
 ## Running UBT

@@ -20,7 +20,7 @@ nothing installed, configured or committed for it.
   edits, infers or overrides them.
 - The engine and its tools. Their behaviour that matters here is recorded in [unreal-profile.md](unreal-profile.md).
 - Publishing safety of the analysed project. Its own repository owns that; Laniakea only guarantees it writes nothing
-  there.
+  there itself. Unreal Build Tool's own cache refreshes are listed in [unreal-profile.md](unreal-profile.md).
 
 ## Composition
 
@@ -35,7 +35,6 @@ nothing installed, configured or committed for it.
 - **Schema** (`schema/graph.v1.schema.json`, validated by `laniakea/schema.py`): the shapes of graph, shard and
   manifest.
 - **Server** (`laniakea/server.py`) and **viewer** (`viewer/`, Cytoscape.js): read-only presentation.
-- **Privacy guard** (`.githooks/pre-push`): see [publishing.md](../publishing.md).
 - **Sample, fixtures, tests** (`sample/`, `fixtures/`, `tests/`): a synthetic project with no engine code, its recorded
   UBT export, a hand-written non-Unreal graph, and the test suite.
 
@@ -82,8 +81,10 @@ and nothing is written.
 12. Core, shards, schema and viewer contain no language-specific logic.
 
 **Decision:** the analysed project is a black box, and all project data lives in the clone's ignored `workspace/`.
-**Why:** full decoupling in both directions; one visible folder is simple to inspect and delete. Ignore rules alone
-are not trusted for privacy, so pushes pass the guard in [publishing.md](../publishing.md).
+**Why:** full decoupling in both directions; one visible folder is simple to inspect and delete.
+
+**Decision:** Windows only.
+**Why:** the maintainer's target platform; Linux and Mac are not targets, so no code path serves them.
 
 **Decision:** Python standard library only, and Cytoscape.js vendored, not fetched.
 **Why:** a machine with Unreal installed already has Python, and the viewer must work offline (invariant 10).
@@ -96,6 +97,7 @@ are not trusted for privacy, so pushes pass the guard in [publishing.md](../publ
 - Language profiles, `unreal` only - see [Relationships](#relationships)
 - Reuse UBT's module graph; no parser, renderer or database - see [Relationships](#relationships)
 - Black box analysed project; all data in `workspace/` - see [Invariants](#invariants)
+- Windows only - see [Invariants](#invariants)
 - Standard library only; vendored viewer library - see [Invariants](#invariants)
 - AGPL-3.0-or-later - see [Invariants](#invariants)
 
@@ -107,6 +109,4 @@ are not trusted for privacy, so pushes pass the guard in [publishing.md](../publ
   declared `requires` edges, and both are shown rather than reconciled.
 - **Large flat scopes.** A project scope of a few hundred nodes lays out in under a second with the force layout; a
   scope of 2,000 nodes takes over a second. Larger scopes would need precomputed positions.
-- **Linux and Mac are unverified.** The engine and .NET lookups follow the engine's own rules there, but nothing has
-  been run on them.
 - **No classes or functions yet.** Their extraction is planned separately and has an unresolved parse-quality gate.

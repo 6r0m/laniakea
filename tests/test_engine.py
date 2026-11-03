@@ -2,7 +2,6 @@
 """Finding the engine: --engine, EngineAssociation through launcher and source-build registrations, the tree."""
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -39,12 +38,8 @@ class EngineResolution(unittest.TestCase):
         self.assertEqual(installs, {"5.8": self.engine})
         self.assertEqual(engine.resolve(self.project("5.8"), launcher=installs, sources={}), self.engine)
 
-    def test_source_build_ini_resolves_an_identifier(self):
-        ini = self.base / "Epic" / "UnrealEngine" / "Install.ini"
-        ini.parent.mkdir(parents=True)
-        ini.write_text(f"[Installations]\n{{ABC-123}}={self.engine}\n", encoding="utf-8")
-        builds = engine.source_builds(self.base / "Epic")
-        self.assertEqual(builds, {"{ABC-123}": self.engine})
+    def test_source_build_resolves_an_identifier(self):
+        builds = {"{ABC-123}": self.engine}
         self.assertEqual(engine.resolve(self.project("{ABC-123}"), launcher={}, sources=builds), self.engine)
 
     def test_unknown_association_asks_for_engine(self):
@@ -61,10 +56,8 @@ class EngineResolution(unittest.TestCase):
         self.assertEqual(engine.resolve(inside, launcher={}, sources={}), self.engine)
 
     def test_bundled_dotnet_prefers_the_newest_version(self):
-        host = {"win32": "win", "darwin": "osx"}.get(sys.platform, "linux")
-        executable = "dotnet.exe" if host == "win" else "dotnet"
         for version in ("8.0", "10.0"):
-            path = self.engine / "Engine/Binaries/ThirdParty/DotNet" / version / f"{host}-x64" / executable
+            path = self.engine / "Engine/Binaries/ThirdParty/DotNet" / version / "win-x64" / "dotnet.exe"
             path.parent.mkdir(parents=True)
             path.write_text("")
         with mock.patch("platform.machine", return_value="AMD64"):

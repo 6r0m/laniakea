@@ -65,7 +65,7 @@ def extract(target, run_dir):
     inputs_before = inputs(target)
     targets = ubt.query_targets(root, project, out)
     chosen = _choose(targets, target.get("target"))
-    platform = engine.host_platform()
+    platform = engine.PLATFORM
     exported = ubt.export(root, project, chosen["name"], platform, CONFIGURATION, out)
     built, counts = graph.build(project, root, exported)
     engine_version = engine.version(root)

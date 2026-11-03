@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""The two read-only Unreal Build Tool modes the profile runs. All output goes to the run folder."""
+"""The two Unreal Build Tool modes the profile runs. Neither builds; both may refresh UBT's own caches in the project.
+Every output and log goes to the run folder."""
 
 import json
 import subprocess

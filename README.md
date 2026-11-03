@@ -4,7 +4,7 @@ Explore an Unreal Engine C++ project like a star map: its plugins, its modules a
 with jump to source. The graph is generated from the project's own build rules, never drawn by hand, and the project
 needs nothing installed or configured.
 
-Needs Python 3.9 or later and an installed Unreal Engine 5. Clone the repository, then run:
+Needs Windows, Python 3.9 or later, and an installed Unreal Engine 5. Clone the repository, then run:
 
 ```text
 python laniakea.py up path/to/YourProject.uproject
@@ -12,7 +12,8 @@ python laniakea.py up path/to/YourProject.uproject
 
 The first run exports the project's Editor target with Unreal Build Tool, which takes seconds, then opens the viewer
 on `127.0.0.1`. Double-click a square node to open it. Everything Laniakea learns stays in its own ignored
-`workspace/` folder; the project is only read.
+`workspace/` folder. Laniakea writes nothing into the project; Unreal Build Tool may refresh its own build caches there,
+as any build does.
 
 | concern | where |
 |---|---|

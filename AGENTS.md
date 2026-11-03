@@ -1,7 +1,8 @@
 # AGENTS.md - Laniakea
 
 Laniakea reads an Unreal C++ project and renders its structure as a regenerable graph. It treats every analysed project as a
-black box: the project is read, never changed, and everything learned about it stays in this clone's ignored `workspace/`.
+black box: Laniakea writes nothing into the project (Unreal Build Tool may refresh its own caches there), and everything
+learned about it stays in this clone's ignored `workspace/`.
 Architecture: [docs/architecture/README.md](docs/architecture/README.md).
 
 ## Privacy (never violate)
@@ -12,14 +13,14 @@ This repository is public. An analysed project may be private, and its owner may
   identifying counts. Examples, fixtures and screenshots come from the synthetic `sample/` only.
 - Project data lives only under `workspace/`. Never stage, force-add or copy anything from it, and never weaken the ignore
   rule. Keep browser snapshots and screenshots of a real project outside this clone.
-- Ignore rules do not guarantee privacy. Every push passes the hook and the leak gate in
-  [docs/publishing.md](docs/publishing.md).
+- Ignore rules do not guarantee privacy: review every staged path and line before a commit.
 - Commits use the identity already set in this clone's local Git config. Never change `user.name`, `user.email` or remotes,
   and never copy identity from another clone.
 - No network at runtime: no CDN, web fonts, analytics or update checks. The server binds `127.0.0.1` only.
 
 ## Working rules
 
+- Windows only; Linux and Mac are not targets.
 - Python 3.9+ standard library only, so a machine with Unreal installed needs nothing extra.
 - Core, shards, schema and viewer stay language-neutral. Unreal-specific logic lives in `laniakea/unreal/`.
 - The tool writes nothing into an analysed project. The only changes allowed there are Unreal Build Tool's own caches, listed
@@ -39,5 +40,4 @@ python -m unittest discover -s tests     whole suite; engine tests run when the 
 python tests/record_fixture.py           re-record fixtures/sample.ubt.json after changing the sample
 ```
 
-Set `LANIAKEA_TEST_ENGINE=<engine root>` to run the engine tests against a specific engine. The hook setup is in
-[docs/publishing.md](docs/publishing.md).
+Set `LANIAKEA_TEST_ENGINE=<engine root>` to run the engine tests against a specific engine.
