@@ -1,0 +1,6 @@
+# Everything the tool learns about an analysed project lives here, never in tracked files.
+/workspace/
+__pycache__/
+
+# Temp
+tmp/
