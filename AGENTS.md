@@ -33,9 +33,10 @@ This repository is public. An analysed project may be private, and its owner may
 ## Commands
 
 ```text
-python laniakea.py up <project>          extract, then serve; <project> is a .uproject, its folder, or a target id
+python laniakea.py up [<project>]        extract, then serve; a .uproject, its folder, a target id, or the newest
+make up [PROJECT=<project>]              the same through make
 python laniakea.py extract <project>     [--engine <root>] [--name <id>] [--target <name>]
-python laniakea.py serve                 [--port <n>] [--no-browser]
+python laniakea.py serve                 [--port <n>, default 8737] [--no-browser]
 python -m unittest discover -s tests     whole suite; engine tests run when the sample's engine resolves
 python tests/record_fixture.py           re-record fixtures/sample.ubt.json after changing the sample
 ```

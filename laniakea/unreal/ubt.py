@@ -21,8 +21,10 @@ def _run(engine_root, args, out_dir, name):
     log = Path(out_dir) / f"{name}.ubt.log"
     with open(Path(out_dir) / f"{name}.ubt.stdout.txt", "wb") as stdout:
         try:
+            # No console window: output goes to the run folder, and a window would flash when started from a GUI.
             result = subprocess.run(command + args + [f"-Log={log}"], env=env, stdout=stdout,
-                                    stderr=subprocess.STDOUT, timeout=TIMEOUT_SECONDS)
+                                    stderr=subprocess.STDOUT, timeout=TIMEOUT_SECONDS,
+                                    creationflags=subprocess.CREATE_NO_WINDOW)
         except subprocess.TimeoutExpired as error:
             raise LaniakeaError(f"UnrealBuildTool {name} did not finish within {TIMEOUT_SECONDS} s; see {log}") from error
     if result.returncode == CONFLICTING_INSTANCE:

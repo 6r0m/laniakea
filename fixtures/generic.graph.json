@@ -14,8 +14,6 @@
  "edges": [
   {"id": "imports:app.core.db->stdlib.sqlite3", "type": "imports", "source": "app.core.db", "target": "stdlib.sqlite3", "status": "declared", "origin": "imports"},
   {"id": "imports:app.core.models->app.core.db", "type": "imports", "source": "app.core.models", "target": "app.core.db", "status": "declared", "origin": "imports"},
-  {"id": "imports:app.web.views->app.core.models", "type": "imports", "source": "app.web.views", "target": "app.core.models", "status": "declared", "origin": "imports"},
-  {"id": "imports.rollup:app.core->stdlib", "type": "imports.rollup", "source": "app.core", "target": "stdlib", "status": "derived", "origin": "rollup"},
-  {"id": "imports.rollup:app.web->app.core", "type": "imports.rollup", "source": "app.web", "target": "app.core", "status": "derived", "origin": "rollup"}
+  {"id": "imports:app.web.views->app.core.models", "type": "imports", "source": "app.web.views", "target": "app.core.models", "status": "declared", "origin": "imports"}
  ]
 }

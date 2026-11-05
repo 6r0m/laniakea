@@ -6,7 +6,7 @@ from pathlib import Path
 
 from . import descriptors
 
-LEVELS = ["project", "plugin", "module"]
+LEVELS = ["project", "folder", "plugin", "module"]
 DEPENDENCY_FIELDS = {
     "PublicDependencyModules": "depends.public",
     "PrivateDependencyModules": "depends.private",
@@ -21,7 +21,8 @@ EDGE_TYPES = [
     {"id": "depends.include_public", "label": "public include path", "status": "declared"},
     {"id": "depends.include_private", "label": "private include path", "status": "declared"},
     {"id": "depends.dynamic", "label": "dynamically loaded", "status": "declared"},
-    {"id": "depends.rollup", "label": "plugin rollup", "status": "derived"},
+    {"id": "depends.rollup", "label": "dependencies (summary)", "status": "derived"},
+    {"id": "requires.rollup", "label": "requires (summary)", "status": "derived"},
 ]
 PROJECT_ID = "project"
 ENGINE_ID = "engine"
@@ -122,7 +123,8 @@ def build(project_file, engine_root, exported):
         attrs = {"modules": modules}
         if "EnabledByDefault" in plugin:
             attrs["enabled_by_default"] = bool(plugin["EnabledByDefault"])
-        b.node(f"plugin:{name}", "plugin", name, PROJECT_ID, status=status, source=b.location(path), attrs=attrs)
+        b.node(f"plugin:{name}", "plugin", name, _folder(b, path), status=status, source=b.location(path), attrs=attrs)
+    _folder_status(b)
 
     for name in sorted(set(owner) | {n for n, m in exported_modules.items() if _relative(m["Directory"], b.project_dir)}):
         entry = exported_modules.get(name)
@@ -173,7 +175,6 @@ def build(project_file, engine_root, exported):
             if target != source_id:
                 b.edge("requires", source_id, target, "declared", "descriptors", descriptors.reference_attrs(entry))
 
-    _rollup(b)
     graph = {
         "schema": "laniakea.graph/1",
         "nodes": [b.nodes[key] for key in sorted(b.nodes)],
@@ -189,31 +190,25 @@ def _conventional_rules(b, parent, name):
     return b.location(rules) if rules.is_file() else None
 
 
-def _rollup(b):
-    """depends.rollup between units: a plugin, a module directly under the project, or the engine core."""
-    def unit(node_id):
-        parent = b.nodes[node_id]["parent"]
-        if parent == PROJECT_ID:
-            return node_id
-        return ENGINE_ID if parent == ENGINE_ID else parent
+def _folder(b, descriptor):
+    """The folders between <project>/Plugins and a plugin's own folder become nodes; the deepest one is the plugin's
+    parent. A plugin directly under Plugins/ has the project as parent."""
+    plugins = b.project_dir / "Plugins"
+    parts = [part for part in Path(os.path.relpath(descriptor.parent.parent, plugins)).parts if part != "."]
+    parent = PROJECT_ID
+    for depth in range(len(parts)):
+        folder_id = "folder:" + "/".join(parts[:depth + 1])
+        b.node(folder_id, "folder", parts[depth], parent, source=b.location(plugins.joinpath(*parts[:depth + 1])))
+        parent = folder_id
+    return parent
 
-    roots = (PROJECT_ID, ENGINE_ID)
-    totals = {}
-    for edge in list(b.edges.values()):
-        if not edge["type"].startswith("depends.") or edge["type"] == "depends.rollup":
-            continue
-        # An edge between two modules directly under a root is already visible at the top scope.
-        if b.nodes[edge["source"]]["parent"] in roots and b.nodes[edge["target"]]["parent"] in roots:
-            continue
-        source, target = unit(edge["source"]), unit(edge["target"])
-        if source == target:
-            continue
-        entry = totals.setdefault((source, target), {"modules": 0, "kinds": set()})
-        entry["modules"] += 1
-        entry["kinds"].add(edge["type"])
-    for (source, target), entry in totals.items():
-        b.edge("depends.rollup", source, target, "derived", "rollup",
-               {"module_edges": entry["modules"], "kinds": sorted(entry["kinds"])})
+
+def _folder_status(b):
+    """A folder is in the target when any plugin inside it is, deepest folders first."""
+    folders = sorted((n for n in b.nodes.values() if n["level"] == "folder"), key=lambda n: -n["id"].count("/"))
+    for folder in folders:
+        statuses = {n["status"] for n in b.nodes.values() if n["parent"] == folder["id"]}
+        folder["status"] = next((s for s in ("in-target", "not-in-target") if s in statuses), "not-analysed")
 
 
 def _counts(graph):

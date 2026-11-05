@@ -4,33 +4,58 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#edf2f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#101923" media="(prefers-color-scheme: dark)">
   <title>Laniakea</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
+  <a class="skip" href="#map">Skip to map</a>
   <header>
     <h1>Laniakea</h1>
     <label>Project <select id="target"></select></label>
+    <button id="up" type="button" title="One level up (Backspace)" disabled>Up</button>
     <nav id="crumbs" aria-label="Scope"></nav>
+    <input id="find" name="find" type="search" placeholder="Find a node ( / )" aria-label="Find a node by name" autocomplete="off" spellcheck="false">
+    <span id="find-hint" aria-live="polite"></span>
     <label>Layout
       <select id="layout">
-        <option value="auto">auto</option>
+        <option value="auto">orbits</option>
         <option value="breadthfirst">hierarchy</option>
-        <option value="concentric">rings</option>
+        <option value="cose">connections</option>
         <option value="grid">grid</option>
-        <option value="cose">force</option>
       </select>
     </label>
   </header>
   <div id="banner" role="status" hidden></div>
+  <div id="error" role="alert" hidden></div>
+  <div class="scope-bar">
+    <button id="toggle-filters" type="button" aria-controls="filters" aria-expanded="false">Browse &amp; filters</button>
+    <span id="scope-summary" role="status"></span>
+    <button id="fit" type="button">Fit map</button>
+    <button id="reset-layout" type="button" title="Forget saved positions for this map and layout">Reset layout</button>
+    <span id="position-status" role="status"></span>
+    <button id="clear" type="button">Clear selection</button>
+    <button id="toggle-details" type="button" aria-controls="details" aria-expanded="false">Details</button>
+  </div>
   <main>
-    <aside id="filters" aria-label="Filters"></aside>
-    <div id="graph" aria-label="Dependency graph; double-click a square node to open it"></div>
-    <aside id="details" aria-live="polite"></aside>
+    <aside id="filters" aria-label="Browse and filters" hidden></aside>
+    <section id="map" tabindex="-1" aria-label="Dependency map">
+      <div id="graph" tabindex="0" role="group" aria-label="Dependency graph" aria-describedby="map-help"></div>
+      <p id="map-legend">Rings: constellations / Dots: stars / Diamonds: external / Numbers: bundled references</p>
+      <p id="map-help">Wheel into a constellation to reveal it. Drag space to fly. Hover to trace. Double-click also expands.</p>
+      <div id="map-tooltip" role="tooltip" hidden></div>
+      <div id="map-empty" role="status" hidden></div>
+    </section>
+    <aside id="details" aria-label="Selection details" hidden></aside>
   </main>
   <footer id="coverage"></footer>
   <script src="vendor/cytoscape.min.js"></script>
+  <script src="universe.js"></script>
+  <script src="map.js"></script>
+  <script src="scene.js"></script>
+  <script src="positions.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

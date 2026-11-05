@@ -4,25 +4,33 @@
 import argparse
 import sys
 import webbrowser
+from pathlib import Path
 
 from . import LaniakeaError, __version__, pipeline, profiles
-from .server import HOST, make_server
+from .server import DEFAULT_PORT, HOST, make_server
 from .workspace import DEFAULT_ROOT, Workspace
 
 
 def _target(workspace, reference, engine, name, target):
-    """The stored target for a project path or id; a new project is registered first."""
+    """The stored target for a project path or id, or the newest one when reference is None.
+    A new project is registered first, and options given for a stored one update it."""
+    if reference is None:
+        newest = workspace.last()
+        if newest is None:
+            raise LaniakeaError("nothing extracted yet; pass a .uproject, its folder, or a target id")
+        reference = newest["project_file"]
     profile, project = profiles.detect(reference)
     if project is None:
         existing = workspace.load(reference)
-        if existing:
-            return existing
-        raise LaniakeaError(f"{reference} is neither a project nor an extracted target id")
+        if not existing:
+            raise LaniakeaError(f"{reference} is neither a project nor an extracted target id")
+        profile, project = profiles.get(existing["profile"]), Path(existing["project_file"])
     stored = workspace.find_project(project)
     target_id = name or (stored["id"] if stored else profile.default_id(project))
     if stored and not (engine or target or name):
         return stored
-    fields = profile.target_fields(project, engine, target or (stored or {}).get("target"))
+    kept = stored or {}
+    fields = profile.target_fields(project, engine or kept.get("engine_root"), target or kept.get("target"))
     return workspace.register(target_id, fields)
 
 
@@ -63,13 +71,15 @@ def parser():
     commands = top.add_subparsers(dest="command", required=True)
 
     def project_options(command):
-        command.add_argument("project", help="a .uproject file, its folder, or an extracted target id")
+        command.add_argument("project", nargs="?",
+                             help="a .uproject file, its folder, or an extracted target id; the newest when omitted")
         command.add_argument("--engine", help="engine root, when EngineAssociation does not resolve")
         command.add_argument("--name", help="target id in the workspace; defaults to the project name")
         command.add_argument("--target", help="build target to export; defaults to the project's Editor target")
 
     def serve_options(command):
-        command.add_argument("--port", type=int, default=0, help="port on 127.0.0.1; 0 picks a free one")
+        command.add_argument("--port", type=int, default=DEFAULT_PORT,
+                             help=f"port on 127.0.0.1; default {DEFAULT_PORT}, 0 picks a free one")
         command.add_argument("--no-browser", action="store_true", help="do not open a browser")
 
     project_options(commands.add_parser("extract", help="export a project into a new run"))

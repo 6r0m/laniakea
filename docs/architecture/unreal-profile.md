@@ -58,6 +58,9 @@ analysed project.
 - **Owners.** A module's owner is the descriptor that lists it in `Modules[]`. A module the export has but no
   descriptor lists is placed by the nearest `.uplugin` above its folder. Engine modules are placed under their engine
   plugin the same way, or directly under the engine.
+- **Folders.** Each folder between `<project>/Plugins` and a plugin's own folder becomes a `folder` node, nested as
+  on disk; a plugin directly under `Plugins/` sits under the project. A folder is `in-target` when any plugin inside it
+  is.
 - **Dependency fields.** `PublicDependencyModules`, `PrivateDependencyModules`, `PublicIncludePathModules`,
   `PrivateIncludePathModules` and `DynamicallyLoadedModules` become the `depends.*` types.
   - UBT adds every public dependency to `PublicIncludePathModules` (`Configuration/UEBuildModule.cs`,
@@ -66,9 +69,8 @@ analysed project.
 - **Descriptor dependencies.** Each `Plugins[]` entry with `Enabled` true becomes a `requires` edge carrying `Optional`
   and the platform, target and configuration allow and deny lists. An entry with `Enabled` false switches a plugin off,
   so it is recorded on the node as `disables` instead.
-- **Rollup.** `depends.rollup` aggregates module edges between units: a plugin, a module directly under the project, or
-  the engine core. An edge between two modules directly under a root is already visible at the top scope, so it is not
-  rolled up.
+- **Summaries.** The profile writes no summary edges; each scope makes `depends.rollup` and `requires.rollup` from the
+  declared edges ([graph-model.md](graph-model.md)). The profile only labels them.
 - **Status.**
   - A project module or plugin absent from the export is `not-in-target`.
   - A plugin without modules is `not-analysed`.

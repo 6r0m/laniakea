@@ -10,7 +10,7 @@ flowchart LR
         CLI -->|"run folders, latest.json"| Workspace[("workspace/ (ignored)")]
         Profile -->|"schema v1 graph"| Shards["shards"]
         Shards -->|"schema v1 shards"| Workspace
-        Server["loopback server"] -->|"reads latest runs"| Workspace
+        Server["loopback server"] -->|"reads pinned runs; reads/writes user positions"| Workspace
         Viewer["viewer page"] -->|"HTTP on 127.0.0.1"| Server
     end
     Profile -->|"reads .uproject, .uplugin, build inputs"| Project[("analysed project")]

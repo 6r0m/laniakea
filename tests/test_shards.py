@@ -7,7 +7,7 @@ import unittest
 
 from laniakea import LaniakeaError, schema, shards
 from laniakea.unreal import graph
-from support import FIXTURES, SAMPLE, fake_engine, recorded
+from support import FIXTURES, SAMPLE, by_id, fake_engine, recorded
 
 
 def edge_ids(shard):
@@ -22,39 +22,82 @@ class UnrealScopes(unittest.TestCase):
             built, _ = graph.build(SAMPLE / "SampleProject.uproject", engine, recorded(SAMPLE, engine)["export"])
         cls.shards = shards.build(built)
 
+    def scope(self, node_id):
+        return self.shards[shards.file_name(node_id)]
+
     def test_every_shard_matches_the_schema(self):
         for shard in self.shards.values():
             schema.validate(shard, "shard")
 
-    def test_project_scope_shows_plugins_and_their_summaries(self):
+    def test_project_scope_shows_folders_and_the_engine_as_one_node(self):
         entry = self.shards[shards.ENTRY]
-        self.assertEqual(entry["members"], ["module:SampleProject", "plugin:SampleCore", "plugin:SampleDisabled",
-                                            "plugin:SampleEditor", "plugin:SampleGameplay"])
-        edges = edge_ids(entry)
-        self.assertIn("requires:plugin:SampleEditor->plugin:EditorScriptingUtilities", edges)
+        self.assertEqual(entry["members"], ["folder:Experimental", "folder:Sample", "module:SampleProject"])
+        self.assertEqual({n["id"] for n in entry["nodes"]}, set(entry["members"]) | {"engine"})
+        self.assertEqual(edge_ids(entry), {
+            "depends.rollup:module:SampleProject->engine",
+            "depends.rollup:module:SampleProject->folder:Sample",
+            "depends.rollup:folder:Sample->engine",
+            "requires.rollup:folder:Sample->engine",
+        })
+
+    def test_summary_names_what_it_stands_for(self):
+        summary = by_id(self.shards[shards.ENTRY]["edges"])["depends.rollup:module:SampleProject->folder:Sample"]
+        self.assertEqual((summary["status"], summary["origin"]), ("derived", "rollup"))
+        self.assertEqual(summary["attrs"], {"edges": 1, "kinds": ["depends.private"],
+                                            "between": ["SampleProject -> SampleGameplay"]})
+
+    def test_folder_scope_keeps_declared_edges_and_shows_the_undeclared_use(self):
+        folder = self.scope("folder:Sample")
+        self.assertEqual(folder["members"], ["plugin:SampleCore", "plugin:SampleEditor", "plugin:SampleGameplay"])
+        edges = edge_ids(folder)
+        self.assertIn("requires:plugin:SampleGameplay->plugin:SampleCore", edges, "a declared edge is drawn as declared")
         self.assertIn("depends.rollup:plugin:SampleEditor->plugin:SampleCore", edges)
-        self.assertIn("depends.rollup:plugin:SampleCore->engine", edges)
-        self.assertNotIn("depends.private:module:SampleEditor->module:SampleGameplay", edges, "summarised by rollup")
-        self.assertFalse([e for e in edges if e.startswith("requires:project->")], "the scope's own node is not drawn")
+        self.assertNotIn("requires:plugin:SampleEditor->plugin:SampleCore", edges, "that use is not declared")
+        self.assertIn("depends.rollup:module:SampleProject->plugin:SampleGameplay", edges, "outside, seen as a sibling")
+        self.assertIn("requires.rollup:plugin:SampleEditor->engine", edges)
+        self.assertEqual([c["file"] for c in folder["parents"]], [shards.ENTRY])
 
-    def test_plugin_scope_shows_module_edges_with_outside_context(self):
-        scope = self.shards[shards.file_name("plugin:SampleEditor")]
+    def test_plugin_scope_sees_sibling_plugins_not_their_modules(self):
+        scope = self.scope("plugin:SampleEditor")
         self.assertEqual(scope["members"], ["module:SampleEditor"])
-        self.assertIn("depends.private:module:SampleEditor->module:SampleGameplay", edge_ids(scope))
-        self.assertFalse([e for e in edge_ids(scope) if e.startswith(("requires:", "depends.rollup:"))])
-        self.assertEqual(scope["drill"]["module:SampleGameplay"], shards.file_name("module:SampleGameplay"))
-        self.assertEqual([crumb["file"] for crumb in scope["parents"]], [shards.ENTRY])
+        self.assertIn("depends.rollup:module:SampleEditor->plugin:SampleGameplay", edge_ids(scope))
+        self.assertEqual(scope["drill"]["plugin:SampleGameplay"], shards.file_name("plugin:SampleGameplay"))
+        self.assertEqual([c["title"] for c in scope["parents"]], ["SampleProject", "Sample"])
 
-    def test_module_scope_shows_every_direct_neighbour(self):
-        scope = self.shards[shards.file_name("module:SampleCore")]
-        self.assertIn("depends.public:module:SampleGameplay->module:SampleCore", edge_ids(scope))
-        self.assertIn("depends.private:module:SampleEditor->module:SampleCore", edge_ids(scope))
+    def test_module_scope_shows_every_direct_neighbour_exactly(self):
+        scope = self.scope("module:SampleCore")
+        edges = edge_ids(scope)
+        self.assertIn("depends.public:module:SampleGameplay->module:SampleCore", edges)
+        self.assertIn("depends.private:module:SampleEditor->module:SampleCore", edges)
+        self.assertIn("depends.public:module:SampleCore->module:Core", edges)
+
+    def test_index_lists_every_scope_with_its_file(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            engine = fake_engine(temporary)
+            built, _ = graph.build(SAMPLE / "SampleProject.uproject", engine, recorded(SAMPLE, engine)["export"])
+        found = shards.index(built)
+        schema.validate(found, "index")
+        files = {entry["id"]: entry["file"] for entry in found["nodes"]}
+        self.assertEqual(set(files.values()), set(self.shards), "one entry per shard, and no other")
+        self.assertEqual(files["project"], shards.ENTRY)
+        self.assertNotIn("engine", files)
+
+    def test_index_distinguishes_collapsed_containers_from_leaf_scopes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            engine = fake_engine(temporary)
+            built, _ = graph.build(SAMPLE / "SampleProject.uproject", engine, recorded(SAMPLE, engine)["export"])
+        found = by_id(shards.index(built)["nodes"])
+        self.assertEqual(found["folder:Sample"]["child_count"], 3)
+        self.assertEqual(found["plugin:SampleCore"]["child_count"], 1)
+        self.assertEqual(found["module:SampleCore"]["child_count"], 0)
+        schema.validate(shards.index(built), "index")
 
     def test_boundary_nodes_open_no_scope(self):
         for shard in self.shards.values():
             boundary = {n["id"] for n in shard["nodes"] if n["boundary"]}
             self.assertFalse(boundary & set(shard["drill"]))
         self.assertNotIn(shards.file_name("module:Core"), self.shards)
+        self.assertNotIn(shards.file_name("engine"), self.shards)
 
 
 class GenericScopes(unittest.TestCase):
@@ -68,13 +111,37 @@ class GenericScopes(unittest.TestCase):
         self.assertEqual(entry["members"], ["app.core", "app.web"])
         self.assertEqual(edge_ids(entry), {"imports.rollup:app.core->stdlib", "imports.rollup:app.web->app.core"})
         package = built[shards.file_name("app.web")]
-        self.assertEqual(edge_ids(package), {"imports:app.web.views->app.core.models"})
+        self.assertEqual(edge_ids(package), {"imports.rollup:app.web.views->app.core"})
+        self.assertEqual(shards.edge_types(built), ["imports", "imports.rollup"])
+
+    def test_leaf_keeps_references_to_its_ancestors(self):
+        edge = {"id": "ancestor", "source": "app.core.db", "target": "app.core",
+                "type": "imports", "status": "declared", "origin": "imports"}
+        self.graph["edges"].append(edge)
+        scope = shards.build(self.graph)[shards.file_name("app.core.db")]
+        self.assertIn(edge, scope["edges"])
 
     def test_a_graph_needs_one_root(self):
         self.graph["nodes"].append({"id": "second", "level": "project", "label": "second", "parent": None,
                                     "boundary": False, "status": "in-target"})
         with self.assertRaises(LaniakeaError):
             shards.build(self.graph)
+
+    def test_a_project_without_children_still_has_an_entry(self):
+        root = next(n for n in self.graph["nodes"] if n["parent"] is None and not n["boundary"])
+        built = shards.build({"nodes": [root], "edges": []})
+        self.assertEqual(built[shards.ENTRY]["scope"], root["id"])
+
+    def test_scope_files_cannot_overwrite_entry_or_index(self):
+        root = next(n for n in self.graph["nodes"] if n["parent"] is None and not n["boundary"])
+        nodes = [root] + [dict(root, id=name, label=name, parent=root["id"]) for name in ("entry", "index")]
+        built = shards.build({"nodes": nodes, "edges": []})
+        self.assertEqual(len(built), 3)
+        self.assertEqual(built[shards.ENTRY]["scope"], root["id"])
+        self.assertNotIn(shards.INDEX, built)
+
+    def test_unicode_ids_have_distinct_scope_files(self):
+        self.assertNotEqual(shards.file_name(chr(256)), shards.file_name(chr(16) + "0"))
 
 
 if __name__ == "__main__":

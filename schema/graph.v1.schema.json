@@ -66,6 +66,24 @@
         "drill": {"type": "object", "additionalProperties": {"type": "string"}, "description": "Node id to shard file."}
       }
     },
+    "index": {
+      "type": "object",
+      "required": ["schema", "nodes"],
+      "additionalProperties": false,
+      "description": "scopes/index.json: every openable node, so a viewer can find one outside the scope it shows.",
+      "properties": {
+        "schema": {"const": "laniakea.index/1"},
+        "nodes": {"type": "array", "items": {"$ref": "#/$defs/indexEntry"}}
+      }
+    },
+    "indexEntry": {
+      "type": "object",
+      "required": ["id", "label", "level", "file"],
+      "additionalProperties": false,
+      "properties": {"id": {"type": "string"}, "label": {"type": "string"}, "level": {"type": "string"},
+                     "file": {"type": "string"},
+                     "child_count": {"type": "integer", "description": "Direct children in the canonical graph; zero denotes a leaf scope."}}
+    },
     "crumb": {
       "type": "object",
       "required": ["title", "file"],

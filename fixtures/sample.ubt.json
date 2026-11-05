@@ -34,7 +34,7 @@
    },
    "SampleCore": {
     "CircularlyReferencedModules": [],
-    "Directory": "<project>/Plugins/SampleCore/Source/SampleCore",
+    "Directory": "<project>/Plugins/Sample/SampleCore/Source/SampleCore",
     "DynamicallyLoadedModules": [],
     "Name": "SampleCore",
     "PCHUsage": "UseExplicitOrSharedPCHs",
@@ -50,12 +50,12 @@
      "CoreUObject",
      "Engine"
     ],
-    "Rules": "<project>/Plugins/SampleCore/Source/SampleCore/SampleCore.Build.cs",
+    "Rules": "<project>/Plugins/Sample/SampleCore/Source/SampleCore/SampleCore.Build.cs",
     "Type": "CPlusPlus"
    },
    "SampleEditor": {
     "CircularlyReferencedModules": [],
-    "Directory": "<project>/Plugins/SampleEditor/Source/SampleEditor",
+    "Directory": "<project>/Plugins/Sample/SampleEditor/Source/SampleEditor",
     "DynamicallyLoadedModules": [
      "Settings"
     ],
@@ -79,12 +79,12 @@
      "Core",
      "CoreUObject"
     ],
-    "Rules": "<project>/Plugins/SampleEditor/Source/SampleEditor/SampleEditor.Build.cs",
+    "Rules": "<project>/Plugins/Sample/SampleEditor/Source/SampleEditor/SampleEditor.Build.cs",
     "Type": "CPlusPlus"
    },
    "SampleGameplay": {
     "CircularlyReferencedModules": [],
-    "Directory": "<project>/Plugins/SampleGameplay/Source/SampleGameplay",
+    "Directory": "<project>/Plugins/Sample/SampleGameplay/Source/SampleGameplay",
     "DynamicallyLoadedModules": [],
     "Name": "SampleGameplay",
     "PCHUsage": "UseExplicitOrSharedPCHs",
@@ -102,7 +102,7 @@
      "Engine",
      "SampleCore"
     ],
-    "Rules": "<project>/Plugins/SampleGameplay/Source/SampleGameplay/SampleGameplay.Build.cs",
+    "Rules": "<project>/Plugins/Sample/SampleGameplay/Source/SampleGameplay/SampleGameplay.Build.cs",
     "Type": "CPlusPlus"
    },
    "SampleProject": {

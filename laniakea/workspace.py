@@ -50,6 +50,12 @@ class Workspace:
         found = (self.load(entry.name) for entry in sorted(base.iterdir()) if entry.is_dir())
         return [target for target in found if target]
 
+    def last(self):
+        """The target whose latest run is newest, or None when nothing was extracted yet."""
+        runs = [(read_json(self.target_dir(t["id"]) / "latest.json")["run"], t) for t in self.targets()
+                if (self.target_dir(t["id"]) / "latest.json").is_file()]
+        return max(runs, key=lambda pair: pair[0])[1] if runs else None
+
     def find_project(self, project_file):
         return next((t for t in self.targets() if same_file(t["project_file"], project_file)), None)
 

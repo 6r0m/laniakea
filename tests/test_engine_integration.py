@@ -13,7 +13,7 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
-from laniakea import LaniakeaError, cli, pipeline
+from laniakea import LaniakeaError, cli, pipeline, shards
 from laniakea.unreal import engine
 from laniakea.workspace import Workspace, read_json
 from support import SAMPLE, by_id, copy_sample, fake_engine, recorded
@@ -86,13 +86,14 @@ class RealEngine(unittest.TestCase):
     def test_removed_dependency_disappears_after_regeneration(self):
         target, first = self.extract()
         self.assertIn("depends.private:module:SampleEditor->module:SampleCore", by_id(first["edges"]))
-        rules = self.project / "Plugins/SampleEditor/Source/SampleEditor/SampleEditor.Build.cs"
+        rules = self.project / "Plugins/Sample/SampleEditor/Source/SampleEditor/SampleEditor.Build.cs"
         rules.write_text(rules.read_text(encoding="utf-8").replace(', "SampleCore" }', " }"), encoding="utf-8")
         self.assertEqual(pipeline.freshness(self.workspace, target)[1],
-                         ["Plugins/SampleEditor/Source/SampleEditor/SampleEditor.Build.cs"])
+                         ["Plugins/Sample/SampleEditor/Source/SampleEditor/SampleEditor.Build.cs"])
         _, second = self.extract()
         self.assertNotIn("depends.private:module:SampleEditor->module:SampleCore", by_id(second["edges"]))
-        self.assertNotIn("depends.rollup:plugin:SampleEditor->plugin:SampleCore", by_id(second["edges"]))
+        folder = shards.build(second)[shards.file_name("folder:Sample")]
+        self.assertNotIn("depends.rollup:plugin:SampleEditor->plugin:SampleCore", by_id(folder["edges"]))
 
 
 if __name__ == "__main__":

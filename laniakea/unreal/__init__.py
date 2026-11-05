@@ -6,7 +6,7 @@ Every Unreal-specific fact lives under this package; core and viewer only see th
 
 from pathlib import Path
 
-from .. import LaniakeaError, __version__
+from .. import LaniakeaError
 from . import descriptors, engine, graph, ubt
 
 NAME = "unreal"
@@ -91,7 +91,6 @@ def extract(target, run_dir):
         "sources": [
             {"id": "ubt", "name": "UnrealBuildTool -Mode=JsonExport", "version": engine_version},
             {"id": "descriptors", "name": ".uproject and .uplugin", "version": engine_version},
-            {"id": "rollup", "name": "laniakea rollup", "version": __version__},
         ],
         # Hashed before the export runs, so an edit made during it reads as stale instead of as current.
         "inputs": inputs_before,

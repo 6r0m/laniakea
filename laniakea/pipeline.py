@@ -14,15 +14,23 @@ def extract(workspace, target):
     try:
         graph, fields = profile.extract(target, run)
         schema.validate(graph)
-        written = shards.write(graph, run / "scopes")
+        written, found = shards.write(graph, run / "scopes")
         for shard in written.values():
             schema.validate(shard, "shard")
+        schema.validate(found, "index")
+        # Summaries are made per scope, so the manifest also names their source and any summary type the profile
+        # did not label.
+        labelled = {t["id"] for t in fields["edge_types"]}
+        summary_types = [{"id": t, "label": f"{t.removesuffix('.rollup')} (summary)", "status": "derived"}
+                         for t in shards.edge_types(written) if t not in labelled]
         manifest = {
             "schema": "laniakea.manifest/1",
             "run": run.name.removesuffix(".partial"),
             "created_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "tool": {"id": "laniakea", "name": "laniakea", "version": __version__},
             **fields,
+            "edge_types": fields["edge_types"] + summary_types,
+            "sources": fields["sources"] + [{"id": "rollup", "name": "laniakea scope summaries", "version": __version__}],
             "entry": shards.ENTRY,
         }
         schema.validate(manifest, "manifest")

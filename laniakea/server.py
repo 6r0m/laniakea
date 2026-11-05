@@ -2,21 +2,28 @@
 """The loopback file server: the viewer, plus each target's last good run.
 
 It binds 127.0.0.1 only and answers only requests addressed to that host, so a web page cannot reach it through a
-rebound DNS name. Nothing is written; freshness is computed once at start.
+rebound DNS name. Only validated user positions can be written, in the ignored workspace. Freshness is computed
+once at start.
 """
 
 import json
 import mimetypes
 import os
+import socket
 from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
-from . import pipeline
+from . import LaniakeaError, pipeline
+from .layouts import LayoutStore
+from .workspace import read_json
 
 VIEWER = Path(__file__).resolve().parent.parent / "viewer"
 HOST = "127.0.0.1"
+# Stable, so bookmarks and links keep working. Chosen clear of every port the maintainer's other stacks declare or
+# listen on, and of the ranges Windows reserves.
+DEFAULT_PORT = 8737
 _TYPES = {".json": "application/json", ".js": "text/javascript", ".css": "text/css", ".html": "text/html"}
 
 
@@ -67,25 +74,95 @@ class Handler(BaseHTTPRequestHandler):
         kind = _TYPES.get(Path(path).suffix) or mimetypes.guess_type(path)[0] or "application/octet-stream"
         self._send(200, Path(path).read_bytes(), kind)
 
-    def do_GET(self):
+    def _local(self):
         port = self.server.server_address[1]
-        if self.headers.get("Host") not in (f"{HOST}:{port}", f"localhost:{port}"):
+        return self.headers.get("Host") in (f"{HOST}:{port}", f"localhost:{port}")
+
+    def _layout_scope(self, path):
+        if not path.startswith("/layout/"):
+            return None
+        parts = path[len("/layout/"):].split("/")
+        if len(parts) != 2:
+            return None
+        target, scope = parts
+        if scope != Path(scope).name or not scope.endswith(".json") or scope.casefold() == "index.json":
+            return None
+        run = next((self.workspace.target_dir(t["id"]) / "runs" / t["run"]
+                    for t in self.index if t["id"] == target), None)
+        if run is None:
+            return None
+        shard = run / "scopes" / scope
+        if not _inside(shard, run / "scopes") or not shard.is_file():
+            return None
+        manifest = read_json(run / "manifest.json")
+        data = read_json(run / "graph.json") if scope == manifest["entry"] else read_json(shard)
+        return target, scope, {node["id"] for node in data["nodes"]}
+
+    def do_POST(self):
+        if not self._local() or self.headers.get("Origin") != f"http://{self.headers.get('Host')}":
+            return self._send(403, b"forbidden origin or host\n")
+        try:
+            scope = self._layout_scope(unquote(urlsplit(self.path).path))
+            if scope is None:
+                return self._send(404, b"not found\n")
+            if self.headers.get("Content-Type", "").split(";", 1)[0] != "application/json":
+                return self._send(415, b"expected application/json\n")
+            length = self.headers.get("Content-Length", "")
+            if not length.isdecimal() or not 0 < int(length) <= 131072 or self.headers.get("Transfer-Encoding"):
+                return self._send(413, b"expected a JSON body no larger than 128 KiB\n")
+            try:
+                patch = json.loads(self.rfile.read(int(length)))
+                data = self.server.layouts.update(*scope[:2], patch, scope[2])
+            except (ValueError, UnicodeError) as error:
+                return self._send(400, str(error).encode())
+            self._send(200, json.dumps(data).encode(), "application/json")
+        except (OSError, LaniakeaError) as error:
+            self._send(500, str(error).encode())
+
+    def do_GET(self):
+        if not self._local():
             return self._send(403, b"forbidden host\n")
         path = unquote(urlsplit(self.path).path)
+        if path.startswith("/layout/"):
+            try:
+                scope = self._layout_scope(path)
+                if scope is None:
+                    return self._send(404, b"not found\n")
+                data = self.server.layouts.read(*scope)
+                return self._send(200, json.dumps(data).encode(), "application/json")
+            except (OSError, LaniakeaError) as error:
+                return self._send(500, str(error).encode())
         if path == "/data/targets.json":
             return self._send(200, json.dumps(self.index).encode(), "application/json")
         if path.startswith("/data/"):
             target_id, _, rest = path[len("/data/"):].partition("/")
-            run = next((self.workspace.latest(t["id"]) for t in self.index if t["id"] == target_id), None)
+            # The index, manifest and shards must describe one extraction even if latest.json moves mid-session.
+            run = next((self.workspace.target_dir(t["id"]) / "runs" / t["run"]
+                        for t in self.index if t["id"] == target_id), None)
             if run is None or not rest:
                 return self._send(404, b"not found\n")
             return self._file(run / rest, run)
         return self._file(VIEWER / (path.lstrip("/") or "index.html"), VIEWER)
 
 
+class _Server(ThreadingHTTPServer):
+    # The base class sets SO_REUSEADDR, which on Windows lets a second server bind a port already in use, so two
+    # servers would share one port. Bind exclusively instead.
+    allow_reuse_address = False
+
+    def server_bind(self):
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
 def make_server(workspace, port=0):
     """A bound server that has not started serving; port 0 picks a free port."""
     index = target_index(workspace)
-    server = ThreadingHTTPServer((HOST, port), partial(Handler, workspace=workspace, index=index))
+    try:
+        server = _Server((HOST, port), partial(Handler, workspace=workspace, index=index))
+    except OSError as error:
+        raise LaniakeaError(f"port {port} on {HOST} is in use or reserved ({error.strerror}); stop the other server, "
+                            "or pass --port <n> (0 picks a free one)") from error
     server.index = index
+    server.layouts = LayoutStore(workspace)
     return server

@@ -7,11 +7,12 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
+from urllib.parse import quote
 
-from laniakea import pipeline
-from laniakea.server import make_server
+from laniakea import LaniakeaError, cli, pipeline
+from laniakea.server import DEFAULT_PORT, make_server
 from laniakea.unreal import target_fields
-from laniakea.workspace import Workspace
+from laniakea.workspace import Workspace, read_json, write_json
 from support import copy_sample, fake_engine, recorded_ubt
 
 
@@ -27,6 +28,7 @@ class Server(unittest.TestCase):
             pipeline.extract(workspace, target)
         (project / "Source/SampleProject/SampleProject.Build.cs").write_text("// edited\n", encoding="utf-8")
         cls.server = make_server(workspace)
+        cls.server.workspace_for_tests = workspace
         cls.port = cls.server.server_address[1]
         threading.Thread(target=cls.server.serve_forever, daemon=True).start()
 
@@ -62,6 +64,21 @@ class Server(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn(b"cytoscape.min.js", body)
 
+    def test_requests_stay_on_the_run_advertised_by_the_server(self):
+        workspace = self.server.workspace_for_tests
+        previous = workspace.latest("sample")
+        partial = workspace.begin_run("sample")
+        manifest = read_json(previous / "manifest.json")
+        manifest["run"] = "replacement"
+        write_json(partial / "manifest.json", manifest)
+        workspace.commit_run("sample", partial)
+        try:
+            _, body = self.get("/data/sample/manifest.json")
+            self.assertEqual(json.loads(body)["run"], self.server.index[0]["run"])
+            self.assertEqual(self.get("/data/sample/scopes/entry.json")[0], 200)
+        finally:
+            write_json(workspace.target_dir("sample") / "latest.json", {"run": previous.name})
+
     def test_refuses_paths_outside_the_run_and_the_viewer(self):
         for path in ("/data/sample/../target.json", "/data/sample/%2E%2E/target.json", "/../laniakea/server.py",
                      "/data/other/manifest.json"):
@@ -69,6 +86,75 @@ class Server(unittest.TestCase):
 
     def test_refuses_a_foreign_host(self):
         self.assertEqual(self.get("/data/targets.json", host=f"evil.example:{self.port}")[0], 403)
+
+    def test_a_second_server_cannot_take_a_port_in_use(self):
+        with self.assertRaisesRegex(LaniakeaError, f"port {self.port} on 127.0.0.1 is in use"):
+            make_server(self.server.workspace_for_tests, self.port).server_close()
+
+    def test_the_default_port_is_stable(self):
+        self.assertEqual(DEFAULT_PORT, 8737)
+        self.assertEqual(cli.parser().parse_args(["serve"]).port, DEFAULT_PORT)
+
+    def post(self, path, value, headers=None):
+        connection = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        body = json.dumps(value)
+        request_headers = {"Host": f"127.0.0.1:{self.port}", "Origin": f"http://127.0.0.1:{self.port}",
+                           "Content-Type": "application/json", **(headers or {})}
+        connection.request("POST", path, body=body, headers=request_headers)
+        response = connection.getresponse()
+        result = response.status, response.read()
+        connection.close()
+        return result
+
+    def test_layout_endpoint_saves_only_in_the_workspace(self):
+        path = "/layout/sample/entry.json"
+        point = {"module:SampleProject": {"x": 10, "y": -20}}
+        status, _ = self.post(path, {"layout": "auto", "positions": point})
+        self.assertEqual(status, 200)
+        status, body = self.get(path)
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["auto"], point)
+        cache = self.server.workspace_for_tests.target_dir("sample") / "layouts" / "entry.json"
+        self.assertTrue(cache.is_file())
+        self.assertNotIn("layouts", read_json(self.server.workspace_for_tests.latest("sample") / "manifest.json"))
+
+    def test_continuous_map_can_save_deep_nodes_in_the_entry_layout(self):
+        path = "/layout/sample/entry.json"
+        point = {"module:SampleCore": {"x": 75, "y": -30}}
+        patch = {"layout": "universe_probe", "positions": point}
+        self.assertEqual(self.post(path, patch)[0], 200)
+        self.assertEqual(json.loads(self.get(path)[1])["universe_probe"], point)
+        before = self.get(path)
+        invalid = {"layout": "universe_probe", "positions": {**point, "other-target": {"x": 1, "y": 2}}}
+        self.assertEqual(self.post(path, invalid)[0], 400)
+        self.assertEqual(self.get(path), before)
+        self.assertEqual(self.post(path, {"layout": "universe_probe", "positions": None})[0], 200)
+
+    def test_layout_writes_refuse_foreign_origins_hosts_forms_and_unknown_nodes_without_mutation(self):
+        path = "/layout/sample/entry.json"
+        patch = {"layout": "auto", "positions": {"module:SampleProject": {"x": 10, "y": -20}}}
+        before = self.get(path)
+        for headers in ({"Origin": "https://foreign.example"}, {"Origin": "null"},
+                        {"Host": f"foreign.example:{self.port}"}, {"Content-Type": "text/plain"}):
+            with self.subTest(headers=headers):
+                self.assertIn(self.post(path, patch, headers)[0], (403, 415))
+                self.assertEqual(self.get(path), before)
+        invalid = {"layout": "auto", "positions": {"missing": {"x": 1, "y": 2}}}
+        self.assertEqual(self.post(path, invalid)[0], 400)
+        self.assertEqual(self.get(path), before)
+
+    def test_layout_endpoint_refuses_unknown_scopes_and_paths(self):
+        for path in ("/layout/other/entry.json", "/layout/sample/index.json", "/layout/sample/missing.json",
+                     "/layout/sample/%2E%2E/target.json", "/data/sample/manifest.json"):
+            self.assertEqual(self.post(path, {"layout": "auto", "positions": {}})[0], 404, path)
+
+    def test_layout_scope_must_be_a_basename_on_windows(self):
+        shard = self.server.workspace_for_tests.latest("sample") / "scopes" / "entry.json"
+        before = shard.read_bytes()
+        for name in (str(shard), "INDEX.JSON", "..\\entry.json"):
+            path = "/layout/sample/" + quote(name, safe="")
+            self.assertEqual(self.post(path, {"layout": "auto", "positions": {}})[0], 404)
+            self.assertEqual(shard.read_bytes(), before)
 
 
 if __name__ == "__main__":

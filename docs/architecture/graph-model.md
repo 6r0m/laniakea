@@ -6,8 +6,13 @@ What graph schema v1 means. The shapes of graph, shard and manifest are owned by
 ## Levels
 
 A profile declares its levels in the manifest, and the viewer hardcodes none. The Unreal profile has `project`,
-`plugin` and `module`. A Rust profile could have workspace, crate, module, type and function; a Python profile could
-have project, package, module, class and function.
+`folder`, `plugin` and `module`: the folders between `Plugins/` and a plugin, such as a project's plugin categories,
+group its plugins. A Rust profile could have workspace, crate, module, type and function; a Python profile could have
+project, package, module, class and function.
+
+A scope is one owner's direct children, not a requirement that every child has the same kind. A project can own
+both a source module and folders of plugins. The viewer names each kind and distinguishes collapsed containers
+from leaves; it does not invent an extra owner to make them look uniform.
 
 ## Nodes
 
@@ -24,10 +29,11 @@ have project, package, module, class and function.
 
 ## Edges and statuses
 
-- `declared`: stated by a build tool or a descriptor. In the Unreal profile, `requires` and every `depends.*` type
-  except `depends.rollup`.
-- `derived`: computed by Laniakea from declared edges, such as `depends.rollup`. A derived edge is never merged with a
-  declared one: when they disagree, both are shown, because the disagreement is the finding.
+- `declared`: stated by a build tool or a descriptor. `graph.json` holds only declared edges; in the Unreal profile,
+  `requires` and the `depends.*` types.
+- `derived`: a summary a scope makes from declared edges (see Scopes). Summaries of different families are never
+  merged: when `requires.rollup` and `depends.rollup` disagree, both are shown, because the disagreement is the
+  finding.
 - `resolved` and `partial` are reserved for symbol-level facts from a compiler-based index. Nothing is labelled
   `verified`: a static relationship is not a runtime call.
 
@@ -41,14 +47,23 @@ counts. The viewer shows the list beside every view, so missing analysis never r
 
 ## Scopes
 
-Each openable node has one shard file, built by `laniakea/shards.py`.
+Each non-boundary node has one shard file, built by `laniakea/shards.py`, including an entry for a project without
+children. File names escape UTF-8 bytes and protect the reserved entry and index names.
 
-- **Container scope** (a node with children): the children, and their edges to each other and to outside nodes no
-  deeper than the children. Deeper edges are left out, because a derived edge at the children's level summarises
-  them.
-- **Leaf scope** (a node with no children): the node and all its direct neighbours.
+- **Container scope** (a node with children) shows the children. Everything outside it appears as the siblings of the
+  scope and of its ancestors:
+  - an endpoint inside a child is drawn as that child;
+  - an endpoint elsewhere in the same tree is drawn as the topmost node that holds it without holding the scope;
+  - an endpoint in another tree, such as the engine, is drawn as that tree's root.
 
-The project's scope is `entry.json`. Boundary nodes open no scope.
+  An edge whose endpoints were not replaced is drawn as declared. All others become one `<family>.rollup` summary
+  per pair of drawn nodes, where the family is the edge type before its first dot. A summary records how many edges
+  it stands for, their types, and examples of the endpoints behind it.
+- **Leaf scope** (a node with no children): the node and all its direct neighbours, exactly.
+
+The project's scope is `entry.json`. Boundary nodes open no scope. `scopes/index.json` lists every openable node with
+its file and direct child count. The viewer uses that count to distinguish collapsed groups from leaf scopes, and
+the index finds nodes outside the scope it shows.
 
 ## Runs and freshness
 

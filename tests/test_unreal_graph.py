@@ -28,9 +28,17 @@ class SampleGraph(unittest.TestCase):
 
     def test_plugins_hold_their_modules(self):
         for plugin in ("SampleCore", "SampleGameplay", "SampleEditor", "SampleDisabled"):
-            self.assertEqual(self.nodes[f"plugin:{plugin}"]["parent"], "project")
             self.assertEqual(self.nodes[f"module:{plugin}"]["parent"], f"plugin:{plugin}")
         self.assertEqual(self.nodes["module:SampleProject"]["parent"], "project")
+
+    def test_folders_under_plugins_hold_their_plugins(self):
+        for plugin in ("SampleCore", "SampleGameplay", "SampleEditor"):
+            self.assertEqual(self.nodes[f"plugin:{plugin}"]["parent"], "folder:Sample")
+        self.assertEqual(self.nodes["plugin:SampleDisabled"]["parent"], "folder:Experimental/Off")
+        nested = self.nodes["folder:Experimental/Off"]
+        self.assertEqual((nested["parent"], nested["label"], nested["status"]), ("folder:Experimental", "Off", "not-in-target"))
+        self.assertEqual((self.nodes["folder:Sample"]["parent"], self.nodes["folder:Sample"]["status"]), ("project", "in-target"))
+        self.assertEqual(self.nodes["folder:Sample"]["source"]["path"], "Plugins/Sample")
 
     def test_private_dependency_is_typed(self):
         self.assertIn("depends.private:module:SampleEditor->module:SampleGameplay", self.edges)
@@ -42,21 +50,18 @@ class SampleGraph(unittest.TestCase):
         self.assertFalse([e for e in self.edges if e.startswith("depends.include_public:")],
                          "UBT lists every public dependency as an include-path module too")
 
-    def test_declared_plugin_dependency_keeps_its_filters_apart_from_rollup(self):
+    def test_declared_plugin_dependency_keeps_its_filters(self):
         requires = self.edges["requires:plugin:SampleEditor->plugin:EditorScriptingUtilities"]
         self.assertEqual((requires["status"], requires["attrs"]["TargetAllowList"]), ("declared", ["Editor"]))
-        rollup = self.edges["depends.rollup:plugin:SampleEditor->plugin:EditorScriptingUtilities"]
-        self.assertEqual((rollup["status"], rollup["origin"]), ("derived", "rollup"))
 
-    def test_undeclared_plugin_use_shows_as_rollup_without_requires(self):
-        self.assertIn("depends.rollup:plugin:SampleEditor->plugin:SampleCore", self.edges)
-        self.assertNotIn("requires:plugin:SampleEditor->plugin:SampleCore", self.edges)
+    def test_graph_holds_only_declared_edges(self):
+        self.assertEqual({e["status"] for e in self.graph["edges"]}, {"declared"}, "summaries belong to the scopes")
 
     def test_plugin_outside_the_target_is_marked(self):
         self.assertEqual(self.nodes["plugin:SampleDisabled"]["status"], "not-in-target")
         self.assertEqual(self.nodes["module:SampleDisabled"]["status"], "not-in-target")
         self.assertEqual(self.nodes["module:SampleDisabled"]["source"]["path"],
-                         "Plugins/SampleDisabled/Source/SampleDisabled/SampleDisabled.Build.cs")
+                         "Plugins/Experimental/Off/SampleDisabled/Source/SampleDisabled/SampleDisabled.Build.cs")
 
     def test_engine_appears_only_as_first_hop_boundary(self):
         boundary = {n for n, node in self.nodes.items() if node["boundary"]}
@@ -84,7 +89,6 @@ class SampleGraph(unittest.TestCase):
         rebuilt, _ = graph.build(SAMPLE / "SampleProject.uproject", self.engine, export)
         edges = by_id(rebuilt["edges"])
         self.assertNotIn("depends.public:module:SampleGameplay->module:SampleCore", edges)
-        self.assertNotIn("depends.rollup:plugin:SampleGameplay->plugin:SampleCore", edges)
         self.assertIn("requires:plugin:SampleGameplay->plugin:SampleCore", edges, "the descriptor still declares it")
 
     def test_export_of_another_project_is_refused(self):
