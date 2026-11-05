@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Rendering and camera operations use the folded projection; graph facts live in Universe.
 'use strict';
 
@@ -29,7 +29,8 @@ function mapNode(node, members, drill, compact = false) {
 function style() {
   return [
     { selector: 'node', style: { label: 'data(caption)', color: css('--fg'), 'font-family': 'Segoe UI, sans-serif',
-      'font-size': 13, 'text-valign': 'bottom', 'text-margin-y': 7, 'text-wrap': 'wrap', 'text-max-width': 140,
+      'font-size': 13, 'text-valign': 'bottom', 'text-margin-y': 7, 'text-wrap': 'wrap',
+      'text-overflow-wrap': 'anywhere', 'text-max-width': 140,
       'text-events': 'yes', 'text-background-color': css('--bg'), 'text-background-opacity': 0.9,
       'text-background-padding': 3, 'background-color': css('--context'), width: 12, height: 12,
       'border-width': 1, 'border-color': css('--context'), 'overlay-padding': 9 } },
@@ -50,20 +51,37 @@ function style() {
       label: 'data(count)', color: css('--muted'), 'font-size': 11, 'text-background-color': css('--bg'),
       'text-background-opacity': 0.9, 'text-background-padding': 2 } },
     { selector: '.faded', style: { opacity: 0.3 } },
+    { selector: 'edge:selected', style: { opacity: 0.7, 'underlay-color': css('--selection'),
+      'underlay-opacity': 0.15, 'underlay-padding': 3 } },
     { selector: 'edge.focus', style: { width: 2.5, opacity: 1, 'z-index': 5 } },
     { selector: 'node:selected', style: { 'border-color': css('--selection'), 'border-width': 3 } },
   ];
 }
 
 function renderGraph() {
+  clearTimeout(state.inspectTimer);
+  for (const key of ['zoomFrame', 'wheelFrame']) {
+    if (state[key]) cancelAnimationFrame(state[key]);
+    state[key] = null;
+  }
+  state.pointer = null; state.wheelDelta = 0; state.drag = null;
   if (state.cy) state.cy.destroy();
   state.cy = cytoscape({ container: $('graph'), elements: [], style: style(),
     minZoom: 0.015, maxZoom: 20000 });
   const cy = state.cy;
-  cy.on('tap', 'node', event => selectNode(event.target.id()));
-  cy.on('tap', 'edge', event => renderDetails(state.shard.edges.find(e => e.id === event.target.id())));
+  state.mapSize = {width:cy.width(),height:cy.height()};
+  cy.on('tap', 'node', event => {
+    clearTimeout(state.inspectTimer);
+    const id = event.target.id();
+    // Opening a panel on the first tap can move or cover the target before a double-tap completes.
+    if (state.universe.isGroup(id)) state.inspectTimer = setTimeout(() => {
+      if (state.cy === cy && cy.getElementById(id).length) selectNode(id);
+    }, 270);
+    else selectNode(id);
+  });
+  cy.on('tap', 'edge', event => renderDetails(state.shard.edges.find(e => e.id === event.target.data('referenceId'))));
   cy.on('tap', event => { if (event.target === cy) { unfocus(); renderDetails(null); } });
-  cy.on('dbltap', 'node', event => toggleGroup(event.target.id()));
+  cy.on('dbltap', 'node', event => { clearTimeout(state.inspectTimer); toggleGroup(event.target.id()); });
   cy.on('mouseover', 'node, edge', event => preview(event.target));
   cy.on('mouseout', 'node, edge', () => unfocus());
   cy.on('zoom', () => {
@@ -73,18 +91,18 @@ function renderGraph() {
     if (!state.framing && direction && state.pointer) semanticZoom(direction);
   });
   cy.on('pan', () => { unfocus(); rememberView(); });
-  cy.on('grab', 'node', event => {
+  cy.on('grabon', 'node', event => {
     state.drag = { id: event.target.id(), start: { ...event.target.position() } };
     $('graph').classList.add('dragging');
   });
-  cy.on('dragfree', 'node', event => {
+  cy.on('freeon', 'node', event => {
     const drag = state.drag, node = event.target;
     $('graph').classList.remove('dragging');
     state.drag = null;
     if (!drag || drag.id !== node.id()) return;
     const dx = node.position('x') - drag.start.x, dy = node.position('y') - drag.start.y;
     if (!dx && !dy) return;
-    const patch = state.universe.translate(node.id(), dx, dy);
+    const patch = state.universe.translate(node.id(), dx, dy, node.id() !== state.universe.root);
     state.positionCache.moveMany($('layout').value, patch);
     readableLabels();
   });
@@ -92,6 +110,9 @@ function renderGraph() {
 }
 
 function refreshMap() {
+  clearTimeout(state.inspectTimer);
+  state.drag = null;
+  $('graph').classList.remove('dragging');
   const universe = state.universe, cy = state.cy;
   const view = universe.project(state.hidden, state.boundary);
   const ids = new Set(view.nodes.map(n => n.id));
@@ -108,10 +129,11 @@ function refreshMap() {
       if (internal && internal.length) item.data.caption += `\n${internal.length} refs within`;
     }
     if (n.parent !== universe.root && ids.has(n.parent) && universe.expanded.has(n.parent)) item.data.parent = n.parent;
-    item.position = universe.positions.get(n.id);
+    item.position = { ...universe.positions.get(n.id) };
     return item;
   });
-  const edges = view.edges.map(e => ({ group: 'edges', data: { id: e.id, source: e.source, target: e.target,
+  const edges = view.edges.map(e => ({ group: 'edges', data: { id: universe.renderPrefix + e.id,
+    referenceId: e.id, source: e.source, target: e.target,
     type: e.type, color: colorOf(e.type), weight: e.refs.length, count: e.refs.length > 1 ? String(e.refs.length) : '' },
     classes: e.status }));
   // Rebuild only rendered elements. The camera and every world coordinate belong to the continuing scene.
@@ -126,11 +148,7 @@ function refreshMap() {
 function selectNode(id) {
   const n = state.universe.nodes.get(id);
   if (!n) return;
-  state.cy.nodes().unselect();
-  const shown = state.cy.getElementById(state.universe.representative(id));
-  if (shown.length) shown.select();
   renderDetails(n);
-  readableLabels();
 }
 
 function focus(elements) {
@@ -145,7 +163,7 @@ function preview(element) {
   if (state.drag) return;
   const cy = state.cy;
   if (element.isNode()) {
-    const family = element.union(element.descendants());
+    const family = cy.nodes().filter(n => state.universe.contains(element.id(), n.id()));
     const edges = family.connectedEdges();
     focus(family.union(edges).union(edges.connectedNodes()));
     element.addClass('hovered');
@@ -156,7 +174,7 @@ function preview(element) {
       (node.boundary ? ' / further external dependencies not analysed' : ''), element.renderedPosition());
   } else {
     focus(element.union(element.connectedNodes()));
-    const edge = state.shard.edges.find(e => e.id === element.id());
+    const edge = state.shard.edges.find(e => e.id === element.data('referenceId'));
     showTooltip(`${label(edge.source)} -> ${label(edge.target)}`, `${edge.refs.length} exact reference(s) / ` +
       [...new Set(edge.refs.map(e => typeLabel(e.type)))].join(', '), element.renderedMidpoint());
   }
@@ -186,13 +204,15 @@ function readableLabels() {
   cy.batch(() => {
     cy.nodes().style({ 'font-size': 13 / zoom, 'text-max-width': 150 / zoom, 'text-background-padding': 3 / zoom,
       'border-width': n => (n.selected() ? 3 : n.hasClass('expanded') ? 1 : n.hasClass('group') ? 2 : 1) / zoom });
-    leaves.style({ width: n => (n.hasClass('group') ? 27 : n.hasClass('member') ? 15 : 11) / zoom,
-      height: n => (n.hasClass('group') ? 27 : n.hasClass('member') ? 15 : 11) / zoom,
+    const diameter = n => n.hasClass('group') ?
+      Math.max(27, Math.min(100, 2 * state.universe.radii.get(n.id()) * zoom * 0.3)) : n.hasClass('member') ? 15 : 11;
+    leaves.style({ width: n => diameter(n) / zoom,
+      height: n => diameter(n) / zoom,
       'underlay-padding': 6 / zoom,
       'text-halign': n => n.renderedPosition('x') < 155 ? 'right' : n.renderedPosition('x') > cy.width() - 155 ? 'left' : 'center',
       'text-valign': 'bottom', 'text-margin-y': 8 / zoom });
     cy.nodes('.expanded').style({ padding: 26 / zoom, 'text-margin-y': -8 / zoom });
-    cy.edges().style({ 'font-size': 11 / zoom });
+    cy.edges().style({ 'font-size': 11 / zoom, 'underlay-padding': 3 / zoom });
     cy.edges().style({ width: e => (e.hasClass('focus') ? 2.5 : Math.min(2.5, 1 + Math.log10(e.data('weight')) * 0.6)) / zoom,
       'arrow-scale': 0.7 / zoom, 'line-dash-pattern': [6 / zoom, 4 / zoom] });
   });
@@ -218,11 +238,11 @@ function declutterLabels() {
     const height = lines.reduce((sum, s) => sum + Math.max(1, Math.ceil(s.length * 7 / 150)) * 15, 0);
     const p = n.renderedPosition(), expanded = n.hasClass('expanded');
     const x = expanded || n.style('text-halign') === 'center' ? p.x - width / 2 :
-      n.style('text-halign') === 'right' ? p.x : p.x - width;
+      n.style('text-halign') === 'right' ? p.x + n.renderedWidth()/2 : p.x - n.renderedWidth()/2 - width;
     const y = expanded ? n.renderedBoundingBox({includeLabels:false,includeOverlays:false,includeUnderlays:false}).y1 - height - 8 :
-      p.y + (n.hasClass('group') ? 15 : 9) + 8;
+      p.y + n.renderedHeight()/2 + 8;
     return { id: n.id(), box: { x1:x, y1:y, x2:x+width, y2:y+height },
-      priority: n.hasClass('hovered') || n.selected() ? 5 : n.hasClass('match') ? 4 : expanded ? 2 : 1 };
+      priority: n.hasClass('hovered') || n.selected() ? 5 : n.hasClass('match') || n.id() === state.scopeShard.scope ? 4 : expanded ? 2 : 1 };
   });
   const names = nonOverlappingLabels(candidates.filter(n => n.box.x1 >= 0 && n.box.y1 >= 0 &&
     n.box.x2 <= cy.width() && n.box.y2 <= cy.height()));
@@ -277,6 +297,7 @@ function fitMap() {
 }
 
 function frameNode(id) {
+  if (id === state.universe.root) { fitMap(); return; }
   const map = state.universe, p = map.positions.get(id), r = map.isGroup(id) ? map.radii.get(id) :
     Math.max(8, (map.radii.get(map.nodes.get(id).parent) || 80) * 0.5);
   frame({ x1:p.x-r, y1:p.y-r, x2:p.x+r, y2:p.y+r, w:r*2, h:r*2 }, 110, 160 / r);
@@ -289,7 +310,12 @@ function layout() {
   const fake = top.map(id => ({id:()=>id,hasClass:()=>!map.nodes.get(id).boundary}));
   let positions = galaxyPositions(fake, state.cy.width(), state.cy.height());
   if (mode !== 'auto') {
-    const temp = cytoscape({headless:true,elements:top.map(id=>({data:{id}}))});
+    const expanded = map.expanded;
+    map.expanded = new Set([map.root]);
+    const rootView = map.project();
+    map.expanded = expanded;
+    const temp = cytoscape({headless:true,elements:[...rootView.nodes.map(n=>({data:{id:n.id}})),
+      ...rootView.edges.map(e=>({data:{id:map.renderPrefix+e.id,source:e.source,target:e.target}}))]});
     temp.layout({name:mode,animate:false,randomize:false,spacingFactor:5}).run();
     positions = new Map(temp.nodes().map(n=>[n.id(),{...n.position()}])); temp.destroy();
   }

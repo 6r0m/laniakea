@@ -1,11 +1,31 @@
-﻿// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Scene navigation changes detail and camera position without replacing the surrounding universe.
 'use strict';
+
+function zoomWithWheel(event) {
+  if (!state.cy) return;
+  // Leave browser zoom available through Ctrl+wheel. Ordinary wheel input belongs to this canvas only.
+  event.stopImmediatePropagation();
+  if (event.ctrlKey || event.metaKey) return;
+  event.preventDefault();
+  const bounds = $('graph').getBoundingClientRect();
+  state.pointer = {x:event.clientX-bounds.left,y:event.clientY-bounds.top};
+  state.wheelPoint = state.pointer;
+  const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? state.cy.height() : 1;
+  state.wheelDelta = (state.wheelDelta || 0) + event.deltaY * unit;
+  if (state.wheelFrame) return;
+  state.wheelFrame = requestAnimationFrame(() => {
+    state.wheelFrame = null;
+    const factor = Math.exp(Math.max(-0.7,Math.min(0.7,-state.wheelDelta*0.0018)));
+    state.wheelDelta = 0;
+    state.cy.zoom({level:state.cy.zoom()*factor,renderedPosition:state.wheelPoint});
+  });
+}
 
 function rememberView() {
   if (!state.cy || !state.universe || state.framing) return;
   const scene = { target: state.target.id, run: state.target.run, expanded: [...state.universe.expanded],
-    pan: { ...state.cy.pan() }, zoom: state.cy.zoom() };
+    pan: { ...state.cy.pan() }, zoom: state.cy.zoom(), size:{width:state.cy.width(),height:state.cy.height()} };
   history.replaceState({ scene }, '', hashFor(state.target.id, state.file));
 }
 
@@ -18,7 +38,10 @@ function restoreView(scene) {
   map.expanded.add(map.root);
   refreshMap();
   state.framing = true;
-  state.cy.viewport({zoom:scene.zoom,pan:scene.pan});
+  const size = scene.size && Number.isFinite(scene.size.width) && Number.isFinite(scene.size.height) ? scene.size :
+    {width:state.cy.width(),height:state.cy.height()};
+  state.cy.viewport({zoom:scene.zoom,pan:{x:scene.pan.x+(state.cy.width()-size.width)/2,
+    y:scene.pan.y+(state.cy.height()-size.height)/2}});
   state.lastZoom = state.cy.zoom();
   state.framing = false;
   readableLabels();
@@ -96,6 +119,8 @@ function followReference(edge) {
   rememberView();
   const entry = scopeFor(edge.target);
   if (entry) history.pushState(null, '', hashFor(state.target.id, entry.file));
+  state.hidden.delete(edge.type);
+  if (map.nodes.get(edge.source).boundary || map.nodes.get(edge.target).boundary) state.boundary = true;
   map.reveal(edge.source); map.reveal(edge.target);
   setSceneScope(edge.target);
   refreshMap(); frameNode(edge.target);

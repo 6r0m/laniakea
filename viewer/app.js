@@ -82,6 +82,7 @@ async function start() {
     }
   });
   new ResizeObserver(resizeMap).observe($('graph'));
+  $('graph').addEventListener('wheel', zoomWithWheel, {capture:true,passive:false});
   $('graph').addEventListener('pointermove', event => {
     const box = $('graph').getBoundingClientRect();
     state.pointer = { x: event.clientX - box.left, y: event.clientY - box.top };
@@ -153,6 +154,7 @@ async function show(id, file, mode) {
     else refreshMap();
     if (!restoreView(savedScene) && shard.scope !== universe.root) frameNode(shard.scope);
     renderDetails(null);
+    return true;
   } catch (error) {
     if (navigation === state.navigation) {
       reportError(error);
@@ -181,11 +183,14 @@ function togglePanel(name, open = $(name).hidden) {
 
 function openScope(file) { return show(state.target.id, file, 'push'); }
 
-function up() {
+async function up() {
   if (!state.shard) return;
-  if (state.scopeShard.scope !== state.universe.root) state.universe.expanded.delete(state.scopeShard.scope);
+  const universe = state.universe, scope = state.scopeShard.scope;
   const parents = state.shard.parents;
-  if (parents.length) openScope(parents[parents.length - 1].file);
+  if (parents.length && await openScope(parents[parents.length - 1].file) && state.universe === universe) {
+    if (scope !== universe.root) universe.expanded.delete(scope);
+    refreshMap();
+  }
 }
 
 function onKey(event) {
@@ -194,7 +199,7 @@ function onKey(event) {
   if (event.key === 'Backspace') { event.preventDefault(); up(); }
   if (event.key === '/') { event.preventDefault(); $('find').focus(); }
   if (event.key === 'Escape') { unfocus(); renderDetails(null); }
-  if (event.target === $('graph') && ['+', '=', '-'].includes(event.key)) {
+  if (event.target === $('graph') && state.cy && ['+', '=', '-'].includes(event.key)) {
     event.preventDefault();
     state.pointer = {x:state.cy.width()/2,y:state.cy.height()/2};
     state.cy.zoom({level:state.cy.zoom() * (event.key === '-' ? 0.8 : 1.25),renderedPosition:state.pointer});
@@ -243,6 +248,7 @@ function renderCrumbs() {
 
 function renderFilters() {
   const panel = $('filters');
+  const focused = [...panel.querySelectorAll('input')].indexOf(document.activeElement);
   panel.replaceChildren(el('h2', 'Visible stars & constellations'));
   const members = el('div', null, { class: 'node-list' });
   for (const node of state.shard.nodes.filter(n => state.shard.members.includes(n.id))) {
@@ -292,6 +298,7 @@ function renderFilters() {
     'diamond': 'outside the project',
   });
   panel.append(keys);
+  if (focused >= 0) panel.querySelectorAll('input')[focused]?.focus({preventScroll:true});
 }
 
 function findHits() {
@@ -300,8 +307,7 @@ function findHits() {
   return state.cy.nodes(':visible').filter((n) => n.data('label').toLowerCase().includes(query));
 }
 
-// Light the matches in this view and bring them into view. With none here, name the best match elsewhere in the
-// project, which Enter opens.
+// Search leaves the camera in place until Enter flies to the best canonical match.
 async function find() {
   const hits = findHits();
   if (state.cy) state.cy.nodes().removeClass('match');
@@ -361,7 +367,16 @@ function typeLabel(type) {
 }
 
 function renderDetails(item) {
+  const isNode = item && item.level !== undefined;
+  item = item && (isNode ? state.shard.nodes : state.shard.edges).find(current => current.id === item.id) || null;
+  const rendered = item && state.cy.getElementById(isNode ? item.id : state.universe.renderPrefix + item.id);
+  if (item && (!rendered.length || !rendered.visible())) item = null;
   state.selection = item;
+  if (state.cy) {
+    state.cy.elements().unselect();
+    if (item) rendered.select();
+    readableLabels();
+  }
   const panel = $('details');
   panel.replaceChildren();
   if (!item) {
@@ -413,8 +428,11 @@ function appendReferences(panel, references) {
     const button = el('button', `${source.label} (${source.level}) -> ${target.label} (${target.level})`,
       {type:'button',title:'Reveal this exact reference in the map'});
     button.onclick = () => followReference(edge);
+    const origin = state.manifest.sources.find(s => s.id === edge.origin);
     row.append(button, el('small', `${typeLabel(edge.type)} / ${edge.status}` +
+      ` / ${origin ? origin.name + ' ' + origin.version : edge.origin}` +
       (state.hidden.has(edge.type) || !state.boundary && (source.boundary || target.boundary) ? ' / hidden by filters' : '')));
+    if (edge.attrs) { const metadata = el('dl'); attributes(metadata, edge.attrs); row.append(metadata); }
     if (source.source) {
       const link = sourceLink(source.source);
       if (link) row.append(link);

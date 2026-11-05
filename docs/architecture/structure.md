@@ -36,8 +36,9 @@ nothing installed, configured or committed for it.
 - **Schema** (`schema/graph.v1.schema.json`, validated by `laniakea/schema.py`): the shapes of graph, shard and
   manifest.
 - **Server** (`laniakea/server.py`) and **viewer** (`viewer/`, Cytoscape.js): presentation and saved user positions.
-  The viewer's `app.js` owns navigation and HTML controls; `map.js` owns canvas styling, layout and selection;
-  `positions.js` owns loading and ordered saves of dragged positions.
+  The viewer's `app.js` owns startup and HTML controls; `universe.js` owns the canonical hierarchy, reference
+  projection and world positions; `map.js` owns canvas rendering and hover; `scene.js` owns camera gestures and
+  navigation; `positions.js` owns loading and ordered saves of released pins.
 - **Layout store** (`laniakea/layouts.py`): validated user positions under each target's `layouts/` directory in the
   ignored workspace, separate from immutable runs. Updates merge moved pins; resetting affects one scope and mode.
 - **Sample, fixtures, tests** (`sample/`, `fixtures/`, `tests/`): a synthetic project with no engine code, its recorded
@@ -64,18 +65,28 @@ output and log in the run folder.
 
 Through HTTP on 127.0.0.1, port 8737 unless `--port` says otherwise: the viewer reads `/data/targets.json` and run
 files. The `/layout/<target>/<scope file>` endpoint reads user positions; same-origin JSON POST requests update or
-reset them. Only targets and scope nodes in the server's advertised run can be written. Foreign origins, forms,
+reset them. Only targets and nodes in the server's advertised run can be written. The entry layout accepts the complete
+canonical graph for the continuous map; other scope layouts accept only nodes in that shard. Foreign origins, forms,
 unknown nodes and non-finite coordinates are refused without changing saved data.
 The server pins data requests to the runs advertised by its startup index, so a new extraction cannot mix a
 manifest and shards from different runs. Restart serving to load newly extracted runs.
 
-Dragged positions use stable node ids, scoped by project and layout mode. Both a star and its visible label accept
-dragging; hidden labels cannot intercept pointer input. Only a released pin is sent; request
-threads serialize merge and atomic JSON replacement. There is no polling or write per drag frame. Fit, filtering
-and viewport resizing preserve positions. Missing nodes are ignored after regeneration; new nodes use automatic
-positions. Each scope opening reads the workspace with HTTP caching disabled after outstanding saves finish;
-only unsaved changes are retained in memory. A failed save stays visible and pending/failed saves trigger the browser's leave-page guard. The cache
-does not change graph facts, extraction inputs, runs, or the analysed project.
+Dragged positions use stable node ids, scoped by project and layout mode, in the entry layout. Both a star and
+its visible label accept dragging; hidden labels cannot intercept pointer input. A constellation drag translates
+its complete subtree and sends one merged position patch on release. Renderer positions are copies, so a live drag
+cannot mutate the saved arrangement before release. Request threads serialize merge and atomic JSON replacement.
+There is no polling or write per drag frame or wheel gesture. Fit, filtering, expansion and viewport resizing
+preserve positions. Missing nodes are ignored after regeneration; new nodes use automatic positions. Opening the
+map reads the workspace with HTTP caching disabled after outstanding saves finish. A failed save stays visible and
+pending/failed saves trigger the browser's leave-page guard. Saved positions do not change graph facts, extraction
+inputs, runs, or the analysed project.
+
+The viewer retains one scene while groups expand or fold. Native Cytoscape compound nodes render containment;
+reference projection explicitly handles descendants because ordinary node-neighborhood operations do not. Mouse
+wheel input is normalized by pixel, line or page units and changes zoom around the pointer; Ctrl+wheel remains
+browser zoom. Keyboard zoom and explicit group controls provide alternatives. The URL retains a scope address;
+browser history retains the camera and expansion state for navigation and reload. Graph data stays pinned to the
+advertised run. A fresh page reads saved pins from the server rather than treating browser storage as their owner.
 
 ## Invariants
 
@@ -123,10 +134,13 @@ does not change graph facts, extraction inputs, runs, or the analysed project.
 - **One target per run.** The default is the Editor target; other targets are named as not analysed. A launcher
   engine refuses Client and Server targets, so their graphs need a source-built engine.
 - **Summaries hide detail by design.** Above the module level, edges are summaries; the exact edges behind one are
-  listed in its details, and fully in the leaf scope of each module. A summary of module use can disagree with the
+  listed completely in its details, including references internal to a collapsed group. A summary of module use can disagree with the
   declared `requires`, and both are shown rather than reconciled.
 - **Wide scopes.** A project without plugin folders puts every plugin in one scope, and a flat scope of a few
-  hundred nodes is hard to read in any layout. The galaxy layout separates members from context; overlapping names
-  are hidden at the fitted zoom without hiding nodes or edges. Zoom, hover, search and selection reveal names;
-  Browse and relationship lists provide text navigation. Very large scopes still need a narrower query or scope.
+  hundred nodes is hard to read in any layout. The continuous map reveals local detail while keeping other groups collapsed. Overlapping names
+  are hidden without hiding stars or references; hover, zoom, search and the accessible node list reveal them.
+  Very wide groups may still require more zoom or a name search to distinguish their contents.
 - **No classes or functions yet.** Their extraction is planned separately and has an unresolved parse-quality gate.
+- **Export scale.** Generated leaf scopes share one reference index; container scopes still scan the graph's
+  references. Serialized scope artifacts grow with the hierarchy. Full class/function-scale extraction and viewing
+  have not been validated; retaining both generated scopes and the continuous projection is not a claim of that scale.

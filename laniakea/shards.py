@@ -76,6 +76,10 @@ def build(graph):
     chains = {n: chain(n) for n in nodes}
     files = _files(nodes, children)
     openable = set(files)
+    incident = {n: [] for n in nodes}
+    for edge in graph["edges"]:
+        for endpoint in {edge["source"], edge["target"]}:
+            incident[endpoint].append(edge)
 
     def container(scope):
         members = sorted(children[scope])
@@ -118,8 +122,7 @@ def build(graph):
         return members, drawn
 
     def leaf(scope):
-        drawn = [e for e in graph["edges"] if scope in (e["source"], e["target"])]
-        return [scope], drawn
+        return [scope], incident[scope]
 
     shards = {}
     for scope in sorted(openable):

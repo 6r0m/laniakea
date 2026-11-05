@@ -78,7 +78,7 @@
     },
     "indexEntry": {
       "type": "object",
-      "required": ["id", "label", "level", "file"],
+      "required": ["id", "label", "level", "file", "child_count"],
       "additionalProperties": false,
       "properties": {"id": {"type": "string"}, "label": {"type": "string"}, "level": {"type": "string"},
                      "file": {"type": "string"},

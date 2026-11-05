@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Canonical containment and references stay independent of the visible, folded map.
 'use strict';
 
@@ -35,6 +35,10 @@ class Universe {
       if (edgeIds.has(e.id)) throw new Error('Duplicate reference id');
       edgeIds.add(e.id);
     }
+    this.bundlePrefix = 'bundle:';
+    while ([...edgeIds].some(id => id.startsWith(this.bundlePrefix))) this.bundlePrefix = '@' + this.bundlePrefix;
+    this.renderPrefix = 'edge:';
+    while ([...this.nodes.keys()].some(id => id.startsWith(this.renderPrefix))) this.renderPrefix = '@' + this.renderPrefix;
     this.expanded = new Set([this.root]);
   }
 
@@ -71,7 +75,7 @@ class Universe {
       } else {
         const type = edge.type.split('.')[0] + '.rollup';
         const key = JSON.stringify([type, source, target]);
-        if (!bundles.has(key)) bundles.set(key, { id: 'bundle:' + key, type, source, target,
+        if (!bundles.has(key)) bundles.set(key, { id: this.bundlePrefix + key, type, source, target,
           status: 'derived', origin: 'rollup', refs: [] });
         bundles.get(key).refs.push(edge);
       }
@@ -86,17 +90,19 @@ class Universe {
 
   // Coordinates are world positions. Only the new group's contents are placed; outer stars do not move.
   place(layouts, mode, topPositions = null) {
-    const saved = layouts[mode] || {};
+    const saved = Object.hasOwn(layouts, mode) ? layouts[mode] : {};
+    const savedPoint = id => Object.hasOwn(saved, id) ? saved[id] : null;
     const top = [...this.childIds(this.root), ...this.childIds(null).filter(id => id !== this.root)];
     if (!top.length) top.push(this.root);
     const radius = Math.max(240, top.length * 34);
     top.forEach((id, i) => {
       const angle = -Math.PI / 2 + i * 2 * Math.PI / top.length;
-      const p = saved[id] || (topPositions && topPositions.get(id)) ||
+      const p = savedPoint(id) || (topPositions && topPositions.get(id)) ||
         { x: Math.cos(angle) * radius * 1.3, y: Math.sin(angle) * radius };
       this.positions.set(id, { ...p });
     });
-    this.positions.set(this.root, { ...saved[this.root] || { x: -radius * 1.1, y: -radius * 0.85 } });
+    this.positions.set(this.root, { ...savedPoint(this.root) || topPositions && topPositions.get(this.root) ||
+      { x: -radius * 1.1, y: -radius * 0.85 } });
     const placeChildren = (id, r) => {
       this.radii.set(id, r);
       const children = this.childIds(id), p = this.positions.get(id);
@@ -106,7 +112,7 @@ class Universe {
       children.forEach((child, i) => {
         const row = Math.floor(i / columns), col = i % columns;
         const count = Math.min(columns, children.length - row * columns);
-        this.positions.set(child, { ...saved[child] || { x: p.x + (col - (count - 1) / 2) * spacing,
+        this.positions.set(child, { ...savedPoint(child) || { x: p.x + (col - (count - 1) / 2) * spacing,
           y: p.y + (row - (rows - 1) / 2) * spacing } });
         placeChildren(child, children.length === 1 ? r * 0.7 : Math.min(r * 0.4, spacing * 0.3));
       });
@@ -121,10 +127,10 @@ class Universe {
     this.radii.set(this.root, radius);
   }
 
-  translate(id, dx, dy) {
-    const patch = {};
+  translate(id, dx, dy, descendants = true) {
+    const patch = Object.create(null);
     for (const [child, p] of this.positions) {
-      if (!this.contains(id, child)) continue;
+      if (descendants ? !this.contains(id, child) : child !== id) continue;
       const point = { x: p.x + dx, y: p.y + dy };
       this.positions.set(child, point); patch[child] = point;
     }

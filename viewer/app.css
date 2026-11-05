@@ -91,7 +91,8 @@ dl { margin: 12px 0; display: grid; grid-template-columns: auto minmax(0, 1fr); 
 dt { color: var(--muted); }
 dd { margin: 0; overflow-wrap: anywhere; }
 .node-list { display: grid; gap: 4px; }
-.node-list button { text-align: left; overflow-wrap: anywhere; background: none; border-color: transparent; }
+.node-list button { text-align: left; overflow-wrap: anywhere; background: none; border-color: transparent;
+  content-visibility: auto; contain-intrinsic-size: auto 50px; }
 .node-list button:hover { background: var(--bg); border-color: var(--line); }
 .node-list small { display: block; color: var(--muted); font-size: 11px; }
 .keys { font-size: 12px; }

@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
@@ -106,4 +106,20 @@ test('invalid parent chains and dangling references fail before a scene is commi
   assert.throws(()=>new Universe(missing),/endpoint/);
   const cyclic=fixture();cyclic.nodes.find(n=>n.id==='app.core').parent='app.core.models';
   assert.throws(()=>new Universe(cyclic),/cycle/);
+});
+
+test('derived connection ids cannot collide with a recorded reference id',()=>{
+  const graph=fixture(),bundle=new Universe(graph).project().edges.find(e=>e.status==='derived');
+  graph.edges.push({id:bundle.id,source:'app.core',target:'app.web',type:'calls',status:'declared',origin:'synthetic'});
+  const edges=new Universe(graph).project().edges;
+  assert.equal(new Set(edges.map(e=>e.id)).size,edges.length);
+});
+
+test('canonical ids matching object properties still have finite positions and writable pins',()=>{
+  const graph=fixture();
+  for(const n of graph.nodes){if(n.id==='app.core')n.id='__proto__';if(n.parent==='app.core')n.parent='__proto__';}
+  for(const e of graph.edges){if(e.source==='app.core')e.source='__proto__';if(e.target==='app.core')e.target='__proto__';}
+  const map=new Universe(graph);map.place({},'auto');
+  assert.ok([...map.positions.values()].every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)));
+  assert.ok(Object.hasOwn(map.translate('__proto__',1,2),'__proto__'));
 });

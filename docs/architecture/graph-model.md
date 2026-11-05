@@ -45,7 +45,34 @@ the target and the configuration. Edge type ids and labels come from the manifes
 The manifest lists what was analysed, what was not (other targets, deeper hops, levels not built), and node and edge
 counts. The viewer shows the list beside every view, so missing analysis never reads as absence.
 
-## Scopes
+## Continuous map
+
+The viewer reads the canonical `graph.json` once per target and run. Containment and directed references are
+independent: a group contains descendants but does not acquire their declared dependencies. Opening a group changes
+only the visible projection, not graph facts or the surrounding arrangement.
+
+Each reference endpoint maps to its first collapsed ancestor, or to itself when all its ancestors are expanded.
+A projected reference retains the complete set of original reference ids. Projected references of different
+families or directions remain separate. A reference with both endpoints hidden within one group contributes to
+that group's internal-reference count and remains available in its exact-reference list. Explicit self-references
+and references to ancestors remain represented. With no filters, every recorded reference belongs to exactly one
+visible connection or internal-reference count.
+
+Wheel zoom reveals a pointed group when its local contents have room on screen; zooming out folds groups at a
+separate threshold to avoid flicker. Other constellations retain their positions. Hover temporarily emphasizes
+connections to a star or a group's descendants. Inspecting a connection lists every original reference; following
+one reveals its endpoints without closing other groups. The destination's direct references remain available,
+with remote endpoints grouped until the operator approaches them.
+Following an exact reference enables its type and boundary visibility if a current filter would hide it.
+Optional click inspection keeps its marker through projection refreshes while that exact item remains visible.
+Bundle details use the references in the current projection. Hiding an inspected item closes its details instead
+of highlighting a different ancestor. Hover and wheel exploration do not require an inspected item.
+
+Known boundary children can be revealed from recorded containment, including external endpoints of exact
+references. This does not fetch or imply analysis of their own dependencies. Missing coverage remains unknown.
+The project root appears as a separate star only when it is an actual reference endpoint, or when it has no children.
+
+## Scope addresses and generated shards
 
 Each non-boundary node has one shard file, built by `laniakea/shards.py`, including an entry for a project without
 children. File names escape UTF-8 bytes and protect the reserved entry and index names.
@@ -62,8 +89,8 @@ children. File names escape UTF-8 bytes and protect the reserved entry and index
 - **Leaf scope** (a node with no children): the node and all its direct neighbours, exactly.
 
 The project's scope is `entry.json`. Boundary nodes open no scope. `scopes/index.json` lists every openable node with
-its file and direct child count. The viewer uses that count to distinguish collapsed groups from leaf scopes, and
-the index finds nodes outside the scope it shows.
+its file and direct child count. The index maps existing scope addresses to canonical nodes. Opening a scope address reveals that node in the
+continuous map; the shard supplies address metadata rather than limiting the references available to the viewer.
 
 ## Runs and freshness
 

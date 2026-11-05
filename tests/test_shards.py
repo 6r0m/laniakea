@@ -104,6 +104,34 @@ class GenericScopes(unittest.TestCase):
     def setUp(self):
         self.graph = json.loads((FIXTURES / "generic.graph.json").read_text(encoding="utf-8"))
 
+    def test_index_requires_the_direct_child_count(self):
+        found = shards.index(self.graph)
+        del found["nodes"][0]["child_count"]
+        with self.assertRaisesRegex(LaniakeaError, "missing 'child_count'"):
+            schema.validate(found, "index")
+
+    def test_leaf_scopes_do_not_rescan_all_references(self):
+        class CountedEdges(list):
+            scans = 0
+
+            def __iter__(self):
+                self.scans += 1
+                return super().__iter__()
+
+        root = self.graph["nodes"][0]
+        nodes = [root] + [dict(root, id=f"leaf{i}", label=f"Leaf {i}", parent=root["id"])
+                          for i in range(200)]
+        edge = {"id": "self", "source": "leaf0", "target": "leaf0",
+                "type": "imports", "status": "declared", "origin": "synthetic"}
+        edges = CountedEdges([edge, dict(edge, id="ancestor", target=root["id"])] +
+                             [dict(edge, id=f"edge{i}", source=f"leaf{i}", target=f"leaf{i+1}")
+                              for i in range(199)])
+        built = shards.build({"nodes": nodes, "edges": edges})
+        self.assertLessEqual(edges.scans, 2, "leaf scopes must reuse the graph's reference index")
+        self.assertEqual(len(built[shards.file_name("leaf0")]["edges"]), 3, "self-references appear once")
+        self.assertEqual(edge_ids(built[shards.file_name("leaf0")]), {"self", "ancestor", "edge0"})
+        self.assertEqual(edge_ids(built[shards.file_name("leaf199")]), {"edge198"})
+
     def test_other_levels_and_edge_types_work_unchanged(self):
         schema.validate(self.graph)
         built = shards.build(self.graph)

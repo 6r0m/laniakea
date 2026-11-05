@@ -8,9 +8,10 @@ const path = require('node:path');
 
 function viewer() {
   const elements = new Map();
-  const context = vm.createContext({ console, Set, Map, URL, URLSearchParams,
+  const context = vm.createContext({ console, Set, Map, URL, URLSearchParams, setTimeout, clearTimeout,
     document: { body: {}, getElementById: id => {
-      if (!elements.has(id)) elements.set(id, { value: '', textContent: '', hidden: true, setAttribute() {} });
+      if (!elements.has(id)) elements.set(id, { value: '', textContent: '', hidden: true, setAttribute() {},
+        append(){},replaceChildren(){},classList:{add(){},remove(){}} });
       return elements.get(id);
     } }, location: { hash: '' }, history: { pushState() {}, replaceState() {} },
     localStorage: { setItem() {}, getItem() { return null; } }, innerWidth: 1280,
@@ -23,6 +24,7 @@ function viewer() {
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/positions.js'), 'utf8'), context);
   vm.runInContext(source.slice(0, source.lastIndexOf('start().catch')), context);
   vm.runInContext(`
+    globalThis.realRenderDetails = renderDetails;
     for (const name of ['renderBanner','renderCoverage','renderCrumbs','renderFilters','renderGraph','renderDetails']) {
       globalThis[name] = () => {};
     }
@@ -36,6 +38,73 @@ function viewer() {
   vm.runInContext('state.universe=new Universe(fixture);',context);
   return { context, run: source => vm.runInContext(source, context) };
 }
+
+function inspectionViewer() {
+  const instance = viewer();
+  instance.run(`state.cy=cytoscape({headless:true,elements:[]});
+    state.scopeShard={scope:'app',title:'Sample',parents:[]};state.index={nodes:[]};
+    state.manifest={edge_types:[],sources:[]};state.target.roots={};
+    state.universe.place({},'auto');globalThis.readableLabels=()=>{};
+    globalThis.el=()=>({append(){},setAttribute(){}});
+    globalThis.attributes=()=>{};globalThis.togglePanel=(name,open)=>$(name).hidden=!open;
+    globalThis.renderDetails=realRenderDetails;refreshMap();`);
+  return instance;
+}
+
+test('Connections receives projected dependencies while preserving pins and expanded groups',()=>{
+  const {run}=inspectionViewer();
+  run(`state.universe.reveal('app.core.db');$('layout').value='cose';
+    state.positionCache={layouts:{cose:{'app.core':{x:42,y:-17}}},status(){}};
+    globalThis.fitMap=()=>{};
+    globalThis.layoutInputs=[];globalThis.omitConnections=false;
+    const createCy=cytoscape;
+    globalThis.cytoscape=options=>{
+      const config=omitConnections?{...options,elements:options.elements.filter(e=>!e.data.source)}:options;
+      const graph=createCy(config),createLayout=graph.layout;
+      graph.layout=options=>{
+        layoutInputs.push({name:options.name,edges:graph.edges().map(e=>[e.source().id(),e.target().id()])});
+        return createLayout.call(graph,options);
+      };
+      return graph;
+    };`);
+  const expanded=run('JSON.stringify([...state.universe.expanded])');
+  run('layout()');
+  const result=JSON.parse(run('JSON.stringify(layoutInputs[0])'));
+  assert.equal(result.name,'cose');
+  assert.deepEqual(result.edges.sort(),[['app.core','stdlib'],['app.web','app.core']]);
+  assert.equal(run('JSON.stringify([...state.universe.expanded])'),expanded);
+  assert.deepEqual(JSON.parse(run("JSON.stringify(state.universe.positions.get('app.core'))")),{x:42,y:-17});
+  run('omitConnections=true;layout()');
+  assert.equal(run('layoutInputs[1].edges.length'),0,'the same probe must detect the old disconnected layout');
+  run('state.cy.destroy()');
+});
+
+test('filtering retains the optional inspected node without persistent hover emphasis',()=>{
+  const {run}=inspectionViewer();
+  run("selectNode('app.web');state.hidden.add('imports');applyFilters()");
+  assert.equal(run("state.cy.getElementById('app.web').selected()"),true);
+  assert.equal(run('state.selection.id'),'app.web');
+  assert.equal(run("state.cy.elements('.focus,.faded').length"),0);
+  run('state.cy.destroy()');
+});
+
+test('filtered inspected edges refresh their references, and fully hidden inspection clears',()=>{
+  const {run}=inspectionViewer();
+  run(`fixture.edges.push({id:'other',source:'app.web.views',target:'app.core.models',
+      type:'imports.optional',status:'declared',origin:'synthetic'});
+    state.universe=new Universe(fixture);state.universe.place({},'auto');refreshMap();
+    renderDetails(state.shard.edges.find(e=>e.source==='app.web'));
+    state.hidden.add('imports.optional');applyFilters();`);
+  assert.equal(run('state.selection.refs.length'),1,'details must describe the displayed bundle');
+  assert.equal(run('state.cy.edges(\':selected\').length'),1);
+  run("state.hidden.add('imports');applyFilters()");
+  assert.equal(run('state.selection'),null);
+  assert.equal(run("state.cy.elements(':selected').length"),0);
+  assert.equal(run("$('details').hidden"),true);
+  run('state.hidden.clear();state.boundary=true;refreshMap();selectNode("stdlib");state.boundary=false;applyFilters()');
+  assert.equal(run('state.selection'),null,'hiding the inspected external node must close its details');
+  run('state.cy.destroy()');
+});
 
 test('a slow earlier scope cannot overwrite the latest navigation', async () => {
   const { context, run } = viewer();
@@ -91,6 +160,14 @@ test('a failed target change never commits a partial target or manifest', async 
   await run("show('other',null,'push')").catch(()=>{});
   assert.equal(run('state.target.id'), 'sample');
   assert.equal(run('state.file'), 'old.json');
+});
+
+test('failed Up navigation leaves the expanded map intact',async()=>{
+  const {context,run}=viewer();
+  run("state.scopeShard={scope:'app.core',parents:[{file:'entry.json'}]};state.shard=state.scopeShard;state.universe.expanded.add('app.core');");
+  context.fetch=async()=>({ok:false,status:500});
+  await run('up()');
+  assert.equal(run("state.universe.expanded.has('app.core')"),true);
 });
 
 test('overlapping labels preserve selection and members, and return on zoom', () => {
@@ -246,4 +323,26 @@ test('map captions and grouping follow canonical kinds and direct child counts',
   assert.equal(neighbour.data.caption,'Neighbour');
   const container=run("mapNode({id:'group',label:'Sample',level:'package'},new Set(),{},true)");
   assert.equal(container.data.caption,'Sample\npackage / 3 inside');
+});
+
+test('renderer movement cannot mutate the saved arrangement before a released drag', () => {
+  const {run} = viewer();
+  run(`state.cy=cytoscape({headless:true,elements:[]});
+    state.scopeShard={scope:'app',title:'Sample',parents:[]};state.index={nodes:[]};
+    state.manifest.edge_types=[{id:'imports'},{id:'imports.rollup'}];
+    state.universe.place({},'auto');globalThis.readableLabels=()=>{};refreshMap();`);
+  const before=run("JSON.stringify(state.universe.positions.get('app.core'))");
+  run("state.cy.getElementById('app.core').position({x:77,y:33})");
+  assert.equal(run("JSON.stringify(state.universe.positions.get('app.core'))"),before);
+  run('state.cy.destroy()');
+});
+
+test('a reference id matching a node id cannot hide a rendered connection', () => {
+  const {run} = viewer();
+  run(`fixture.edges.push({id:'app.core',source:'app.core',target:'app.web',type:'calls',status:'declared',origin:'synthetic'});
+    state.universe=new Universe(fixture);state.universe.place({},'auto');
+    state.cy=cytoscape({headless:true,elements:[]});state.scopeShard={scope:'app',title:'Sample',parents:[]};
+    state.index={nodes:[]};state.manifest.edge_types=[];globalThis.readableLabels=()=>{};refreshMap();`);
+  assert.equal(run('state.cy.edges().length'),run('state.shard.edges.length'));
+  run('state.cy.destroy()');
 });
