@@ -8,7 +8,7 @@ const path = require('node:path');
 
 function viewer() {
   const elements = new Map();
-  const context = vm.createContext({ console, Set, Map, URL, URLSearchParams, setTimeout, clearTimeout,
+  const context = vm.createContext({ console, Set, Map, URL, URLSearchParams, TextEncoder, AbortController, DOMException, setTimeout, clearTimeout,
     document: { body: {}, getElementById: id => {
       if (!elements.has(id)) elements.set(id, { value: '', textContent: '', hidden: true, setAttribute() {},
         append(){},replaceChildren(){},classList:{add(){},remove(){}} });
@@ -18,13 +18,17 @@ function viewer() {
   });
   const source = fs.readFileSync(path.join(__dirname, '../viewer/app.js'), 'utf8');
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/vendor/cytoscape.min.js'), 'utf8'), context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/vendor/flatbush.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/universe.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/map.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/scene.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/positions.js'), 'utf8'), context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/references.js'), 'utf8'), context);
   vm.runInContext(source.slice(0, source.lastIndexOf('start().catch')), context);
   vm.runInContext(`
     globalThis.realRenderDetails = renderDetails;
+    globalThis.realRenderBanner = renderBanner;
+    globalThis.realRenderGraph=renderGraph;
     for (const name of ['renderBanner','renderCoverage','renderCrumbs','renderFilters','renderGraph','renderDetails']) {
       globalThis[name] = () => {};
     }
@@ -39,17 +43,459 @@ function viewer() {
   return { context, run: source => vm.runInContext(source, context) };
 }
 
-function inspectionViewer() {
+function inspectionViewer(styleEnabled = false) {
   const instance = viewer();
-  instance.run(`state.cy=cytoscape({headless:true,elements:[]});
+  instance.run(`globalThis.css=()=>'#888888';state.cy=cytoscape({headless:true,elements:[],styleEnabled:${styleEnabled},style:style()});
     state.scopeShard={scope:'app',title:'Sample',parents:[]};state.index={nodes:[]};
     state.manifest={edge_types:[],sources:[]};state.target.roots={};
     state.universe.place({},'auto');globalThis.readableLabels=()=>{};
-    globalThis.el=()=>({append(){},setAttribute(){}});
+    // Headless renderer checks have no camera; viewport cuts have Universe and browser coverage.
+    globalThis.viewportCamera=()=>null;
+    globalThis.el=()=>({append(){},setAttribute(){},insertBefore(){},remove(){}});
     globalThis.attributes=()=>{};globalThis.togglePanel=(name,open)=>$(name).hidden=!open;
     globalThis.renderDetails=realRenderDetails;refreshMap();`);
   return instance;
 }
+
+function treeElements(run) {
+  run(`globalThis.el=(tag,text,attrs={})=>({tag,textContent:text||'',attrs,children:[],isConnected:true,
+    append(...items){this.children.push(...items);},replaceChildren(...items){this.children=items;},
+    setAttribute(name,value){this.attrs[name]=value;},remove(){},
+    querySelector(selector){return this.children.flatMap(function walk(n){return[n,...(n.children||[]).flatMap(walk)];})
+      .find(n=>selector==='[data-action="toggle-group"]'&&n.attrs?.['data-action']==='toggle-group')||null;}});
+    for(const id of ['details','banner']){const old=$(id);Object.assign(old,el('aside'));}
+  `);
+}
+
+test('stale warnings disclose complete diagnostics without filling the collapsed banner',()=>{
+  const {run}=viewer();treeElements(run);
+  run(`state.target={id:'sample',project:'SampleProject',stale:true,run:'synthetic-run',changed_count:30,
+    changed:Array.from({length:20},(_,i)=>'Plugins/Sample/Source/VeryLongChangedHeader'+i+'.h')};realRenderBanner();`);
+  assert.equal(run("$('banner').hidden"),false);
+  assert.equal(run("$('banner').children[0].tag"),'details');
+  assert.equal(run("$('banner').children[0].open"),undefined);
+  assert.match(run("$('banner').children[0].children[0].textContent"),/30 inputs changed/);
+  assert.ok(!run("$('banner').children[0].children[0].textContent").includes('VeryLongChangedHeader'));
+  assert.equal(run("$('banner').children[0].children.find(n=>n.tag==='ul').children.length"),20);
+  run('state.target.stale=false;realRenderBanner();');
+  assert.equal(run("$('banner').hidden"),true);
+});
+
+test('grouped compiler references keep manifest names and colors without exposing generated type ids',()=>{
+  const {run}=viewer();
+  run(`state.manifest.edge_types=[{id:'calls',label:'calls (statically resolved)'},
+    {id:'uses.function',label:'function reference'},{id:'uses.type',label:'type reference'}];`);
+  assert.equal(run("colorOf('calls.rollup')"),run("colorOf('calls')"));
+  assert.match(run("typeLabel('calls.rollup')"),/calls.*summary/);
+  assert.match(run("typeLabel('uses.rollup')"),/function reference.*type reference.*summary/);
+  assert.equal(run("colorOf('uses.rollup',[{type:'uses.type'}])"),run("colorOf('uses.type')"));
+  assert.equal(run("typeLabel('uses.rollup',[{type:'uses.type'}])"),'type reference (summary)');
+  assert.notEqual(run("colorOf('uses.rollup',[{type:'uses.type'},{type:'uses.function'}])"),run("colorOf('uses.function')"));
+  assert.equal(run("typeLabel('unknown')"),'unknown');
+});
+
+test('secondary node metadata stays disclosed while references and analysis state remain visible',()=>{
+  const {run}=inspectionViewer();treeElements(run);
+  run(`globalThis.attributes=(node,values)=>{for(const[key,value]of Object.entries(values||{}))node.append(el('dt',key),el('dd',value));};
+    globalThis.renderConnections=panel=>panel.append(el('h3','Outgoing'));
+    const n=state.universe.nodes.get('app.core');n.attrs={analysis:'partial',
+      compiler_analysis:'not analysed: no native unit observed',disables:'many unrelated project options'};
+    selectNode(n.id);`);
+  assert.equal(run("$('details').children.find(n=>n.tag==='details').children[0].textContent"),'Metadata');
+  assert.equal(run("$('details').children.find(n=>n.tag==='details').open"),undefined);
+  assert.ok(run("$('details').children.find(n=>n.tag==='dl').children.some(n=>n.textContent==='partial')"));
+  assert.ok(run("$('details').children.find(n=>n.tag==='dl').children.some(n=>n.textContent==='not analysed: no native unit observed')"));
+  assert.ok(!run("$('details').children.find(n=>n.tag==='dl').children.some(n=>n.textContent==='many unrelated project options')"));
+  assert.ok(run("$('details').children.some(n=>n.tag==='h3'&&n.textContent==='Outgoing')"));
+  run('state.cy.destroy()');
+});
+
+test('semantic expansion updates inspection controls without replacing paged reference state',()=>{
+  const {run}=inspectionViewer();treeElements(run);
+  run(`state.universe.paged=true;state.universe.graph.nodes.find(n=>n.id==='app.core').attrs={};
+    globalThis.renderConnections=()=>{};selectNode('app.core');
+    globalThis.control=$('details').querySelector('[data-action="toggle-group"]');
+    globalThis.epoch=state.referenceEpoch;state.universe.expanded.add('app.core');refreshMap();`);
+  assert.equal(run('control.textContent'),'Collapse constellation');
+  assert.equal(run("control.attrs['aria-expanded']"),'true');
+  assert.equal(run('state.referenceEpoch'),run('epoch'),'reference pages and scroll must survive semantic zoom');
+  run('state.cy.destroy()');
+});
+
+test('Fit overview restores root navigation without moving saved pins',()=>{
+  const {run}=inspectionViewer();
+  run(`state.target.run='test';state.manifest.entry='entry.json';state.indexLookup=new Map([
+    ['app',{id:'app',file:'entry.json'}],['app.core',{id:'app.core',file:'core.json'}]]);
+    setSceneScope('app.core');globalThis.pins=JSON.stringify([...state.universe.positions]);fitOverview();`);
+  assert.equal(run('state.scopeShard.scope'),'app');
+  assert.equal(run('state.file'),'entry.json');
+  assert.equal(run('JSON.stringify([...state.universe.positions])'),run('pins'));
+  run('state.cy.destroy()');
+});
+
+test('reset cancellation preserves user pins and sends no write',async()=>{
+  const {run,context}=viewer();const requests=[];context.fetch=async(url,options)=>{requests.push(options);return{ok:true};};
+  run(`globalThis.prompts=[];globalThis.confirm=message=>{prompts.push(message);return false;};
+    $('layout').value='auto';$('layout').selectedOptions=[{textContent:'orbits'}];
+    state.positionCache=new PositionCache('/layout/sample/entry.json',{auto:{a:{x:1,y:2}}});
+    state.cy=cytoscape({headless:true});globalThis.layout=()=>{};`);
+  await run('resetPositions()');
+  assert.equal(requests.length,0);assert.equal(run('state.positionCache.layouts.auto.a.x'),1);
+  assert.match(run('prompts[0]'),/1 saved position/);
+  assert.match(run('prompts[0]'),/SampleProject \(orbits\)/);
+  run('confirm=()=>true');await run('resetPositions()');
+  assert.equal(requests.length,1);assert.equal(run('state.positionCache.layouts.auto'),undefined);
+  run('confirm=()=>{throw Error("Empty layouts need no confirmation")};');await run('resetPositions()');
+  run('state.cy.destroy()');
+});
+
+test('ordinary labels avoid other star glyphs while a traced name remains available',()=>{
+  const {context,run}=viewer();
+  context.labels=[{id:'a',box:{x1:10,y1:10,x2:40,y2:30},priority:1}];
+  context.glyphs=[{id:'a',box:{x1:0,y1:0,x2:10,y2:10}},{id:'b',box:{x1:25,y1:20,x2:35,y2:35}}];
+  assert.equal(run('nonOverlappingLabels(labels,glyphs).has("a")'),false);
+  run('labels[0].priority=8');assert.equal(run('nonOverlappingLabels(labels,glyphs).has("a")'),true);
+});
+
+test('self-reference loops keep control points outside their glyph through zoom changes',t=>{
+  const {run}=viewer();t.after(()=>run('state.cy?.destroy()'));
+  run(`globalThis.css=()=>'#888';state.scopeShard={scope:'app.core.db'};state.universe.place({},'auto');
+    state.cy=cytoscape({headless:true,styleEnabled:true,style:style(),layout:{name:'preset',fit:false},elements:[
+      {data:{id:'app.core.db',caption:'Database'},classes:'member'},
+      {data:{id:'loop',source:'app.core.db',target:'app.core.db',loopDistance:100,color:'#888'},classes:'loop'}]});
+    state.cy.zoom(.05);readableLabels();`);
+  const fits = () => run("parseFloat(state.cy.getElementById('loop').style('control-point-step-size'))>state.cy.getElementById('app.core.db').outerWidth()");
+  assert.equal(fits(),true);
+  run("state.cy.getElementById('loop').style('control-point-step-size',40)");
+  assert.equal(fits(),false,'the fixed-size control reproduces a loop hidden inside its star');
+  run("state.cy.getElementById('loop').removeStyle('control-point-step-size')");
+  run('state.cy.zoom(2);readableLabels();');
+  assert.equal(fits(),true);
+});
+
+test('a late mouse-out from the previous target cannot erase the current hover trace',()=>{
+  const {run}=viewer();
+  run(`globalThis.css=()=>'#888';globalThis.showTooltip=()=>{};globalThis.readableLabels=()=>{};
+    globalThis.layout=()=>{};const create=cytoscape;
+    globalThis.cytoscape=options=>create({...options,container:undefined,headless:true});
+    state.scopeShard={scope:'app'};realRenderGraph();
+    state.cy.add([{data:{id:'app.core.db'}},{data:{id:'app.web.views'}},
+      {data:{id:'connection',source:'app.core.db',target:'app.web.views'}}]);
+    state.cy.getElementById('app.core.db').emit('mouseover');
+    state.cy.getElementById('app.web.views').emit('mouseover');
+    state.cy.getElementById('app.core.db').emit('mouseout');`);
+  assert.equal(run("state.cy.getElementById('app.web.views').hasClass('hovered')"),true);
+  assert.ok(run("state.cy.edges('.focus').length")>0);
+  run("state.cy.getElementById('app.web.views').emit('mouseout');");
+  assert.equal(run("state.cy.elements('.focus,.hovered').length"),0);
+  run('state.cy.destroy()');
+});
+
+test('bundle counts appear on the inspected connection without cluttering the whole map',()=>{
+  const {run}=viewer();
+  run(`globalThis.css=()=>'#888888';globalThis.styles=style();`);
+  assert.equal(run("styles.find(s=>s.selector==='edge.derived').style.label"),'');
+  assert.equal(run("styles.find(s=>s.selector==='edge.derived.hovered, edge.derived:selected').style.label"),'data(count)');
+});
+
+test('repeated label updates reuse geometry until zoom or the rendered graph changes',t=>{
+  const {run}=viewer();
+  t.after(()=>run('state.cy.destroy()'));
+  run(`globalThis.css=()=>'#888888';
+    state.scopeShard={scope:'app'};
+    state.cy=cytoscape({headless:true,styleEnabled:true,style:style(),elements:[
+      {data:{id:'a',caption:'A',weight:1}},{data:{id:'b',caption:'B',weight:1}},
+      {data:{id:'edge',source:'a',target:'b',weight:1,color:'#888888'}}]});
+    globalThis.geometryWrites=0;const original=state.cy.edges.bind(state.cy);
+    state.cy.edges=(...args)=>{const edges=original(...args),setter=edges.style;
+      edges.style=function(values,...rest){if(values&&Object.hasOwn(values,'arrow-scale'))geometryWrites++;
+        return setter.call(this,values,...rest);};return edges;};
+    readableLabels();readableLabels();`);
+  assert.equal(run('geometryWrites'),0,'camera gestures must use native edge scaling instead of invalidating every reference style');
+  run('state.cy.zoom(2);readableLabels();');
+  assert.equal(run('geometryWrites'),0);
+  run('state.labelGeometry=null;readableLabels();');
+  assert.equal(run('geometryWrites'),0);
+});
+
+test('projection refresh keeps existing renderer elements and their geometry',()=>{
+  const {run}=inspectionViewer();
+  run(`state.universe.reveal('app.core.db');refreshMap();
+    globalThis.points=JSON.stringify(state.cy.nodes().not(':parent').map(n=>[n.id(),n.position()]));
+    globalThis.star=state.cy.nodes()[0];globalThis.reference=state.cy.edges()[0];
+    globalThis.rendererWrites=0;const json=state.cy.json.bind(state.cy);
+    state.cy.json=(...args)=>{if(args.length)rendererWrites++;return json(...args);};
+    star.addClass('focus hovered');refreshMap();`);
+  assert.equal(run('rendererWrites'),0,'unchanged projection must not mutate the renderer');
+  assert.equal(run('state.cy.getElementById(star.id())[0]===star'),true);
+  assert.equal(run('state.cy.getElementById(reference.id())[0]===reference'),true);
+  assert.equal(run("state.cy.elements('.focus,.hovered').length"),0,'scope refresh must clear temporary hover');
+  assert.equal(run("JSON.stringify(state.cy.nodes().not(':parent').map(n=>[n.id(),n.position()]))===points"),true,
+    'updating a compound group must not translate its unchanged child positions');
+});
+
+test('expanded constellations use independent renderer shapes instead of costly native compound parents',()=>{
+  const {run}=inspectionViewer();
+  run("state.universe.reveal('app.core.db');refreshMap();");
+  assert.equal(run("state.cy.nodes(':parent').length"),0,'containment belongs to Universe, not native compound style propagation');
+  assert.equal(run("state.cy.getElementById('app.core').pannable()"),true);
+  assert.equal(run("state.cy.getElementById('app.core.db').pannable()"),false);
+  run('state.cy.destroy()');
+});
+
+test('expanded backgrounds stay below star hit targets even while a reference trace changes',t=>{
+  const {run}=viewer();
+  t.after(()=>run('state.cy?.destroy()'));
+  run(`globalThis.css=()=>'#888';state.scopeShard={scope:'app'};state.index={nodes:[]};state.manifest={edge_types:[]};
+    state.universe.place({},'auto');state.cy=cytoscape({headless:true,styleEnabled:true,style:style(),elements:[]});
+    globalThis.viewportCamera=()=>null;state.universe.reveal('app.core.db');refreshMap();`);
+  assert.equal(run("state.cy.getElementById('app.core').style('z-compound-depth')"),'bottom');
+  assert.ok(run("state.cy.getElementById('app.core').data('layer')")>=0);
+  run("state.cy.getElementById('app.core').addClass('focus');");
+  assert.equal(run("state.cy.getElementById('app.core').style('z-compound-depth')"),'bottom');
+  assert.equal(run("Number(state.cy.getElementById('app.core').style('z-index'))"),run("state.cy.getElementById('app.core').data('layer')"));
+  run("state.cy.getElementById('app.core.db').addClass('hovered');");
+  assert.equal(run("Number(state.cy.getElementById('app.core.db').style('z-index'))"),20);
+  assert.equal(run("state.cy.edges().first().style('z-compound-depth')"),'auto',
+    'connections remain interactive above constellation backgrounds');
+  run('state.cy.destroy()');
+});
+
+test('opening a previously styled ring resets its dimensions and label hit geometry',()=>{
+  const {run}=viewer();
+  run(`globalThis.css=()=>'#888';state.scopeShard={scope:'app',parents:[]};state.index={nodes:[]};
+    state.manifest={edge_types:[]};state.universe.place({},'auto');
+    state.cy=cytoscape({headless:true,styleEnabled:true,style:style(),elements:[]});refreshMap();
+    state.universe.reveal('app.core.db');refreshMap();`);
+  assert.equal(run("state.cy.getElementById('app.core').style('text-valign')"),'top');
+  assert.equal(run("state.cy.getElementById('app.core').width()"),run("state.cy.getElementById('app.core').data('spanX')"));
+  run('state.cy.destroy()');
+});
+
+test('a target change resets renderer scale and cancels old viewport work',()=>{
+  const {run}=viewer();
+  run(`globalThis.css=()=>'#888';globalThis.cancelled=[];globalThis.cancelAnimationFrame=id=>cancelled.push(id);
+    const create=cytoscape;globalThis.cytoscape=options=>create({...options,container:undefined,headless:true});
+    globalThis.layout=()=>{};state.renderScale=4096;state.viewportFrame=123;realRenderGraph();`);
+  assert.equal(run('state.renderScale'),1);
+  assert.equal(run('cancelled.includes(123)'),true);
+  run('state.cy.destroy()');
+});
+
+test('restoring a deep camera reprojects after moving to its viewport',()=>{
+  const {run}=inspectionViewer();
+  run(`globalThis.projectedZooms=[];globalThis.refreshMap=()=>projectedZooms.push(worldZoom());
+    state.target.run='run';restoreView({target:'sample',run:'run',expanded:['app','app.core'],zoom:100,
+      pan:{x:12,y:13},size:{width:state.cy.width(),height:state.cy.height()}});`);
+  assert.equal(run('projectedZooms.at(-1)'),100);
+  run('state.cy.destroy()');
+});
+
+test('exact metadata survives a canonical reference id matching a compact group id',()=>{
+  const {run}=inspectionViewer();
+  run(`const nodes=fixture.nodes,source=nodes.findIndex(n=>n.id==='app.core.db'),target=nodes.findIndex(n=>n.id==='app.core.models');
+    state.universe=new Universe({schema:'laniakea.map/1',nodes,references:[{source,target,type:'calls',count:2}]});
+    state.universe.place({},'auto');state.universe.reveal('app.core.db');refreshMap();
+    renderDetails({id:'group:1',referenceGroup:1,source:'app.core.db',target:'app.core.models',type:'calls',
+      status:'resolved',origin:'compiler',attrs:{line:42}});`);
+  assert.equal(run('state.selection.attrs.line'),42);
+  assert.equal(run('state.selection.referenceGroup'),1);
+  assert.equal(run("state.cy.edges(':selected').length"),1);
+  run('state.cy.destroy()');
+});
+
+test('gesture frames defer label restyling and settle once without moving world pins',()=>{
+  const {run}=viewer();
+  run(`globalThis.css=()=>'#888';state.scopeShard={scope:'app'};
+    state.cy=cytoscape({headless:true,styleEnabled:true,style:style(),elements:[{data:{id:'a',caption:'A'}}]});
+    globalThis.timer=null;globalThis.setTimeout=callback=>{timer=callback;return 1;};globalThis.clearTimeout=()=>{};
+    globalThis.pins=JSON.stringify([...state.universe.positions]);beginViewportGesture();readableLabels();`);
+  assert.equal(run('state.labelGeometry'),undefined);
+  run('timer()');assert.equal(run('state.gestureActive'),false);
+  assert.equal(run('state.labelGeometry.cy===state.cy'),true);
+  assert.equal(run('JSON.stringify([...state.universe.positions])'),run('pins'));
+  run('state.cy.destroy()');
+});
+
+test('Fit map recovers the overview after panning into an empty viewport',()=>{
+  const {run}=viewer();
+  run(`state.universe.place({},'auto');state.cy=cytoscape({headless:true,elements:[]});
+    globalThis.bounds=null;globalThis.frame=box=>bounds=box;globalThis.refreshed=0;
+    globalThis.refreshMap=()=>refreshed++;fitMap();`);
+  assert.equal(run('refreshed'),1);
+  assert.equal(run("state.universe.childIds(state.universe.root).every(id=>{const p=state.universe.positions.get(id);return p.x>=bounds.x1&&p.x<=bounds.x2&&p.y>=bounds.y1&&p.y<=bounds.y2;})"),true);
+  run('state.cy.destroy()');
+});
+
+test('a constellation label delegates its visible family to native dragging and restores inspection',()=>{
+  const {run}=inspectionViewer(true);
+  run(`state.universe.reveal('app.core.db');refreshMap();state.cy.getElementById('app.web').select();
+    state.labelBoxes=new Map([['app.core',{x1:10,y1:10,x2:80,y2:50}]]);
+    $('graph').getBoundingClientRect=()=>({left:0,top:0});
+    globalThis.points=JSON.stringify([...state.universe.positions]);
+    state.gestureActive=true;
+    grabConstellationLabel({button:0,clientX:20,clientY:20});`);
+  assert.equal(run('state.gestureActive'),false,'a fresh mouse press must use current label geometry');
+  assert.equal(run("state.cy.getElementById('app.core.db').selected()"),true);
+  assert.equal(run("state.cy.getElementById('app.core.models').selected()"),true);
+  assert.equal(run("state.cy.getElementById('app.core').pannable()"),false);
+  assert.ok(run("state.cy.edges('.arranging').length")>0);
+  assert.equal(run("state.cy.edges().every(e=>e.style('events')==='no')"),true,'wires crossing a group name cannot intercept native grabbing');
+  run('releaseConstellationLabel()');
+  assert.equal(run("state.cy.edges('.arranging').length"),0);
+  assert.equal(run("state.cy.getElementById('app.core').pannable()"),true);
+  assert.equal(run("state.cy.nodes(':selected').length"),1);
+  assert.equal(run("state.cy.getElementById('app.web').selected()"),true);
+  assert.equal(run("state.cy.edges().every(e=>e.style('events')==='yes')"),true,'connection interaction returns after the gesture');
+  assert.equal(run('JSON.stringify([...state.universe.positions])'),run('points'));
+  run('state.cy.destroy()');
+});
+
+test('following a parallel call inspects its exact source location through the shared connection',()=>{
+  const {run}=inspectionViewer();
+  run(`globalThis.exact={id:'chosen-call',source:'app.core.db',target:'app.core.models',type:'calls',
+      status:'resolved',origin:'compiler',attrs:{line:17}};
+    state.universe=new Universe({...fixture,edges:[exact,{...exact,id:'other-call',attrs:{line:23}}]});
+    state.universe.place({},'auto');refreshMap();followReference(exact);`);
+  assert.equal(run('state.selection?.id'),'chosen-call');
+  assert.equal(run('state.selection.attrs.line'),17);
+  assert.equal(run("state.cy.edges(':selected').length"),1);
+  run('refreshMap()');
+  assert.equal(run('state.selection?.id'),'chosen-call');
+  run("state.hidden.add('calls');refreshMap()");
+  assert.equal(run('state.selection'),null);
+});
+
+test('expanding one branch does not rewrite unchanged stars in another branch',()=>{
+  const {run}=inspectionViewer();
+  run(`const untouched=state.cy.getElementById('app.web'),json=untouched.json.bind(untouched);
+    globalThis.untouchedWrites=0;untouched.json=(...args)=>{if(args.length)untouchedWrites++;return json(...args);};
+    state.universe.reveal('app.core.db');refreshMap();`);
+  assert.equal(run('untouchedWrites'),0);
+  assert.equal(run("state.cy.getElementById('app.core.db').length"),1);
+});
+
+test('flying to a deeply nested function uses its local scale instead of a fixed world radius',()=>{
+  const {run}=viewer();
+  run(`state.universe.place({},'auto');state.universe.radii.set('app.core',0.2);
+    globalThis.frame=(bounds,padding,maxZoom)=>globalThis.camera={bounds,padding,maxZoom};
+    frameNode('app.core.db');`);
+  assert.ok(run('camera.bounds.x2-camera.bounds.x1')<1,'nearby deep stars must be separated on screen');
+  assert.ok(run('camera.maxZoom')>160,'deep hierarchy must not stop at the top-level camera scale');
+});
+
+test('the camera fits constellations smaller than one world unit',()=>{
+  const {run}=viewer();
+  run(`state.cy=cytoscape({headless:true,elements:[],minZoom:0.001,maxZoom:20000});
+    globalThis.readableLabels=()=>{};globalThis.rememberView=()=>{};
+    frame({x1:0,y1:0,x2:0.1,y2:0.1},0,20000);`);
+  assert.ok(run('worldZoom()')>=99,'world-unit rounding must not cap deep camera zoom');
+  run('state.cy.destroy()');
+});
+
+test('renderer rescaling preserves world positions and camera history across deep zoom',()=>{
+  const {run}=inspectionViewer();
+  run(`globalThis.worldPoints=JSON.stringify([...state.universe.positions]);
+    setWorldViewport(4096,{x:120,y:80});
+    history.replaceState=(value)=>globalThis.savedScene=value.scene;rememberView();`);
+  assert.equal(run('worldZoom()'),4096);
+  assert.ok(run('state.cy.zoom()')<=2,'native fonts must remain in a useful renderer scale');
+  assert.equal(run('JSON.stringify([...state.universe.positions])===worldPoints'),true);
+  assert.equal(run('savedScene.zoom'),4096);
+  assert.equal(run("state.cy.getElementById('app.core').position('x')"),run("state.universe.positions.get('app.core').x*state.renderScale"));
+  run('setWorldViewport(0.5,{x:0,y:0});restoreView(savedScene);');
+  assert.equal(run('worldZoom()'),4096);
+  assert.equal(run('JSON.stringify([...state.universe.positions])===worldPoints'),true);
+});
+
+test('compiler locations become source links and structured metadata stays readable',()=>{
+  const {run}=viewer();
+  run(`state.target.roots={project:'C:/Sample'};
+    globalThis.el=(tag,text,attrs)=>({tag,text,attrs,children:[],append(...items){this.children.push(...items);}});
+    globalThis.metadata={children:[],append(...items){this.children.push(...items);}};
+    attributes(metadata,{location:{root:'project',path:'Source/Calls.cpp',line:12},
+      context:{target:'SampleEditor',configuration:'Development'}});`);
+  assert.equal(run('metadata.children[1].children.length'),1,'call locations need an actionable source link');
+  assert.equal(run('metadata.children[1].children[0].attrs.href'),'vscode://file/C:/Sample/Source/Calls.cpp:12');
+  assert.equal(run('metadata.children[3].textContent'),'{"target":"SampleEditor","configuration":"Development"}');
+});
+
+test('compact reference groups display original reference counts in the map and summary',()=>{
+  const {run}=inspectionViewer();
+  run(`const nodes=fixture.nodes;
+    state.universe=new Universe({schema:'laniakea.map/1',nodes,references:[{
+      source:nodes.findIndex(n=>n.id==='app.core.db'),target:nodes.findIndex(n=>n.id==='app.web.views'),type:'calls',count:1000}]});
+    state.universe.place({},'auto');refreshMap();`);
+  assert.equal(run("state.cy.edges()[0].data('weight')"),1000);
+  assert.match(run("$('scope-summary').textContent"),/1000 references/);
+});
+
+test('compact startup resolves scope metadata without downloading canonical graph or scope payloads',async()=>{
+  const {context,run}=viewer(),requests=[];
+  const graph=context.fixture,index={nodes:graph.nodes.filter(n=>!n.boundary).map(n=>({id:n.id,label:n.label,level:n.level,
+    child_count:graph.nodes.filter(c=>c.parent===n.id).length,file:n.id==='app'?'entry.json':n.id+'.json'}))};
+  run(`state.target=null;state.universe=null;state.targets[0].map_url='/map/sample/key/topology.json';
+    state.targets[0].references_url='/map/sample/key/references';globalThis.frameNode=()=>{};`);
+  context.fetch=async url=>{requests.push(url);return {ok:true,json:async()=>url.endsWith('manifest.json')?
+    {entry:'entry.json',edge_types:[],levels:[]} : url.endsWith('index.json')?index:
+    {schema:'laniakea.map/1',nodes:graph.nodes,references:[]}};};
+  await run("show('sample','app.core.db.json','push')");
+  assert.equal(run('state.universe.paged'),true);assert.equal(run('state.scopeShard.scope'),'app.core.db');
+  assert.ok(!requests.some(url=>url.endsWith('/graph.json')||url.endsWith('/app.core.db.json')));
+});
+
+test('large reference lists load on scroll and retain a keyboard load action',()=>{
+  const {run}=viewer();
+  run(`globalThis.el=(tag,text,attrs)=>({tag,text,attrs,children:[],isConnected:true,
+    append(...items){this.children.push(...items);},
+    insertBefore(item,before){this.children.splice(this.children.indexOf(before),0,item);},remove(){this.removed=true;}});
+    globalThis.observers=[];globalThis.IntersectionObserver=class{constructor(callback){this.callback=callback;observers.push(this);}
+      observe(){} disconnect(){this.disconnected=true;}};
+    state.target.roots={};state.manifest={sources:[],edge_types:[]};
+    globalThis.panel=el('section');
+    globalThis.references=Array.from({length:125},(_,i)=>({id:'reference'+i,source:'app.web.views',target:'app.core.db',
+      type:'calls',status:'resolved',origin:'compiler'}));
+    appendReferences(panel,references);`);
+  assert.equal(run("panel.children[0].children.filter(n=>n.tag==='li'&&!n.removed).length"),51);
+  assert.equal(run('observers.length'),1);
+  run('observers[0].callback([{isIntersecting:true}])');
+  assert.equal(run("panel.children[0].children.filter(n=>n.tag==='li'&&!n.removed).length"),101);
+  run('panel.children[0].children.at(-1).children[0].onclick()');
+  assert.equal(run("panel.children[0].children.filter(n=>n.tag==='li'&&!n.removed).length"),125);
+  assert.equal(run('observers[0].disconnected'),true);
+});
+
+test('paged inspection replaces rows, navigates backwards and rejects stale or mismatched pages',async()=>{
+  const {run}=viewer();
+  run(`globalThis.el=(tag,text)=>({tag,text,children:[],isConnected:true,
+    append(...items){this.children.push(...items);},replaceChildren(...items){this.children=items;},
+    setAttribute(){},scrollIntoView(){this.scrolled=(this.scrolled||0)+1;}});
+    state.target.roots={};state.manifest={sources:[],edge_types:[]};state.referenceEpoch=1;
+    globalThis.panel=el('aside');globalThis.fail=false;globalThis.deferred=null;
+    state.referencePages={load:async query=>{
+      if(deferred)return await deferred;
+      return {total:fail?126:125,next_cursor:query.cursor+50<125?query.cursor+50:null,
+        items:Array.from({length:Math.min(50,125-query.cursor)},(_,i)=>({group:1,
+          reference:{id:'ref'+(query.cursor+i),source:'app.core.db',target:'app.web.views',type:'calls',status:'resolved',origin:'compiler'}}))};}};`);
+  await run('appendReferencePage(panel,{node:"app.core"},125)');
+  assert.equal(run('panel.children[0].children[1].children.length'),50);
+  assert.equal(run('panel.children[0].scrolled'),undefined,'initial asynchronous panels must not move the reader');
+  await run('panel.children[0].children[0].children[1].onclick()');
+  assert.equal(run('panel.children[0].scrolled'),1,'a requested page starts at its controls rather than halfway through new rows');
+  assert.equal(run('panel.children[0].children[1].children.length'),50,'previous rows are released rather than appended');
+  assert.equal(run('panel.children[0].children[0].children[3].textContent'),'51-100 of 125 references');
+  await run('panel.children[0].children[0].children[0].onclick()');
+  assert.equal(run('panel.children[0].children[0].children[3].textContent'),'1-50 of 125 references');
+  run('fail=true');await run('panel.children[0].children[0].children[1].onclick()');
+  assert.match(run('panel.children[0].children[0].children[3].textContent'),/does not match/);
+  assert.equal(run('panel.children[0].children[0].children[2].hidden'),false);
+  run('fail=false');await run('panel.children[0].children[0].children[2].onclick()');
+  assert.equal(run('panel.children[0].children[0].children[3].textContent'),'51-100 of 125 references');
+  run('deferred=new Promise(resolve=>globalThis.finish=resolve)');
+  const pending=run('panel.children[0].children[0].children[1].onclick()');
+  run('state.referenceEpoch++;finish({total:125,items:[],next_cursor:null})');await pending;
+  assert.equal(run('panel.children[0].children[1].children.length'),50,'late pages cannot overwrite a different inspection');
+});
 
 test('Connections receives projected dependencies while preserving pins and expanded groups',()=>{
   const {run}=inspectionViewer();
@@ -112,7 +558,9 @@ test('a slow earlier scope cannot overwrite the latest navigation', async () => 
   context.fetch = url => url.endsWith('/index.json') ? Promise.resolve({ok:true,json:async()=>({nodes:[]})}) :
     new Promise(resolve => pending[url.split('/').pop()] = title => resolve({ok:true,json:async()=>({title,scope:'app'})}));
   const older = run("show('sample','older.json','push')");
+  await new Promise(setImmediate);
   const newer = run("show('sample','newer.json','push')");
+  await new Promise(setImmediate);
   pending['newer.json']('newer'); await newer;
   pending['older.json']('older'); await older;
   assert.equal(run('state.file'), 'newer.json');
@@ -122,7 +570,7 @@ test('a slow earlier scope cannot overwrite the latest navigation', async () => 
 test('a removed bookmark falls back to the entry only on HTTP 404', async () => {
   const { context, run } = viewer();
   context.fetch = async url => url.endsWith('missing.json') ? {ok:false,status:404}
-    : {ok:true,json:async()=>({title:'entry',scope:'app'})};
+    : {ok:true,json:async()=>url.endsWith('index.json')?{nodes:[]}:{title:'entry',scope:'app'}};
   await run("show('sample','missing.json','push')");
   assert.equal(run('state.file'), 'entry.json');
 });
@@ -183,6 +631,33 @@ test('overlapping labels preserve selection and members, and return on zoom', ()
   assert.equal(run('nonOverlappingLabels(labels).has("member")'), true);
 });
 
+test('inspected connection endpoints keep labels ahead of unrelated overlapping stars',t=>{
+  const {run}=viewer();
+  run(`state.cy=cytoscape({headless:true,styleEnabled:true,layout:{name:'preset',fit:false},elements:[
+    {data:{id:'unrelated',caption:'Unrelated'},position:{x:200,y:200}},
+    {data:{id:'caller',caption:'Caller'},position:{x:200,y:200}},
+    {data:{id:'callee',caption:'Callee'},position:{x:500,y:200}},
+    {data:{id:'call',source:'caller',target:'callee'}}]});
+    state.cy.width=()=>800;state.cy.height=()=>600;state.scopeShard={scope:'root'};
+    // The null renderer has no font metrics; supply the rectangles a canvas renderer measures.
+    state.cy.nodes().forEach(n=>n.renderedBoundingBox=()=>{const p=n.renderedPosition();return {
+      x1:p.x-50,y1:p.y+20,x2:p.x+50,y2:p.y+50,w:100,h:30};});
+    state.cy.getElementById('call').select();declutterLabels();`);
+  t.after(()=>run('state.cy.destroy()'));
+  assert.equal(run("state.cy.getElementById('caller').style('text-opacity')"),'1');
+  assert.equal(run("state.cy.getElementById('unrelated').style('text-opacity')"),'0');
+  assert.equal(run("state.cy.getElementById('callee').style('text-opacity')"),'1');
+});
+
+test('visible label hit boxes use renderer font metrics rather than estimated character widths',()=>{
+  const {run}=viewer();
+  run(`state.cy=cytoscape({headless:true,styleEnabled:true,elements:[{data:{id:'a',caption:'Caption'}}]});
+    state.cy.width=()=>800;state.cy.height=()=>600;state.scopeShard={scope:'a'};
+    state.cy.nodes()[0].renderedBoundingBox=()=>({x1:150,y1:120,x2:270,y2:180,w:120,h:60});declutterLabels();`);
+  assert.deepEqual(JSON.parse(run("JSON.stringify(state.labelBoxes.get('a'))")),{x1:150,y1:120,x2:270,y2:180,w:120,h:60});
+  run('state.cy.destroy()');
+});
+
 test('a late search index cannot populate another project cache', async () => {
   const { context, run } = viewer();
   let release;
@@ -206,6 +681,36 @@ test('drag release sends only that pin and captures its scope before navigation'
   assert.equal(requests[1].url, '/layout/sample/entry.json');
   assert.deepEqual(JSON.parse(requests[1].body), {layout:'auto',positions:{b:{x:3,y:3}}});
   assert.deepEqual(JSON.parse(requests[0].body).positions, {a:{x:42,y:-17}});
+});
+
+test('large constellation moves use bounded sequential requests and drain their responses', async () => {
+  const {context,run}=viewer();
+  const saved=new Map();let inFlight=0,requests=0;
+  context.fetch=async(_url,options)=>{
+    const bytes=Buffer.byteLength(options.body);requests++;
+    if(bytes>48*1024||inFlight+bytes>64*1024)throw Error('browser keepalive budget exceeded');
+    inFlight+=bytes;
+    for(const [id,p] of Object.entries(JSON.parse(options.body).positions))saved.set(id,p);
+    return {ok:true,text:async()=>{inFlight-=bytes;return '{}';}};
+  };
+  run(`globalThis.cache=new PositionCache('/layout/sample/entry.json',{});
+    globalThis.points=Object.fromEntries(Array.from({length:1500},(_,i)=>['symbol:'+String(i).padStart(70,'0'),{x:i,y:-i}]));`);
+  assert.equal(await run("cache.moveMany('auto',points)"),true);
+  assert.equal(saved.size,1500);assert.ok(requests>2);assert.equal(inFlight,0);
+  assert.equal(run('unsavedPositionCaches.size'),0);
+});
+
+test('a failed middle position batch remains unsaved until the complete move is retried', async()=>{
+  const {context,run}=viewer();let requests=0;
+  context.fetch=async()=>({ok:++requests!==2,status:500,text:async()=> 'write failed'});
+  run(`globalThis.cache=new PositionCache('/layout/sample/entry.json',{});
+    globalThis.points=Object.fromEntries(Array.from({length:1500},(_,i)=>['symbol:'+String(i).padStart(70,'0'),{x:i,y:-i}]));`);
+  assert.equal(await run("cache.moveMany('auto',points)"),false);
+  assert.equal(run('cache.errors.size'),1500);
+  assert.equal(run('unsavedPositionCaches.size'),1);
+  context.fetch=async()=>({ok:true,text:async()=> '{}'});
+  assert.equal(await run("cache.moveMany('auto',points)"),true);
+  assert.equal(run('unsavedPositionCaches.size'),0);
 });
 
 test('quick consecutive moves are saved in order, with the newest coordinates last', async () => {

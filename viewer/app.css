@@ -42,7 +42,7 @@ select, button, input { font: inherit; color: var(--fg); background: var(--bg); 
   border-radius: 5px; padding: 5px 9px; min-height: 32px; max-width: 100%; }
 button, summary { cursor: pointer; touch-action: manipulation; }
 button:hover, select:hover, button[aria-expanded='true'] { border-color: var(--accent); }
-button:disabled { opacity: 0.45; cursor: default; }
+button:disabled, button[aria-disabled='true'] { opacity: 0.45; cursor: default; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 a { color: var(--accent); text-underline-offset: 3px; }
 a:hover { text-decoration-thickness: 2px; }
@@ -57,6 +57,10 @@ a:hover { text-decoration-thickness: 2px; }
 #find-hint { color: var(--muted); font-size: 12px; }
 #find-hint:empty { display: none; }
 #banner, #error { padding: 8px 20px; background: var(--warn-bg); color: var(--warn-fg); overflow-wrap: anywhere; }
+#banner { flex-shrink: 0; max-height: 26vh; overflow: auto; }
+#banner summary { font-weight: 600; }
+#banner p { margin: 8px 0; }
+#banner ul { margin: 8px 0; padding-left: 20px; }
 .scope-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 20px; border-bottom: 1px solid var(--line); }
 #scope-summary { flex: 1; min-width: 180px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 #position-status { color: var(--muted); font-size: 12px; }
@@ -86,9 +90,9 @@ aside p { margin: 8px 0 14px; overflow-wrap: anywhere; }
 .filter { display: flex; align-items: center; gap: 8px; margin: 8px 0; color: var(--fg); cursor: pointer; }
 .filter input { min-height: auto; accent-color: var(--accent); }
 .swatch { flex: 0 0 16px; height: 3px; border-radius: 2px; }
-.swatch.derived { background-image: repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 7px); }
-dl { margin: 12px 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 12px; font-size: 12px; }
-dt { color: var(--muted); }
+.swatch.derived { background: currentColor; }
+dl { margin: 12px 0; display: grid; grid-template-columns: fit-content(40%) minmax(0, 1fr); gap: 6px 12px; font-size: 12px; }
+dt { color: var(--muted); overflow-wrap: anywhere; }
 dd { margin: 0; overflow-wrap: anywhere; }
 .node-list { display: grid; gap: 4px; }
 .node-list button { text-align: left; overflow-wrap: anywhere; background: none; border-color: transparent;
@@ -102,7 +106,11 @@ dd { margin: 0; overflow-wrap: anywhere; }
 .connections button, .endpoints button { border: 0; background: none; color: var(--accent); padding: 0;
   min-height: 24px; text-align: left; overflow-wrap: anywhere; text-decoration: underline; text-underline-offset: 3px; }
 .connections small { display: block; color: var(--muted); }
-.connections a { display: inline-block; margin-top: 4px; font-size: 12px; }
+.connections a { display: inline-block; max-width: 100%; margin-top: 4px; font-size: 12px; }
+.reference-pager { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0;
+  position: sticky; top: 0; z-index: 1; padding: 6px 0; background: var(--panel); }
+.node-metadata { margin-top: 14px; font-size: 12px; }
+.node-metadata summary { color: var(--muted); }
 .endpoints { display: flex; flex-direction: column; align-items: flex-start; }
 .open-scope { display: block; padding: 8px 10px; border: 1px solid var(--line); border-radius: 5px; }
 .examples { padding-left: 18px; font-size: 12px; overflow-wrap: anywhere; }

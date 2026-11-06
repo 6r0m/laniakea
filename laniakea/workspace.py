@@ -5,6 +5,7 @@ import json
 import os
 import re
 import shutil
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -29,6 +30,25 @@ def read_json(path):
 
 def same_file(a, b):
     return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
+
+
+@contextmanager
+def writer_lock(path, message):
+    """One local writer; Windows releases the byte lock when its owning process exits."""
+    import msvcrt
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open('a+b') as stream:
+        stream.seek(0)
+        try:
+            msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+        except OSError as error:
+            raise LaniakeaError(message) from error
+        try:
+            yield
+        finally:
+            stream.seek(0)
+            msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
 
 
 class Workspace:
@@ -76,6 +96,13 @@ class Workspace:
         run = self.target_dir(target_id) / "runs" / (stamp + ".partial")
         run.mkdir(parents=True)
         return run
+
+    @contextmanager
+    def extraction_lock(self, target_id):
+        """One writer per mutable target copy; the operating system releases a dead owner's lock."""
+        with writer_lock(self.target_dir(target_id) / 'extraction.lock',
+                         f'another extraction of {target_id} is running; its copy is protected'):
+            yield
 
     def commit_run(self, target_id, partial):
         """Publish a complete run, then point latest.json at it."""

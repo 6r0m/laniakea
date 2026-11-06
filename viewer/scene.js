@@ -3,7 +3,7 @@
 'use strict';
 
 function zoomWithWheel(event) {
-  if (!state.cy) return;
+  if (!state.cy || state.drag) return;
   // Leave browser zoom available through Ctrl+wheel. Ordinary wheel input belongs to this canvas only.
   event.stopImmediatePropagation();
   if (event.ctrlKey || event.metaKey) return;
@@ -18,14 +18,27 @@ function zoomWithWheel(event) {
     state.wheelFrame = null;
     const factor = Math.exp(Math.max(-0.7,Math.min(0.7,-state.wheelDelta*0.0018)));
     state.wheelDelta = 0;
-    state.cy.zoom({level:state.cy.zoom()*factor,renderedPosition:state.wheelPoint});
+    zoomAt(worldZoom()*factor,state.wheelPoint);
   });
+}
+
+function zoomAt(level, point) {
+  if (state.drag) return;
+  level = Math.max(state.cy.minZoom(),Math.min(state.cy.maxZoom(),level));
+  const ratio = level/worldZoom(), pan = state.cy.pan();
+  setWorldViewport(level,{x:point.x+(pan.x-point.x)*ratio,y:point.y+(pan.y-point.y)*ratio},true);
+}
+
+function fitOverview() {
+  if (!state.cy) return;
+  setSceneScope(state.universe.root);
+  fitMap();
 }
 
 function rememberView() {
   if (!state.cy || !state.universe || state.framing) return;
   const scene = { target: state.target.id, run: state.target.run, expanded: [...state.universe.expanded],
-    pan: { ...state.cy.pan() }, zoom: state.cy.zoom(), size:{width:state.cy.width(),height:state.cy.height()} };
+    pan: { ...state.cy.pan() }, zoom: worldZoom(), size:{width:state.cy.width(),height:state.cy.height()} };
   history.replaceState({ scene }, '', hashFor(state.target.id, state.file));
 }
 
@@ -37,20 +50,17 @@ function restoreView(scene) {
   map.expanded = new Set(scene.expanded.filter(id => map.nodes.has(id) && map.isGroup(id)));
   map.expanded.add(map.root);
   refreshMap();
-  state.framing = true;
   const size = scene.size && Number.isFinite(scene.size.width) && Number.isFinite(scene.size.height) ? scene.size :
     {width:state.cy.width(),height:state.cy.height()};
-  state.cy.viewport({zoom:scene.zoom,pan:{x:scene.pan.x+(state.cy.width()-size.width)/2,
-    y:scene.pan.y+(state.cy.height()-size.height)/2}});
-  state.lastZoom = state.cy.zoom();
-  state.framing = false;
-  readableLabels();
+  setWorldViewport(scene.zoom,{x:scene.pan.x+(state.cy.width()-size.width)/2,
+    y:scene.pan.y+(state.cy.height()-size.height)/2});
+  refreshMap();
   rememberView();
   return true;
 }
 
 function scopeFor(id) {
-  return state.index.nodes.find(n => n.id === id);
+  return state.indexLookup ? state.indexLookup.get(id) : state.index.nodes.find(n => n.id === id);
 }
 
 function setSceneScope(id) {
@@ -71,7 +81,7 @@ function semanticZoom(direction) {
   state.zoomFrame = requestAnimationFrame(() => {
     state.zoomFrame = null;
     if (!state.pointer || !state.cy || state.drag) return;
-    const map = state.universe, cy = state.cy, zoom = cy.zoom(), pan = cy.pan();
+    const map = state.universe, cy = state.cy, zoom = worldZoom(), pan = cy.pan();
     const point = {x:(state.pointer.x-pan.x)/zoom,y:(state.pointer.y-pan.y)/zoom};
     let change, changed = false;
     for (let i = 0; i < map.nodes.size; i++) {
@@ -108,10 +118,12 @@ function flyToNode(id, inspect = true) {
   rememberView();
   const entry = scopeFor(id);
   if (entry) history.pushState(null, '', hashFor(state.target.id, entry.file));
+  state.selection=null;
   map.reveal(id);
   setSceneScope(id);
   refreshMap(); frameNode(id);
   if (inspect) selectNode(id);
+  else renderDetails(null);
 }
 
 function followReference(edge) {
@@ -120,11 +132,13 @@ function followReference(edge) {
   const entry = scopeFor(edge.target);
   if (entry) history.pushState(null, '', hashFor(state.target.id, entry.file));
   state.hidden.delete(edge.type);
+  state.pendingReference=edge;
   if (map.nodes.get(edge.source).boundary || map.nodes.get(edge.target).boundary) state.boundary = true;
   map.reveal(edge.source); map.reveal(edge.target);
   setSceneScope(edge.target);
   refreshMap(); frameNode(edge.target);
   renderDetails({...edge,refs:[edge]});
+  state.pendingReference=null;
 }
 
 function resizeMap() {

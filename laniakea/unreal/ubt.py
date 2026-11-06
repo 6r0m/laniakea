@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""The two Unreal Build Tool modes the profile runs. Neither builds; both may refresh UBT's own caches in the project.
-Every output and log goes to the run folder."""
+"""UBT rule queries and guarded native action export. Outputs and logs belong to the run folder;
+native build planning runs only in the marked copy, without compiling or linking."""
 
 import json
 import subprocess
@@ -63,3 +63,14 @@ def check_project(exported, project_file):
     named = exported.get("ProjectFile")
     if not named or not same_file(named, project_file):
         raise LaniakeaError(f"the export names project {named!r}, not {project_file}")
+
+
+def build_actions(engine_root, project_file, target, configuration, out_dir, workspace):
+    """Export native build actions, without compiling/linking, inside the guarded copy only."""
+    from .project_copy import check
+    check(project_file, workspace)
+    output = Path(out_dir) / "build-actions.json"
+    _run(engine_root, ["-Mode=Build", target, engine.PLATFORM, configuration,
+                       f"-Project={project_file}", f"-WriteOutdatedActions={output}",
+                       "-NoHotReloadFromIDE", "-NoUBTMakefiles", "-DisableAdaptiveUnity", "-NoUBA"], out_dir, "native-actions")
+    return _read(output, "native-actions", out_dir)

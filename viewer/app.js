@@ -25,8 +25,16 @@ async function getJson(url) {
 
 function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 
-function colorOf(type) {
-  const index = state.manifest.edge_types.findIndex((t) => t.id === type);
+function connectionTypes(type, refs = []) {
+  const types = state.manifest.edge_types;
+  if (types.some(t => t.id === type) || !type.endsWith('.rollup')) return [type];
+  const originals = [...new Set(refs.map(r => r.type))];
+  return originals.length ? originals : types.filter(t => t.id.split('.')[0] === type.split('.')[0]).map(t => t.id);
+}
+
+function colorOf(type, refs) {
+  const types = connectionTypes(type, refs);
+  const index = types.length === 1 ? state.manifest.edge_types.findIndex(t => t.id === types[0]) : -1;
   return index < 0 ? '#888888' : PALETTE[index % PALETTE.length];
 }
 
@@ -58,7 +66,7 @@ async function start() {
   for (const name of ['filters', 'details']) {
     $(`toggle-${name}`).onclick = () => togglePanel(name);
   }
-  $('fit').onclick = () => fitMap();
+  $('fit').onclick = fitOverview;
   $('reset-layout').onclick = resetPositions;
   $('clear').onclick = () => { unfocus(); renderDetails(null); };
   $('up').onclick = up;
@@ -83,6 +91,8 @@ async function start() {
   });
   new ResizeObserver(resizeMap).observe($('graph'));
   $('graph').addEventListener('wheel', zoomWithWheel, {capture:true,passive:false});
+  $('graph').addEventListener('mousedown',grabConstellationLabel,{capture:true});
+  window.addEventListener('mouseup',releaseConstellationLabel);
   $('graph').addEventListener('pointermove', event => {
     const box = $('graph').getBoundingClientRect();
     state.pointer = { x: event.clientX - box.left, y: event.clientY - box.top };
@@ -113,28 +123,53 @@ async function show(id, file, mode) {
     const target = state.targets.find((t) => t.id === id);
     const manifest = changed ? await getJson(`/data/${encodeURIComponent(id)}/manifest.json`) : state.manifest;
     if (navigation !== state.navigation) return;
-    let wanted = file || manifest.entry;
-    let shard;
-    try {
-      shard = await getJson(`/data/${encodeURIComponent(id)}/scopes/${encodeURIComponent(wanted)}`);
-    } catch (error) {
-      if (error.status !== 404 || wanted === manifest.entry) throw error;
-      wanted = manifest.entry;
-      shard = await getJson(`/data/${encodeURIComponent(id)}/scopes/${encodeURIComponent(wanted)}`);
-      mode = 'replace';
-    }
-    if (navigation !== state.navigation) return;
     const index = await projectIndex(target);
     if (navigation !== state.navigation) return;
-    const universe = changed || !state.universe ?
-      new Universe(await getJson(`/data/${encodeURIComponent(id)}/graph.json`)) : state.universe;
+    let wanted = file || manifest.entry;
+    let shard, universe;
+    if (target.map_url) {
+      universe = changed || !state.universe ? new Universe(await getJson(target.map_url)) : state.universe;
+      if (navigation !== state.navigation) return;
+      let entry = index.nodes.find(n=>n.file===wanted);
+      if (!entry) {
+        try { await getJson(`/data/${encodeURIComponent(id)}/scopes/${encodeURIComponent(wanted)}`); }
+        catch(error) {
+          if(error.status!==404||wanted===manifest.entry)throw error;
+          wanted=manifest.entry;mode='replace';entry=index.nodes.find(n=>n.file===wanted);
+        }
+        if(!entry)throw new Error('Scope is missing from the canonical node index');
+      }
+      const byId=new Map(index.nodes.map(n=>[n.id,n]));
+      shard={scope:entry.id,title:entry.label,nodes:[],edges:[],members:[],drill:{},
+        parents:universe.paths.get(entry.id).slice(0,-1).map(id=>({title:universe.nodes.get(id).label,file:byId.get(id)?.file})).filter(p=>p.file)};
+    } else {
+      try {
+        shard = await getJson(`/data/${encodeURIComponent(id)}/scopes/${encodeURIComponent(wanted)}`);
+      } catch (error) {
+        if (error.status !== 404 || wanted === manifest.entry) throw error;
+        wanted = manifest.entry;
+        shard = await getJson(`/data/${encodeURIComponent(id)}/scopes/${encodeURIComponent(wanted)}`);
+        mode = 'replace';
+      }
+      if (navigation !== state.navigation) return;
+      universe = changed || !state.universe ?
+        new Universe(await getJson(`/data/${encodeURIComponent(id)}/graph.json`)) : state.universe;
+    }
     if (navigation !== state.navigation) return;
     const positionCache = changed || !state.positionCache ? await loadPositionCache(id, manifest.entry) : state.positionCache;
     if (navigation !== state.navigation) return;
-    if (changed) state.hidden = new Set();
+    if (changed) { state.hidden = new Set(); state.referencePages?.clear(); }
+    const referencePages = universe.paged && (changed || !state.referencePages) ?
+      new ReferencePages(target.references_url,{validate:page=>{
+        for(const item of page.items) {
+          const group=universe.graph.edges[item.group-1],edge=item.reference;
+          if(!group||group.source!==edge.source||group.target!==edge.target||group.type!==edge.type)throw new Error('Reference page does not match this map');
+        }
+      }}) : state.referencePages;
     const fresh = changed || !state.cy;
     Object.assign(state, { target, manifest, shard, scopeShard: shard, universe, file: wanted,
-      elsewhere: null, selection: null, positionCache, index });
+      elsewhere: null, selection: null, positionCache, index, referencePages,
+      indexLookup:new Map(index.nodes.map(n=>[n.id,n])) });
     universe.reveal(shard.scope);
     if (shard.scope !== universe.root && universe.isGroup(shard.scope)) universe.expanded.add(shard.scope);
     remember('target', id);
@@ -149,7 +184,6 @@ async function show(id, file, mode) {
     renderBanner();
     renderCoverage();
     renderCrumbs();
-    renderFilters();
     if (fresh) renderGraph();
     else refreshMap();
     if (!restoreView(savedScene) && shard.scope !== universe.root) frameNode(shard.scope);
@@ -202,7 +236,7 @@ function onKey(event) {
   if (event.target === $('graph') && state.cy && ['+', '=', '-'].includes(event.key)) {
     event.preventDefault();
     state.pointer = {x:state.cy.width()/2,y:state.cy.height()/2};
-    state.cy.zoom({level:state.cy.zoom() * (event.key === '-' ? 0.8 : 1.25),renderedPosition:state.pointer});
+    zoomAt(worldZoom() * (event.key === '-' ? 0.8 : 1.25),state.pointer);
   }
   if (event.target === $('graph') && state.cy && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
     event.preventDefault();
@@ -222,10 +256,16 @@ function renderBanner() {
   const banner = $('banner');
   const t = state.target;
   banner.hidden = !t.stale;
+  banner.replaceChildren();
   if (t.stale) {
-    const more = t.changed_count > t.changed.length ? ` and ${t.changed_count - t.changed.length} more` : '';
-    banner.textContent = `Stale: ${t.changed_count} build input(s) changed since run ${t.run} (${t.changed.join(', ')}${more}). ` +
-      `Run: python laniakea.py extract ${t.id}; restart the server to load the new run.`;
+    const details = el('details');
+    details.append(el('summary', `Snapshot out of date: ${t.changed_count} inputs changed`),
+      el('p', `Showing run ${t.run}. Run: python laniakea.py extract ${t.id}; restart the server to load the new run.`));
+    const changed = el('ul');
+    for (const path of t.changed) changed.append(el('li', path));
+    details.append(changed);
+    if (t.changed_count > t.changed.length) details.append(el('p', `${t.changed_count-t.changed.length} more changed inputs.`));
+    banner.append(details);
   }
 }
 
@@ -258,10 +298,10 @@ function renderFilters() {
     members.append(button);
   }
   panel.append(members, el('h2', 'Connections'));
-  const present = new Set(state.universe.graph.edges.map(e => e.type));
+  const present = state.universe.typeCounts;
   for (const type of state.manifest.edge_types) {
     if (!present.has(type.id)) continue;
-    const count = state.universe.graph.edges.filter(e => e.type === type.id).length;
+    const count = present.get(type.id);
     const box = el('input', null, { type: 'checkbox' });
     box.checked = !state.hidden.has(type.id);
     box.disabled = !present.has(type.id);
@@ -284,7 +324,8 @@ function renderFilters() {
   attributes(keys, {
     'hover': 'emphasize direct connections',
     'wheel': 'reveal or fold constellations around the pointer',
-    'drag space': 'fly through the map',
+    'drag space': 'fly through the map, including inside open constellations',
+    'drag a star or name': 'arrange it; an open constellation moves by its name',
     'click': 'inspect a star or connection',
     '/': 'find any recorded node; Enter flies to it',
     'double-click, Enter': 'expand or collapse a constellation',
@@ -293,7 +334,7 @@ function renderFilters() {
     'Backspace, Up': 'one level up',
     'Alt+Left': 'back, as in any page',
     'Esc': 'clear the highlight',
-    'dashed line': 'summary of several relationships',
+    'connection': 'references; hover for direction, type and count',
     'dashed star': 'outside the analysed target',
     'diamond': 'outside the project',
   });
@@ -352,24 +393,48 @@ function sourceLink(location) {
   const root = state.target.roots[location.root];
   if (!root) return null;
   const path = `${root.replace(/\\/g, '/').replace(/\/$/, '')}/${location.path}`;
-  return el('a', location.path, { href: `vscode://file/${encodeURI(path)}:${location.line || 1}` });
+  return el('a', `${location.path}:${location.line || 1}`, { href: `vscode://file/${encodeURI(path)}:${location.line || 1}` });
 }
 
 function attributes(list, attrs) {
   for (const [key, value] of Object.entries(attrs || {})) {
-    list.append(el('dt', key), el('dd', Array.isArray(value) ? value.join(', ') || '-' : value));
+    const detail = el('dd');
+    const location = value && typeof value === 'object' && typeof value.root === 'string' &&
+      typeof value.path === 'string' && sourceLink(value);
+    if (location) detail.append(location);
+    else detail.textContent = Array.isArray(value) ? value.map(item => typeof item === 'object' ? JSON.stringify(item) : item).join(', ') || '-' :
+      value && typeof value === 'object' ? JSON.stringify(value) : value == null || value === '' ? '-' : String(value);
+    list.append(el('dt', key), detail);
   }
 }
 
-function typeLabel(type) {
+function typeLabel(type, refs) {
   const entry = state.manifest.edge_types.find(t => t.id === type);
-  return entry ? entry.label : type;
+  if (entry) return entry.label;
+  const types = connectionTypes(type, refs);
+  return type.endsWith('.rollup') && types.length ? types.map(id =>
+    state.manifest.edge_types.find(t => t.id === id)?.label || id).join(' / ') + ' (summary)' : type;
 }
 
 function renderDetails(item) {
   const isNode = item && item.level !== undefined;
-  item = item && (isNode ? state.shard.nodes : state.shard.edges).find(current => current.id === item.id) || null;
-  const rendered = item && state.cy.getElementById(isNode ? item.id : state.universe.renderPrefix + item.id);
+  const requested = item;
+  item = requested && (isNode ? state.shard.nodes : requested.referenceGroup ? [] : state.shard.edges)
+    .find(current => current.id === requested.id) || null;
+  let connection = item;
+  if (!item && requested && !isNode) {
+    for (const projected of state.shard.edges) {
+      const exact = projected.refs?.find(reference => reference.id === requested.id);
+      if (!requested.referenceGroup && exact && projected.source === exact.source && projected.target === exact.target) {
+        item = {...exact,refs:[exact]}; connection = projected; break;
+      }
+      if (requested.referenceGroup && projected.source === requested.source && projected.target === requested.target &&
+          projected.refs?.some(group=>group.group===requested.referenceGroup)) {
+        item = {...requested,refs:[requested]};connection=projected;break;
+      }
+    }
+  }
+  const rendered = item && state.cy.getElementById(isNode ? item.id : state.universe.renderPrefix + connection.id);
   if (item && (!rendered.length || !rendered.visible())) item = null;
   state.selection = item;
   if (state.cy) {
@@ -378,6 +443,19 @@ function renderDetails(item) {
     readableLabels();
   }
   const panel = $('details');
+  const key = state.universe.paged && item ? JSON.stringify([item.id,item.referenceGroup||null,
+    [...state.hidden].sort(),state.boundary,item.refs?.map(r=>r.group)]) : null;
+  if (key && key===state.detailsKey) {
+    const control = panel.querySelector('[data-action="toggle-group"]');
+    if (control) updateGroupControl(control, item.id);
+    return;
+  }
+  state.detailsKey=key;
+  state.referenceEpoch=(state.referenceEpoch||0)+1;
+  state.referencePages?.cancel();
+  for (const observer of state.referenceObservers || []) observer.disconnect();
+  state.referenceObservers = [];
+  panel.scrollTop=0;panel.scrollLeft=0;
   panel.replaceChildren();
   if (!item) {
     togglePanel('details', false);
@@ -394,21 +472,27 @@ function renderDetails(item) {
       const link = sourceLink(item.source);
       if (link) { const dd = el('dd'); dd.append(link); list.append(el('dt', 'source'), dd); }
     }
-    attributes(list, item.attrs);
+    const entries = Object.entries(item.attrs || {}), isAnalysis = ([name]) => name === 'analysis' || name.endsWith('_analysis');
+    attributes(list, Object.fromEntries(entries.filter(isAnalysis)));
     panel.append(list);
     if (state.universe.isGroup(item.id) && item.id !== state.universe.root) {
-      const opened = state.universe.expanded.has(item.id);
-      const button = el('button', opened ? 'Collapse constellation' : 'Expand constellation', {type:'button'});
+      const button = el('button', null, {type:'button','data-action':'toggle-group'});
+      updateGroupControl(button, item.id);
       button.onclick = () => toggleGroup(item.id);
       panel.append(button);
     }
     const fly = el('button', 'Fly to star', {type:'button'});
     fly.onclick = () => flyToNode(item.id);
     panel.append(fly);
+    const secondary = Object.fromEntries(entries.filter(entry => !isAnalysis(entry)));
+    if (Object.keys(secondary).length) {
+      const metadata = el('details', null, {class:'node-metadata'}), fields = el('dl');
+      attributes(fields, secondary); metadata.append(el('summary', 'Metadata'), fields); panel.append(metadata);
+    }
     renderConnections(panel, item);
     return;
   }
-  panel.append(el('h2', typeLabel(item.type)));
+  panel.append(el('h2', typeLabel(item.type, item.refs)));
   const endpoints = el('p', null, {class:'endpoints'});
   for (const id of [item.source,item.target]) {
     const button = el('button', label(id), {type:'button'});
@@ -417,33 +501,114 @@ function renderDetails(item) {
     endpoints.append(button);
   }
   panel.append(endpoints);
-  appendReferences(panel, item.refs || [item]);
+  if (state.universe.paged && !item.referenceGroup) {
+    appendReferencePage(panel,{groups:item.refs.map(r=>r.group)},referenceTotal(item.refs));
+  } else appendReferences(panel, item.refs || [item]);
+}
+
+function updateGroupControl(button, id) {
+  const opened = state.universe.expanded.has(id);
+  button.textContent = opened ? 'Collapse constellation' : 'Expand constellation';
+  button.setAttribute('aria-expanded', String(opened));
+}
+
+function referenceRow(edge) {
+  const row = el('li');
+  const source=state.universe.nodes.get(edge.source),target=state.universe.nodes.get(edge.target);
+  if(!source||!target)throw new Error('Unknown exact-reference endpoint');
+  const button=el('button',`${source.label} (${source.level}) -> ${target.label} (${target.level})`,
+    {type:'button',title:'Reveal this exact reference in the map'});
+  button.onclick=()=>followReference(edge);
+  const origin=state.manifest.sources.find(s=>s.id===edge.origin);
+  row.append(button,el('small',`${typeLabel(edge.type)} / ${edge.status}`+
+    ` / ${origin?origin.name+' '+origin.version:edge.origin}`+
+    (state.hidden.has(edge.type)||!state.boundary&&(source.boundary||target.boundary)?' / hidden by filters':'')));
+  if(edge.attrs){const metadata=el('dl');attributes(metadata,edge.attrs);row.append(metadata);}
+  if(source.source){const link=sourceLink(source.source);if(link)row.append(link);}
+  return row;
+}
+
+function appendReferencePage(panel, query, expectedTotal) {
+  const epoch=state.referenceEpoch,cache=state.referencePages;
+  const section=el('section'),controls=el('div',null,{class:'reference-pager'});
+  const previous=el('button','Previous',{type:'button','aria-label':'Previous references'}),
+    next=el('button','Next',{type:'button','aria-label':'Next references'});
+  const retry=el('button','Retry references',{type:'button'}),status=el('small',null,{role:'status','aria-live':'polite',class:'muted'});
+  const list=el('ul',null,{class:'connections'});
+  controls.append(previous,next,retry,status);section.append(controls,list);panel.append(section);
+  const cursors=[0];let number=0,nextCursor=null,busy=false,lastAttempt=0;
+  const current=()=>epoch===state.referenceEpoch&&cache===state.referencePages&&section.isConnected;
+  const load=async (page,navigate=false)=>{
+    if(busy)return false;
+    busy=true;lastAttempt=page;previous.disabled=number===0;next.disabled=nextCursor===null;
+    previous.setAttribute('aria-disabled','true');next.setAttribute('aria-disabled','true');
+    retry.hidden=true;status.textContent='Loading references...';
+    try{
+      const data=await cache.load({...query,cursor:cursors[page],limit:50});
+      if(!current())return false;
+      if(data.total!==expectedTotal)throw new Error('Reference count does not match this map');
+      list.replaceChildren(...data.items.map(item=>referenceRow({...item.reference,referenceGroup:item.group})));
+      number=page;nextCursor=data.next_cursor;
+      if(nextCursor!==null)cursors[page+1]=nextCursor;
+      status.textContent=`${data.total?page*50+1:0}-${page*50+data.items.length} of ${data.total} references`;
+      if(navigate)section.scrollIntoView({block:'start',inline:'nearest',behavior:'instant'});
+      return true;
+    }catch(error){
+      if(!current()||error.name==='AbortError')return false;
+      status.textContent=`Could not load references: ${error.message}. Retry to continue.`;retry.hidden=false;
+      return false;
+    }finally{
+      busy=false;
+      if(current()){
+        const focused=document.activeElement;
+        previous.disabled=number===0;next.disabled=nextCursor===null;
+        previous.setAttribute('aria-disabled',String(previous.disabled));next.setAttribute('aria-disabled',String(next.disabled));
+        if((focused===previous||focused===next)&&focused.disabled)(focused===next?previous:next).focus({preventScroll:true});
+      }
+    }
+  };
+  previous.onclick=()=>load(number-1,true);next.onclick=()=>load(number+1,true);retry.onclick=()=>load(lastAttempt,true);
+  return load(0);
 }
 
 function appendReferences(panel, references) {
   const list = el('ul', null, {class:'connections'});
-  for (const edge of references) {
-    const row = el('li');
-    const source = state.universe.nodes.get(edge.source), target = state.universe.nodes.get(edge.target);
-    const button = el('button', `${source.label} (${source.level}) -> ${target.label} (${target.level})`,
-      {type:'button',title:'Reveal this exact reference in the map'});
-    button.onclick = () => followReference(edge);
-    const origin = state.manifest.sources.find(s => s.id === edge.origin);
-    row.append(button, el('small', `${typeLabel(edge.type)} / ${edge.status}` +
-      ` / ${origin ? origin.name + ' ' + origin.version : edge.origin}` +
-      (state.hidden.has(edge.type) || !state.boundary && (source.boundary || target.boundary) ? ' / hidden by filters' : '')));
-    if (edge.attrs) { const metadata = el('dl'); attributes(metadata, edge.attrs); row.append(metadata); }
-    if (source.source) {
-      const link = sourceLink(source.source);
-      if (link) row.append(link);
+  const more = el('li'), load = el('button', 'Load more references', {type:'button'});
+  more.append(load); list.append(more);
+  let offset = 0, observer = null;
+  const appendBatch = () => {
+    const end = Math.min(references.length, offset + 50);
+    for (; offset < end; offset++) {
+      const edge = references[offset];
+      list.insertBefore(referenceRow(edge), more);
     }
-    list.append(row);
-  }
+    if (offset >= references.length) { more.remove(); if (observer) observer.disconnect(); }
+    else load.textContent = `Load next ${Math.min(50, references.length - offset)} references`;
+  };
+  load.onclick = appendBatch;
+  appendBatch();
   panel.append(list);
+  if (offset < references.length && typeof IntersectionObserver !== 'undefined') {
+    observer = new IntersectionObserver(entries => {
+      if (!list.isConnected) { observer.disconnect(); return; }
+      if (entries.some(entry => entry.isIntersecting)) appendBatch();
+    }, {root:$('details'),rootMargin:'400px'});
+    observer.observe(more);
+    (state.referenceObservers ||= []).push(observer);
+  }
 }
 
 function renderConnections(panel, node) {
   const map = state.universe;
+  if(map.paged){
+    const stats=map.referenceStats.get(node.id);
+    for(const [heading,direction] of [['Outgoing','outgoing'],['Incoming','incoming'],['Within','within']]){
+      const count=stats[direction];panel.append(el('h3',`${heading} (${count})`));
+      if(count)appendReferencePage(panel,{node:node.id,direction},count);
+      else panel.append(el('p',node.boundary?'No further references were analysed.':'No recorded references.',{class:'muted'}));
+    }
+    return;
+  }
   const references = map.references(node.id);
   for (const [heading, match] of [
     ['Outgoing', e => map.contains(node.id,e.source) && !map.contains(node.id,e.target)],

@@ -1,6 +1,6 @@
 # Architecture
 
-Laniakea is a local command line tool and a static viewer that turn a project's build rules into a navigable graph.
+Laniakea is a local command line tool and a static viewer that turn build rules and compiler facts into a navigable graph.
 
 | what you will find | file |
 |---|---|

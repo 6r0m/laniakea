@@ -7,7 +7,7 @@ async (page) => {
   const point = id => page.evaluate(id => {
     const n = state.cy.getElementById(id), p = n.renderedPosition(), b = $('graph').getBoundingClientRect();
     if (!n.length) throw new Error(`Missing visible star ${id}`);
-    return {x:b.x+p.x,y:b.y+p.y,world:{...n.position()},pan:{...state.cy.pan()}};
+    return {x:b.x+p.x,y:b.y+p.y,world:{...state.universe.positions.get(id)},pan:{...state.cy.pan()}};
   }, id);
   const wheel = async (id, expanded, delta) => {
     for (let i = 0; i < 80; i++) {
@@ -21,7 +21,8 @@ async (page) => {
   };
   const accounted = () => page.evaluate(() => {
     const refs = [...state.shard.edges.flatMap(e=>e.refs),...[...state.shard.internal.values()].flat()];
-    return refs.length === state.universe.graph.edges.length && new Set(refs.map(e=>e.id)).size === refs.length;
+    return referenceTotal(refs)+state.shard.outside+state.shard.hidden===referenceTotal(state.universe.graph.edges) &&
+      new Set(refs.map(e=>e.id)).size===refs.length;
   });
   const cdp = await page.context().newCDPSession(page);
   await page.bringToFront();
@@ -31,11 +32,71 @@ async (page) => {
   await page.waitForFunction(()=>typeof state!=='undefined'&&state.cy&&state.positionCache);
   await frames();
   check(await page.evaluate(()=>$('error').hidden),'Startup reports an error');
+  check(await page.evaluate(()=>state.target.id==='sample'&&state.universe.nodes.has('folder:Sample')&&
+    state.universe.nodes.has('module:SampleCore')),'This mutation check requires the served synthetic sample');
+  const original=await page.evaluate(()=>({mode:$('layout').value,layouts:state.positionCache.layouts}));
+  const acceptInitialReset=dialog=>dialog.accept();
+  page.on('dialog',acceptInitialReset);
+  try {await page.evaluate(async()=>{await resetPositions();});}
+  finally {page.off('dialog',acceptInitialReset);}
+  await frames();
   const posts=[],errors=[];
-  const observe = request => {if(request.method()==='POST')posts.push(request.url());};
+  const observe = request => {if(request.method()==='POST'&&new URL(request.url()).pathname.startsWith('/layout/'))posts.push(request.url());};
   const error = value => errors.push(value.message);
   page.on('request',observe);page.on('pageerror',error);
   try {
+    await page.evaluate(()=>{
+      globalThis.bannerProbe=state.target;
+      state.target={...state.target,stale:true,changed_count:40,
+        changed:Array.from({length:40},(_,i)=>`Plugins/Sample/SyntheticFeature${i}/Source/Private/SyntheticComponent${i}.cpp`)};
+      renderBanner();
+    });
+    try {
+      const warning=page.locator('#banner'),disclosure=warning.locator('details'),summary=disclosure.locator('summary');
+      check(await warning.isVisible()&&await disclosure.count()===1,'Staleness needs a persistent warning with diagnostic disclosure');
+      check(await summary.innerText()==='Snapshot out of date: 40 inputs changed','Staleness summary must identify the snapshot limitation');
+      check(await disclosure.evaluate(node=>!node.open),'Stale paths must start collapsed');
+      check(await warning.evaluate(node=>node.getBoundingClientRect().height<=70),'Collapsed staleness consumes the desktop map');
+      await summary.click();
+      check(await disclosure.evaluate(node=>node.open&&node.querySelectorAll('li').length===40&&
+        node.textContent.includes('SyntheticComponent39.cpp')&&node.textContent.includes('python laniakea.py extract sample')),
+        'Expanding staleness lost exact diagnostics or its recovery action');
+      await summary.focus();await page.keyboard.press('Enter');
+      check(await disclosure.evaluate(node=>!node.open),'Stale diagnostics cannot be collapsed by keyboard');
+      await page.setViewportSize({width:390,height:844});await frames();
+      const narrowWarning=await page.evaluate(()=>{
+        const banner=$('banner').getBoundingClientRect(),map=$('graph').getBoundingClientRect();
+        return {banner:banner.height,mapHeight:map.height,mapTop:map.top,viewport:innerHeight,width:document.documentElement.scrollWidth};
+      });
+      check(narrowWarning.banner<=115&&narrowWarning.mapHeight>=300&&narrowWarning.mapTop<=narrowWarning.viewport-300&&narrowWarning.width<=390,
+        'Collapsed stale warning leaves no useful narrow map: '+JSON.stringify(narrowWarning));
+    } finally {
+      await page.setViewportSize({width:1440,height:1000});
+      await page.evaluate(()=>{state.target=bannerProbe;delete globalThis.bannerProbe;renderBanner();});await frames();
+    }
+    await page.evaluate(()=>{
+      const node=state.universe.nodes.get(state.universe.root);
+      globalThis.metadataProbe={id:node.id,attrs:node.attrs};
+      node.attrs={...node.attrs,synthetic_notes:Array.from({length:120},(_,i)=>`Sample metadata item ${i}`)};
+      flyToNode(node.id);
+    });
+    try {
+      const metadata=page.locator('#details .node-metadata'),summary=metadata.locator('summary');
+      check(await summary.innerText()==='Metadata'&&await metadata.evaluate(node=>!node.open),'Bulk node metadata must start collapsed');
+      const usable=await page.evaluate(()=>{
+        const panel=$('details'),box=panel.getBoundingClientRect(),heading=panel.querySelector('h3'),metadata=panel.querySelector('.node-metadata');
+        return heading&&heading.getBoundingClientRect().bottom<=box.bottom&&
+          Boolean(metadata.compareDocumentPosition(heading)&Node.DOCUMENT_POSITION_FOLLOWING)&&
+          [...panel.querySelectorAll('button')].some(b=>b.textContent==='Fly to star'&&b.getBoundingClientRect().bottom<=box.bottom);
+      });
+      check(usable,'Bulk metadata pushes navigation or connection headings below the initial detail viewport');
+      await summary.click();
+      check(await metadata.evaluate(node=>node.open&&node.textContent.includes('Sample metadata item 119')),'Metadata disclosure loses recorded values');
+      await summary.click();
+    } finally {
+      await page.evaluate(()=>{state.universe.nodes.get(metadataProbe.id).attrs=metadataProbe.attrs;
+        delete globalThis.metadataProbe;state.detailsKey=null;renderDetails(null);fitMap();});await frames();
+    }
     const connections=await page.evaluate(()=>{
       const create=cytoscape,mode=$('layout').value;
       let edges=0;
@@ -52,16 +113,52 @@ async (page) => {
     const double=await point('folder:Sample');
     await page.mouse.dblclick(double.x,double.y,{delay:80});await frames();
     check(await page.evaluate(()=>state.universe.expanded.has('folder:Sample')),'Double-click was intercepted by the details panel');
+    const wire=await page.evaluate(()=>{
+      const cy=state.cy,g=$('graph').getBoundingClientRect();
+      const glyphs=cy.nodes().not('.expanded').map(n=>n.renderedBoundingBox({includeLabels:false,includeOverlays:false,includeUnderlays:false}));
+      const backgrounds=cy.nodes('.expanded').map(n=>n.renderedBoundingBox({includeLabels:false,includeOverlays:false,includeUnderlays:false}));
+      const inside=(p,b)=>p.x>b.x1&&p.x<b.x2&&p.y>b.y1&&p.y<b.y2;
+      for(const e of cy.edges()){
+        const p=e.renderedMidpoint();
+        if(p.x>25&&p.y>25&&p.x<cy.width()-25&&p.y<cy.height()-25&&backgrounds.some(b=>inside(p,b))&&
+          !glyphs.some(b=>inside(p,b))&&![...state.labelBoxes.values()].some(b=>inside(p,b)))return{id:e.id(),x:g.x+p.x,y:g.y+p.y};
+      }
+      throw Error('Synthetic scene needs an exposed connection inside a constellation');
+    });
+    await page.waitForFunction(()=>!state.gestureActive);await page.mouse.move(wire.x,wire.y);await frames();
+    const wireHover=await page.evaluate(()=>({traced:state.cy.edges('.hovered').length,tooltip:!$('map-tooltip').hidden,
+      gesture:state.gestureActive,targets:state.cy.elements('.hovered').map(e=>e.id())}));
+    check(wireHover.traced>0&&wireHover.tooltip,'A constellation background blocks connection tracing: '+JSON.stringify(wireHover));
+    await page.mouse.click(wire.x,wire.y);await frames();
+    check(await page.evaluate(()=>state.selection&&state.selection.level===undefined&&!$('details').hidden),
+      'A constellation background blocks connection inspection');
+    await page.getByRole('button',{name:'Clear selection',exact:true}).click();
     await page.evaluate(()=>selectNode('folder:Sample'));
     await page.getByRole('button',{name:'Collapse constellation',exact:true}).click();
     await page.getByRole('button',{name:'Clear selection',exact:true}).click();
     await page.getByRole('button',{name:'Fit map',exact:true}).click();await frames();
-    const unaffected=await page.evaluate(()=>({...state.cy.getElementById('folder:Experimental').position()}));
+    await page.evaluate(()=>selectNode('folder:Sample'));
+    const groupControl=page.locator('#details [data-action="toggle-group"]');
+    check(await groupControl.innerText()==='Expand constellation'&&await groupControl.getAttribute('aria-expanded')==='false',
+      'Collapsed constellation control has incorrect state');
+    await page.waitForFunction(()=>!state.referencePages?.pending.size);
+    await page.evaluate(()=>{globalThis.groupProbe={button:document.querySelector('#details [data-action="toggle-group"]'),
+      pager:document.querySelector('#details .reference-pager')};if(!groupProbe.pager)throw Error('Synthetic folder needs a reference pager');});
+    await wheel('folder:Sample',true,-120);await page.waitForFunction(()=>!state.gestureActive);
+    check(await groupControl.innerText()==='Collapse constellation'&&await groupControl.getAttribute('aria-expanded')==='true',
+      'Semantic zoom leaves a stale constellation control');
+    check(await page.evaluate(()=>groupProbe.button===document.querySelector('#details [data-action="toggle-group"]')&&
+      groupProbe.pager===document.querySelector('#details .reference-pager')),'Semantic zoom recreated the reader\'s reference pager');
+    await groupControl.click();await page.evaluate(()=>delete globalThis.groupProbe);
+    await page.getByRole('button',{name:'Clear selection',exact:true}).click();
+    await page.getByRole('button',{name:'Fit map',exact:true}).click();await frames();
+    const unaffected=await page.evaluate(()=>({...state.universe.positions.get('folder:Experimental')}));
     const openSteps=await wheel('folder:Sample',true,-120);
     check(await accounted(),'References disappeared while opening the folder');
-    const now=await page.evaluate(()=>({...state.cy.getElementById('folder:Experimental').position()}));
+    const now=await page.evaluate(()=>({...state.universe.positions.get('folder:Experimental')}));
     check(now.x===unaffected.x&&now.y===unaffected.y,'Expanding a folder moved an unrelated constellation');
     check(posts.length===0,'Zooming wrote user pins');
+    await page.waitForFunction(()=>!state.gestureActive);
     const hover=await point('plugin:SampleGameplay');
     await page.mouse.move(hover.x,hover.y);await frames();
     check(await page.evaluate(()=>state.cy.edges('.focus').length>0&&state.selection===null),'Hover requires a click or does not trace');
@@ -74,11 +171,11 @@ async (page) => {
       box:state.cy.getElementById('plugin:SampleGameplay').renderedBoundingBox({includeLabels:false,includeOverlays:false,includeUnderlays:false}),
       graph:$('graph').getBoundingClientRect().toJSON()}));
     const groupPosts=posts.length;
-    const groupX=groupBefore.graph.x+(groupBefore.box.x1+groupBefore.box.x2)/2;
-    const candidates=[{x:groupX,y:groupBefore.graph.y+groupBefore.box.y1-20},
-      ...[[0.25,0.25],[0.75,0.25],[0.25,0.75],[0.75,0.75]].map(([x,y])=>({
-        x:groupBefore.graph.x+groupBefore.box.x1+groupBefore.box.w*x,
-        y:groupBefore.graph.y+groupBefore.box.y1+groupBefore.box.h*y}))];
+    await page.waitForFunction(()=>!state.gestureActive);
+    const candidates=await page.evaluate(()=>{
+      const b=state.labelBoxes.get('plugin:SampleGameplay'),g=$('graph').getBoundingClientRect();
+      return b?[{x:g.x+(b.x1+b.x2)/2,y:g.y+(b.y1+b.y2)/2}]:[];
+    });
     let grab;
     for(const candidate of candidates){
       await page.mouse.move(candidate.x,candidate.y);await frames();
@@ -93,8 +190,23 @@ async (page) => {
     check(Math.abs(groupAfter.child.x-groupBefore.child.x)>0.1&&
       Math.abs((groupAfter.child.x-groupBefore.child.x)-(groupAfter.group.x-groupBefore.group.x))<0.000001,
       'Dragging a constellation detached its child positions');
+    const body=await page.evaluate(()=>{
+      const cy=state.cy,b=cy.getElementById('plugin:SampleGameplay').renderedBoundingBox({includeLabels:false,includeOverlays:false,includeUnderlays:false});
+      const graph=$('graph').getBoundingClientRect();
+      return {x:graph.x+b.x1+b.w*.2,y:graph.y+b.y1+b.h*.2,pan:{...cy.pan()},
+        positions:JSON.stringify([...state.universe.positions])};
+    });
+    const beforePan=posts.length;
+    await page.mouse.move(body.x,body.y);await page.mouse.down();
+    await page.mouse.move(body.x+35,body.y+25,{steps:8});await page.mouse.up();
+    check(await page.evaluate(body=>Math.abs(state.cy.pan().x-body.pan.x-35)<1&&
+      JSON.stringify([...state.universe.positions])===body.positions,body)&&posts.length===beforePan,
+      'An expanded background must pan without moving or saving its descendants');
+    await page.evaluate(pan=>setWorldViewport(worldZoom(),pan),body.pan);
+    await page.waitForFunction(()=>!state.gestureActive);
     const source=await point('module:SampleGameplay');
     await page.mouse.click(source.x,source.y);
+    await page.waitForFunction(()=>state.selection?.id==='module:SampleGameplay');
     await page.evaluate(()=>{state.hidden.add('depends.public');applyFilters();});
     check(await page.evaluate(()=>state.selection?.id==='module:SampleGameplay'&&
       state.cy.getElementById('module:SampleGameplay').selected()),'Filtering lost the inspected module marker');
@@ -150,16 +262,22 @@ async (page) => {
     await page.mouse.move(empty.x+65,empty.y+35,{steps:8});await page.mouse.up();
     const flight=await page.evaluate(()=>({...state.cy.pan()}));
     check(Math.abs(flight.x-empty.pan.x)>30&&posts.length===flightPosts,'Dragging space did not fly without writing pins');
-    const beforeReset=await page.evaluate(()=>({...state.cy.getElementById('engine').position()}));
+    const beforeReset=await page.evaluate(()=>({...state.universe.positions.get('engine')}));
     await page.getByRole('button',{name:'Fit map',exact:true}).click();
+    check(await page.evaluate(()=>state.file===state.manifest.entry&&state.scopeShard.scope===state.universe.root&&
+      location.hash===hashFor(state.target.id,state.manifest.entry)&&$('up').disabled&&
+      $('crumbs').querySelector('[aria-current="page"]').textContent.startsWith(state.manifest.project)),
+      'Fit map leaves a deep breadcrumb or scope address on the overview');
     await page.evaluate(()=>renderDetails(null));await frames();
+    await page.waitForFunction(()=>!state.gestureActive&&state.visibleLabels);
     const engine=await point('engine'), beforeDrag=posts.length;
+    await page.mouse.move(engine.x,engine.y);await frames();
+    check(await page.evaluate(()=>state.visibleLabels.has('engine')),'Hover did not expose the external star name');
     // Drag the visible name, preserving coverage of label hit-testing as well as the star glyph.
     const labelPoint=await page.evaluate(()=>{
-      const n=state.cy.getElementById('engine'),p=n.renderedPosition(),b=$('graph').getBoundingClientRect();
-      const align=n.style('text-halign');
-      return{x:b.x+p.x+(align==='left'?-n.renderedWidth()/2-12:align==='right'?n.renderedWidth()/2+12:10),
-        y:b.y+p.y+n.renderedHeight()/2+15};
+      const n=state.cy.getElementById('engine'),b=$('graph').getBoundingClientRect();
+      const label=n.renderedBoundingBox({includeNodes:false,includeEdges:false,includeLabels:true,includeOverlays:false,includeUnderlays:false});
+      return{x:b.x+(label.x1+label.x2)/2,y:b.y+(label.y1+label.y2)/2};
     });
     await page.mouse.move(labelPoint.x,labelPoint.y);await page.mouse.down();
     await page.mouse.move(labelPoint.x+45,labelPoint.y+55,{steps:8});await page.mouse.up();
@@ -184,6 +302,58 @@ async (page) => {
       check(restored.engine.x===stored.engine.x&&restored.engine.y===stored.engine.y,'A fresh browser did not restore the outer pin');
       check(restored.deep.x===deepStored.x&&restored.deep.y===deepStored.y,'A fresh browser did not restore the deep pin');
     } finally {await fresh.close();}
+    const savedBeforeReset=await page.evaluate(()=>({mode:$('layout').value,modeLabel:$('layout').selectedOptions[0].textContent,project:state.target.project,
+      pins:JSON.stringify(state.positionCache.layouts),positions:JSON.stringify([...state.universe.positions]),
+      count:Object.keys(state.positionCache.layouts[$('layout').value]||{}).length}));
+    check(savedBeforeReset.count>0,'Reset refusal needs saved synthetic positions');
+    const beforeCancel=posts.length,cancelDialog=page.waitForEvent('dialog');
+    const cancelClick=page.getByRole('button',{name:'Reset layout',exact:true}).click();
+    const refused=await cancelDialog;
+    const resetMessage=refused.message();
+    check(refused.type()==='confirm'&&resetMessage.includes(savedBeforeReset.project)&&resetMessage.includes(savedBeforeReset.modeLabel)&&
+      resetMessage.includes(String(savedBeforeReset.count)),'Reset confirmation omits the affected project, mode or position count');
+    await refused.dismiss();await cancelClick;await frames();
+    check(posts.length===beforeCancel&&await page.evaluate(before=>JSON.stringify(state.positionCache.layouts)===before.pins&&
+      JSON.stringify([...state.universe.positions])===before.positions&&!$('reset-layout').disabled,savedBeforeReset),
+      'Cancelling reset changed or saved positions');
+    const acceptDialog=page.waitForEvent('dialog'),acceptClick=page.getByRole('button',{name:'Reset layout',exact:true}).click();
+    const accepted=await acceptDialog;await accepted.accept();await acceptClick;
+    await page.waitForFunction(()=>state.positionCache.pending===0&&state.positionCache.errors.size===0&&
+      !Object.hasOwn(state.positionCache.layouts,$('layout').value));
+    check(posts.length===beforeCancel+1,'Confirmed reset must make exactly one layout request');
+    const paging=await page.evaluate(async()=>{
+      const pane=document.createElement('aside');pane.id='pagination-probe';
+      pane.style.cssText='position:fixed;top:150px;right:0;width:296px;height:600px;z-index:20;overflow:auto';
+      document.body.append(pane);
+      globalThis.pagerProbe={pane,cache:state.referencePages,epoch:state.referenceEpoch};state.referenceEpoch++;
+      state.referencePages={load:async query=>({total:125,next_cursor:query.cursor+50<125?query.cursor+50:null,
+        items:Array.from({length:Math.min(50,125-query.cursor)},(_,i)=>({group:1,reference:{id:'sample-page-'+(query.cursor+i),
+          source:'module:SampleCore',target:'module:SampleGameplay',type:'calls',status:'resolved',origin:'compiler'}}))})};
+      return await appendReferencePage(pane,{node:'module:SampleCore'},125);
+    });
+    check(paging,'Synthetic reference page did not load');
+    try {
+      const probe=page.locator('#pagination-probe'),next=probe.getByRole('button',{name:'Next references',exact:true});
+      await next.focus();await page.keyboard.press('Enter');
+      await page.waitForFunction(()=>document.querySelector('#pagination-probe [role=status]').textContent==='51-100 of 125 references');
+      check(await next.evaluate(node=>document.activeElement===node),'Paging lost keyboard focus');
+      await page.evaluate(()=>pagerProbe.pane.scrollTop=800);await frames();
+      check(await page.evaluate(()=>{const pane=pagerProbe.pane.getBoundingClientRect(),pager=pagerProbe.pane.querySelector('.reference-pager').getBoundingClientRect();
+        return pager.top>=pane.top-1&&pager.top<=pane.top+20;}),'Reference controls disappeared while scrolling');
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(()=>document.querySelector('#pagination-probe [role=status]').textContent==='101-125 of 125 references');
+      const paged=await page.evaluate(()=>{
+        const pane=pagerProbe.pane,first=pane.querySelector('li button').getBoundingClientRect(),pager=pane.querySelector('.reference-pager').getBoundingClientRect();
+        return {bounded:pane.querySelectorAll('li').length===25,startsAtFirstRow:first.top>=pager.bottom-2&&first.top<pane.getBoundingClientRect().bottom,
+          focus:document.activeElement.getAttribute('aria-label')==='Previous references',noOverflow:pane.scrollWidth<=pane.clientWidth,
+          geometry:{first:first.top,pager:pager.bottom,pane:pane.getBoundingClientRect().top,scroll:pane.scrollTop}};
+      });
+      check(paged.bounded&&paged.startsAtFirstRow&&paged.focus&&paged.noOverflow,'Reference page realization: '+JSON.stringify(paged));
+    } finally {
+      await page.evaluate(()=>{state.referencePages=pagerProbe.cache;state.referenceEpoch=pagerProbe.epoch;pagerProbe.pane.remove();delete globalThis.pagerProbe;});
+    }
+    await page.evaluate(()=>{flyToNode('module:SampleCore');$('details').scrollTop=500;$('details').scrollLeft=20;flyToNode('module:SampleGameplay');});
+    check(await page.evaluate(()=>$('details').scrollTop===0&&$('details').scrollLeft===0),'New inspection retained the previous list scroll');
     await page.setViewportSize({width:390,height:844});await frames();
     await page.getByRole('button',{name:'Fit map',exact:true}).click();
     const narrow=await page.evaluate(()=>({width:document.documentElement.scrollWidth,viewport:innerWidth,
@@ -194,6 +364,17 @@ async (page) => {
       wheelExpansion:true,wheelCollapse:true,hoverOnlyTracing:true,allReferencesAccounted:true,
       exactReferenceFollow:true,doubleClickExpansion:true,spaceFlight:true,reloadAndHistory:true,
       groupDragSaved:true,deepPinSaved:true,labelDragSaved:true,freshBrowserRestored:true,
-      narrowViewport:true,openSteps,errors};
-  } finally {page.off('request',observe);page.off('pageerror',error);}
+      narrowViewport:true,keyboardPaging:true,stickyPager:true,boundedReferenceRows:true,
+      compactStaleWarning:true,metadataDisclosure:true,liveGroupControl:true,overviewAddress:true,resetRefusal:true,
+      interiorConnectionTracing:true,openSteps,errors};
+  } finally {
+    page.off('request',observe);page.off('pageerror',error);
+    await page.evaluate(async original=>{
+      const cache=state.positionCache;
+      if(!await cache.write(original.mode,null))throw new Error('Could not restore the synthetic layout');
+      if(Object.hasOwn(original.layouts,original.mode)&&!await cache.moveMany(original.mode,original.layouts[original.mode]))
+        throw new Error('Could not restore the synthetic pins');
+      $('layout').value=original.mode;layout();
+    },original);
+  }
 }

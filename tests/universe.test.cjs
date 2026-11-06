@@ -6,6 +6,99 @@ const path=require('node:path');
 const {Universe}=require('../viewer/universe.js');
 const fixture=()=>JSON.parse(fs.readFileSync(path.join(__dirname,'../fixtures/generic.graph.json'),'utf8'));
 
+test('viewport cuts evict distant detail, retain crossing references and preserve pins on return',()=>{
+  const map=new Universe(difficultGraph());map.place({},'auto');map.reveal('app.core.nested.leaf');map.reveal('app.web.views');
+  const before=JSON.stringify([...map.positions]);
+  const p=map.positions.get('app.core.nested.leaf'),zoom=20;
+  const camera={x1:p.x-10,y1:p.y-10,x2:p.x+10,y2:p.y+10,zoom};
+  const view=map.project(new Set(),true,camera);
+  assert.ok(view.outside>0,'distant references are counted separately from absent references');
+  assert.ok(!view.expanded.has('app.web'),'distant open branches release their detail');
+  assert.ok(view.edges.some(e=>e.refs.some(r=>r.id==='nested')),'crossing references remain represented');
+  const represented=[...view.edges.flatMap(e=>e.refs),...[...view.internal.values()].flat()];
+  assert.equal(represented.length+view.outside+view.hidden,map.graph.edges.length);
+  assert.equal(new Set(represented.map(e=>e.id)).size,represented.length);
+  assert.equal(JSON.stringify([...map.positions]),before);
+  assert.ok(map.expanded.has('app.web'),'requested expansion survives viewport eviction');
+  const q=map.positions.get('app.web.views');
+  assert.ok(map.project(new Set(),true,{x1:q.x-10,y1:q.y-10,x2:q.x+10,y2:q.y+10,zoom}).expanded.has('app.web'));
+});
+
+test('wheel expansion queries nearby constellation bounds instead of scanning every node',()=>{
+  const map=new Universe(fixture());map.place({},'auto');
+  let scans=0;const keys=map.nodes.keys.bind(map.nodes);map.nodes.keys=()=>{scans++;return keys();};
+  const p=map.positions.get('app.core');
+  assert.equal(map.zoomStep(10,p,1)?.id,'app.core');
+  assert.equal(scans,0);
+});
+
+test('a manually moved descendant remains discoverable beyond its original ancestor radius',()=>{
+  const map=new Universe(fixture());map.place({},'auto');map.reveal('app.core.db');
+  map.translate('app.core.db',10000,10000);
+  const p=map.positions.get('app.core.db');
+  const view=map.project(new Set(),true,{x1:p.x-10,y1:p.y-10,x2:p.x+10,y2:p.y+10,zoom:50});
+  assert.ok(view.nodes.some(n=>n.id==='app.core.db'),'viewport discovery must follow moved pins through ancestor bounds');
+  assert.ok(view.expanded.has('app.core'));
+  assert.ok(map.bounds.get('app.core').x2>=p.x&&map.bounds.get('app.core').y2>=p.y);
+});
+
+test('a forced remote endpoint retains its connection without loading its unrelated neighbours',()=>{
+  const map=new Universe(difficultGraph());map.place({},'auto');map.reveal('app.core.db');map.reveal('app.web.views');
+  const p=map.positions.get('app.web.views');
+  const view=map.project(new Set(),true,{x1:p.x-5,y1:p.y-5,x2:p.x+5,y2:p.y+5,zoom:50,force:['app.core.db']});
+  const ids=view.edges.flatMap(e=>e.refs.map(r=>r.id));
+  assert.ok(ids.includes('cycle'),'the local-to-remote reference remains visible');
+  assert.ok(view.nodes.some(n=>n.id==='app.core.db'));
+  assert.ok(!ids.includes('self'),'a remote context star must not recursively expand its own references');
+});
+
+test('compact map groups preserve weighted counts without loading canonical call-site metadata',()=>{
+  const nodes=fixture().nodes,source=nodes.findIndex(n=>n.id==='app.core.db'),target=nodes.findIndex(n=>n.id==='app.web.views');
+  const topology={schema:'laniakea.map/1',nodes,references:[{source,target,type:'calls',count:1000}]};
+  const map=new Universe(topology);
+  assert.equal(map.paged,true);assert.equal(map.typeCounts.get('calls'),1000);
+  assert.deepEqual(map.referenceStats.get('app.core'),{outgoing:1000,incoming:0,within:0});
+  assert.deepEqual(map.referenceStats.get('app'),{outgoing:0,incoming:0,within:1000});
+  assert.equal(map.project().edges[0].count,1000);
+  assert.equal(map.graph.edges.length,1);
+  for(const wrong of [{source:999999},{count:0},{count:1.5},{target:-1}]){
+    assert.throws(()=>new Universe({...topology,references:[{...topology.references[0],...wrong}]}),/reference group/);
+  }
+});
+
+test('parallel exact references share one connection without losing call sites or direction',()=>{
+  const graph=fixture();
+  graph.edges=Array.from({length:200},(_,i)=>({id:`call${i}`,source:'app.core.db',target:'app.core.models',
+    type:'calls',status:'resolved',origin:'compiler',attrs:{line:i+1}}));
+  graph.edges.push({...graph.edges[0],id:'reverse',source:'app.core.models',target:'app.core.db'});
+  const map=new Universe(graph);map.reveal('app.core.db');map.reveal('app.core.models');
+  const view=map.project();
+  assert.equal(view.edges.length,2,'parallel call sites must not create overlapping renderer lines');
+  const forward=view.edges.find(e=>e.source==='app.core.db');
+  assert.equal(forward.refs.length,200);
+  assert.deepEqual(forward.refs.map(e=>e.id),graph.edges.slice(0,200).map(e=>e.id));
+  assert.equal(view.edges.find(e=>e.id==='reverse').status,'resolved');
+});
+
+test('hover reference queries reuse an index and keep self and ancestor references exactly once',()=>{
+  const graph=difficultGraph();
+  let scans=0;
+  const source=graph.edges;
+  graph.edges=new Proxy(source,{get(target,key,receiver){
+    if(key===Symbol.iterator){scans++;return target[Symbol.iterator].bind(target);}
+    if(key==='filter'||typeof key==='string'&&/^\d+$/.test(key))scans++;
+    return Reflect.get(target,key,receiver);
+  }});
+  const map=new Universe(graph);scans=0;
+  for(const [type,count] of map.typeCounts)assert.equal(count,source.filter(e=>e.type===type).length);
+  const expected=source.filter(e=>map.contains('app.core',e.source)||map.contains('app.core',e.target));
+  assert.deepEqual(map.references('app.core'),expected);
+  map.references('app.core.db');map.references('app.web.views');
+  assert.equal(scans,0,'hover must not scan the entire graph');
+  const returned=map.references('app.core');returned.length=0;
+  assert.equal(map.references('app.core').length,expected.length,'callers cannot mutate the index');
+});
+
 function difficultGraph(){
   const graph=fixture();
   graph.nodes.push({id:'app.core.nested',label:'models',level:'package',parent:'app.core',boundary:false,status:'in-target'});

@@ -4,4 +4,5 @@ Planned work in flight. Each plan is one change; it is deleted once its durable 
 
 | change | file |
 |---|---|
-| milestone 2: classes, functions and calls; not approved | [m2_function_layer.md](m2_function_layer.md) |
+| deferred Engine internals; investigate-change required | [engine_internals.md](engine_internals.md) |
+| deferred Rust/Python profiles; investigate-change required | [language_profiles.md](language_profiles.md) |

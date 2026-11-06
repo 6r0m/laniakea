@@ -5,6 +5,7 @@ import argparse
 import sys
 import webbrowser
 from pathlib import Path
+from time import perf_counter
 
 from . import LaniakeaError, __version__, pipeline, profiles
 from .server import DEFAULT_PORT, HOST, make_server
@@ -43,12 +44,17 @@ def _extract(args, workspace):
     summary = ", ".join(f"{key.split('.', 1)[1]} {value}" for key, value in counts.items() if key.startswith("nodes."))
     print(f"laniakea: {target['id']}: target {manifest['target']['name']}, run {run.name}")
     print(f"laniakea: {summary}")
+    print("laniakea: timings (s): " + ", ".join(f"{name}={seconds:.3f}"
+          for name, seconds in manifest["timings_seconds"].items()))
     for line in manifest["coverage"]["not_analysed"]:
         print(f"laniakea: not analysed: {line}")
 
 
 def _serve(args, workspace):
+    started = perf_counter()
+    print('laniakea: checking freshness and preparing map views...', flush=True)
     server = make_server(workspace, args.port)
+    print(f'laniakea: serve preparation: {perf_counter()-started:.3f}s')
     url = f"http://{HOST}:{server.server_address[1]}/"
     for entry in server.index:
         state = f"STALE, {entry['changed_count']} build input(s) changed" if entry["stale"] else "fresh"
@@ -75,7 +81,7 @@ def parser():
                              help="a .uproject file, its folder, or an extracted target id; the newest when omitted")
         command.add_argument("--engine", help="engine root, when EngineAssociation does not resolve")
         command.add_argument("--name", help="target id in the workspace; defaults to the project name")
-        command.add_argument("--target", help="build target to export; defaults to the project's Editor target")
+        command.add_argument("--target", help="build target to export; defaults to the latest usable build receipt, then Editor")
 
     def serve_options(command):
         command.add_argument("--port", type=int, default=DEFAULT_PORT,
@@ -87,6 +93,10 @@ def parser():
     up = commands.add_parser("up", help="extract, then serve")
     project_options(up)
     serve_options(up)
+    setup = commands.add_parser("setup-symbols", help="install the pinned local symbol compiler into the workspace (offline)")
+    setup.add_argument("--libclang", required=True, help="LLVM 21.1.8 libclang.dll")
+    setup.add_argument("--resources", required=True, help="LLVM's lib/clang/21 resource directory")
+    setup.add_argument("--compiler", help="matching clang-cl.exe, for compiler-validated reuse between extractions")
     return top
 
 
@@ -94,6 +104,10 @@ def main(argv=None):
     args = parser().parse_args(argv)
     workspace = Workspace(args.workspace)
     try:
+        if args.command == "setup-symbols":
+            from .unreal import tools
+            tools.install(workspace.root / "tools" / "unreal", args.libclang, args.resources, args.compiler)
+            print(f"laniakea: installed local symbol tools {tools.VERSION}")
         if args.command in ("extract", "up"):
             _extract(args, workspace)
         if args.command in ("serve", "up"):

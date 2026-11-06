@@ -142,6 +142,27 @@ class GenericScopes(unittest.TestCase):
         self.assertEqual(edge_ids(package), {"imports.rollup:app.web.views->app.core"})
         self.assertEqual(shards.edge_types(built), ["imports", "imports.rollup"])
 
+    def test_container_scopes_reuse_incident_edges_and_preserve_rollups(self):
+        class CountedEdges(list):
+            scans = 0
+            def __iter__(self):
+                self.scans += 1
+                return super().__iter__()
+        root = self.graph["nodes"][0]
+        nodes = [root]
+        for n in range(40):
+            nodes.extend([dict(root, id=f"group{n}", parent=root["id"]),
+                          dict(root, id=f"leaf{n}", parent=f"group{n}")])
+        edge = {"id": "reference", "source": "leaf0", "target": "leaf1", "type": "calls",
+                "status": "resolved", "origin": "compiler"}
+        edges = CountedEdges([edge])
+        built = shards.build({"nodes": nodes, "edges": edges})
+        self.assertLessEqual(edges.scans, 1, "containers must not rescan the entire graph")
+        rolled = built[shards.file_name("group0")]["edges"]
+        self.assertEqual([(e["source"], e["target"], e["attrs"]["edges"]) for e in rolled],
+                         [("leaf0", "group1", 1)])
+        self.assertEqual(built[shards.file_name("leaf0")]["edges"], [edge])
+
     def test_leaf_keeps_references_to_its_ancestors(self):
         edge = {"id": "ancestor", "source": "app.core.db", "target": "app.core",
                 "type": "imports", "status": "declared", "origin": "imports"}

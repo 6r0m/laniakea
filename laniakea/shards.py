@@ -77,9 +77,14 @@ def build(graph):
     files = _files(nodes, children)
     openable = set(files)
     incident = {n: [] for n in nodes}
-    for edge in graph["edges"]:
+    canonical_edges = list(graph["edges"])
+    container_edges = {n: set() for n in openable if children.get(n)}
+    for index, edge in enumerate(canonical_edges):
         for endpoint in {edge["source"], edge["target"]}:
             incident[endpoint].append(edge)
+            for ancestor in chains[endpoint]:
+                if ancestor in container_edges:
+                    container_edges[ancestor].add(index)
 
     def container(scope):
         members = sorted(children[scope])
@@ -98,7 +103,8 @@ def build(graph):
             return None
 
         drawn, summaries = [], {}
-        for edge in graph["edges"]:
+        for index in sorted(container_edges[scope]):
+            edge = canonical_edges[index]
             source, target = shown_as(edge["source"]), shown_as(edge["target"])
             if source is None or target is None or source == target:
                 continue

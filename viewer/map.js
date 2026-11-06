@@ -3,7 +3,7 @@
 'use strict';
 
 function nodeMetadata(id) {
-  const entry = state.index && state.index.nodes.find(n => n.id === id);
+  const entry = state.indexLookup ? state.indexLookup.get(id) : state.index && state.index.nodes.find(n => n.id === id);
   if (entry) return entry;
   const n = state.universe && state.universe.nodes.get(id);
   return n && { ...n, child_count: state.universe.childIds(id).length };
@@ -20,9 +20,10 @@ function nodeDescription(node) {
 function mapNode(node, members, drill, compact = false) {
   const entry = nodeMetadata(node.id), group = entry && entry.child_count > 0 &&
     !(node.parent === null && !node.boundary);
-  const caption = compact && !members.has(node.id) && !group ? node.label : `${node.label}\n${nodeDescription(node)}`;
+  const description = node.boundary && group ? nodeDescription(node).replace(' / external', '\nexternal') : nodeDescription(node);
+  const caption = compact && !members.has(node.id) && !group ? node.label : `${node.label}\n${description}`;
   return { group: 'nodes', data: { id: node.id, label: node.label, caption },
-    classes: [members.has(node.id) && 'member', group && 'group', drill[node.id] && 'openable',
+    classes: [members.has(node.id) && 'member', group && 'group', Object.hasOwn(drill,node.id) && 'openable',
       node.boundary && 'boundary', node.status].filter(Boolean).join(' ') };
 }
 
@@ -41,33 +42,43 @@ function style() {
       'border-color': css('--external') } },
     { selector: 'node.not-in-target', style: { 'background-opacity': 0.15, 'border-style': 'dashed' } },
     { selector: 'node.not-analysed', style: { 'border-style': 'dotted' } },
+    { selector: 'node.focus, node.match', style: {'z-index':10} },
+    { selector: 'node.hovered, node:selected', style: {'z-index':20} },
     { selector: 'node.expanded', style: { shape: 'roundrectangle', 'background-opacity': 0.025,
       'border-opacity': 0.35, 'border-width': 1, 'underlay-opacity': 0, padding: 28,
       'text-valign': 'top', 'text-halign': 'center', 'text-margin-y': -8, 'font-weight': 600,
-      'compound-sizing-wrt-labels': 'exclude', 'z-compound-depth': 'bottom' } },
+      width:'data(spanX)',height:'data(spanY)','z-index':'data(layer)','z-compound-depth':'bottom' } },
     { selector: 'edge', style: { width: 1, 'line-color': 'data(color)', 'target-arrow-color': 'data(color)',
-      'target-arrow-shape': 'triangle', 'curve-style': 'bezier', 'arrow-scale': 0.7, opacity: 0.3 } },
-    { selector: 'edge.derived', style: { 'line-style': 'dashed', width: 'mapData(weight, 1, 100, 1, 3)',
-      label: 'data(count)', color: css('--muted'), 'font-size': 11, 'text-background-color': css('--bg'),
+      'target-arrow-shape': 'triangle', 'curve-style': 'bezier', 'arrow-scale': 0.7, opacity: 0.3,
+      'source-endpoint':'inside-to-node','target-endpoint':'inside-to-node' } },
+    { selector: 'edge.derived', style: { 'curve-style':'straight','target-arrow-shape':'none','line-style':'solid', opacity: 0.15, width: 'mapData(weight, 1, 100, 1, 3)',
+      label: '', color: css('--muted'), 'font-size': 11, 'text-background-color': css('--bg'),
       'text-background-opacity': 0.9, 'text-background-padding': 2 } },
+    { selector: 'edge.derived.hovered, edge.derived:selected', style: { label: 'data(count)','target-arrow-shape':'triangle' } },
+    { selector:'edge.loop',style:{'curve-style':'bezier','source-endpoint':'outside-to-node','target-endpoint':'outside-to-node',
+      'control-point-step-size':'data(loopDistance)'} },
+    { selector:'edge.arranging',style:{display:'none'} },
     { selector: '.faded', style: { opacity: 0.3 } },
-    { selector: 'edge:selected', style: { opacity: 0.7, 'underlay-color': css('--selection'),
+    { selector: 'edge:selected', style: { opacity: 1,width:3,'line-color':css('--selection'),'target-arrow-color':css('--selection'), 'underlay-color': css('--selection'),
       'underlay-opacity': 0.15, 'underlay-padding': 3 } },
-    { selector: 'edge.focus', style: { width: 2.5, opacity: 1, 'z-index': 5 } },
+    { selector: 'edge.focus', style: { width: 2.5, opacity: 1, 'z-index': 5,'target-arrow-shape':'triangle' } },
     { selector: 'node:selected', style: { 'border-color': css('--selection'), 'border-width': 3 } },
   ];
 }
 
 function renderGraph() {
   clearTimeout(state.inspectTimer);
-  for (const key of ['zoomFrame', 'wheelFrame']) {
+  clearTimeout(state.gestureTimer);state.gestureActive=false;
+  for (const key of ['zoomFrame', 'wheelFrame','viewportFrame']) {
     if (state[key]) cancelAnimationFrame(state[key]);
     state[key] = null;
   }
-  state.pointer = null; state.wheelDelta = 0; state.drag = null;
+  state.pointer = null; state.wheelDelta = 0; state.drag = null;state.renderScale=1;
+  releaseConstellationLabel();
   if (state.cy) state.cy.destroy();
   state.cy = cytoscape({ container: $('graph'), elements: [], style: style(),
-    minZoom: 0.015, maxZoom: 20000 });
+    minZoom: 0.015, maxZoom: 20000, textureOnViewport:true });
+  state.viewportCut=null;
   const cy = state.cy;
   state.mapSize = {width:cy.width(),height:cy.height()};
   cy.on('tap', 'node', event => {
@@ -82,15 +93,16 @@ function renderGraph() {
   cy.on('tap', 'edge', event => renderDetails(state.shard.edges.find(e => e.id === event.target.data('referenceId'))));
   cy.on('tap', event => { if (event.target === cy) { unfocus(); renderDetails(null); } });
   cy.on('dbltap', 'node', event => { clearTimeout(state.inspectTimer); toggleGroup(event.target.id()); });
-  cy.on('mouseover', 'node, edge', event => preview(event.target));
-  cy.on('mouseout', 'node, edge', () => unfocus());
+  cy.on('mouseover', 'node, edge', event => preview(event.target,event.renderedPosition));
+  cy.on('mousemove','node, edge',event=>preview(event.target,event.renderedPosition));
+  cy.on('mouseout', 'node, edge', event => { if (event.target.hasClass('hovered')) unfocus(); });
   cy.on('zoom', () => {
-    readableLabels();
-    const zoom = cy.zoom(), direction = Math.sign(zoom - (state.lastZoom || zoom));
-    state.lastZoom = zoom;
-    if (!state.framing && direction && state.pointer) semanticZoom(direction);
+    if (state.framing) return;
+    const level = worldZoom(), direction = Math.sign(level - (state.lastZoom || level));
+    setWorldViewport(level, cy.pan());
+    if (direction && state.pointer) semanticZoom(direction);
   });
-  cy.on('pan', () => { unfocus(); rememberView(); });
+  cy.on('pan', () => { if (!state.framing) {beginViewportGesture();scheduleViewport();} });
   cy.on('grabon', 'node', event => {
     state.drag = { id: event.target.id(), start: { ...event.target.position() } };
     $('graph').classList.add('dragging');
@@ -100,13 +112,37 @@ function renderGraph() {
     $('graph').classList.remove('dragging');
     state.drag = null;
     if (!drag || drag.id !== node.id()) return;
-    const dx = node.position('x') - drag.start.x, dy = node.position('y') - drag.start.y;
+    const dx = (node.position('x') - drag.start.x) / (state.renderScale || 1);
+    const dy = (node.position('y') - drag.start.y) / (state.renderScale || 1);
     if (!dx && !dy) return;
     const patch = state.universe.translate(node.id(), dx, dy, node.id() !== state.universe.root);
     state.positionCache.moveMany($('layout').value, patch);
-    readableLabels();
+    releaseConstellationLabel(false);
+    refreshMap();
   });
   layout();
+}
+
+function viewportCamera(padding = 220) {
+  const cy=state.cy,zoom=worldZoom(),pan=cy.pan();
+  if(!cy.width() || !cy.height()) return null;
+  const force=[];
+  const selected=state.pendingReference || (state.selection?.referenceGroup ? state.selection : null);
+  if(selected)for(const id of selected.source?[selected.source,selected.target]:[selected.id]) if(state.universe.nodes.has(id))force.push(id);
+  return {x1:(-pan.x-padding)/zoom,y1:(-pan.y-padding)/zoom,
+    x2:(cy.width()-pan.x+padding)/zoom,y2:(cy.height()-pan.y+padding)/zoom,zoom,force};
+}
+
+function scheduleViewport() {
+  if(state.viewportFrame || state.drag)return;
+  state.viewportFrame=requestAnimationFrame(()=>{
+    state.viewportFrame=null;if(!state.cy || state.drag)return;
+    const now=viewportCamera(60),cut=state.viewportCut;
+    if(now && (!cut || now.x1<cut.x1 || now.y1<cut.y1 || now.x2>cut.x2 || now.y2>cut.y2 ||
+      now.zoom/cut.zoom>1.5 || now.zoom/cut.zoom<0.67)) refreshMap();
+    else readableLabels();
+    rememberView();
+  });
 }
 
 function refreshMap() {
@@ -114,30 +150,55 @@ function refreshMap() {
   state.drag = null;
   $('graph').classList.remove('dragging');
   const universe = state.universe, cy = state.cy;
-  const view = universe.project(state.hidden, state.boundary);
-  const ids = new Set(view.nodes.map(n => n.id));
+  cy.elements().removeClass('faded focus hovered');
+  $('map-tooltip').hidden = true;
+  state.viewportCut=viewportCamera();
+  const view = universe.project(state.hidden, state.boundary,state.viewportCut);
   const members = new Set(view.nodes.filter(n => !n.boundary).map(n => n.id));
   const drill = Object.fromEntries(state.index.nodes.map(n => [n.id, n.file]));
   state.shard = { ...state.scopeShard, ...view, members: [...members], drill };
   const nodes = view.nodes.map(n => {
     const item = mapNode(n, members, drill);
-    const expanded = universe.expanded.has(n.id) && n.id !== universe.root && universe.isGroup(n.id);
+    const expanded = view.expanded.has(n.id) && n.id !== universe.root && universe.isGroup(n.id);
+    const {position,...size}=nodeGeometry(n.id,expanded);
+    item.pannable=expanded;
     if (expanded) {
       item.classes += ' expanded'; item.data.caption = `${n.label}\n${n.level}`;
+      Object.assign(item.data,size);
+      item.data.layer=universe.paths.get(n.id).length+1;
     } else {
       const internal = view.internal.get(n.id);
-      if (internal && internal.length) item.data.caption += `\n${internal.length} refs within`;
+      if (internal && internal.length) item.data.caption += `\n${referenceTotal(internal)} refs within`;
     }
-    if (n.parent !== universe.root && ids.has(n.parent) && universe.expanded.has(n.parent)) item.data.parent = n.parent;
-    item.position = { ...universe.positions.get(n.id) };
+    item.position=position;
     return item;
   });
+  const spans = new Map(nodes.map(n => [n.data.id, Math.max(n.data.spanX || 0,n.data.spanY || 0)]));
   const edges = view.edges.map(e => ({ group: 'edges', data: { id: universe.renderPrefix + e.id,
     referenceId: e.id, source: e.source, target: e.target,
-    type: e.type, color: colorOf(e.type), weight: e.refs.length, count: e.refs.length > 1 ? String(e.refs.length) : '' },
-    classes: e.status }));
-  // Rebuild only rendered elements. The camera and every world coordinate belong to the continuing scene.
-  cy.batch(() => { cy.elements().remove(); cy.add([...nodes, ...edges]); });
+    type: e.type, color: colorOf(e.type, e.refs), weight: referenceTotal(e.refs),
+    count: referenceTotal(e.refs) > 1 ? String(referenceTotal(e.refs)) : '',
+    ...(e.source===e.target?{loopDistance:Math.max(200/cy.zoom(),2*spans.get(e.source))}:{}) },
+    classes: e.status+(e.source===e.target?' loop':'') }));
+  const elements = [...nodes, ...edges];
+  const previous = state.renderedMap?.cy === cy ? state.renderedMap.elements : new Map();
+  const definitions = new Map(elements.map(item => [item.data.id, JSON.stringify(item)]));
+  const added = elements.filter(item => !previous.has(item.data.id));
+  const updated = elements.filter(item => previous.has(item.data.id) && previous.get(item.data.id) !== definitions.get(item.data.id));
+  const removed = cy.elements().filter(item => !definitions.has(item.id()));
+  // Update only changed elements; a distant constellation keeps its native renderer geometry.
+  if (added.length || updated.length || removed.length) {
+    cy.batch(() => {
+      removed.remove(); cy.add(added);
+      for (const item of updated) {
+        const value = {...item};
+        cy.getElementById(item.data.id).json(value);
+      }
+    });
+    state.labelGeometry = null;
+    state.visibleLabels = null;
+  }
+  state.renderedMap = {cy, elements:definitions};
   readableLabels();
   updateScopeSummary();
   renderFilters();
@@ -153,29 +214,38 @@ function selectNode(id) {
 
 function focus(elements) {
   state.cy.batch(() => {
-    state.cy.elements().removeClass('focus').addClass('faded');
-    elements.removeClass('faded').addClass('focus');
+    state.cy.elements('.focus').not(elements).removeClass('focus');
+    elements.not('.focus').addClass('focus');
   });
   readableLabels();
 }
 
-function preview(element) {
-  if (state.drag) return;
+function preview(element, pointer = state.pointer) {
+  if (state.drag || state.gestureActive) return;
+  if(element.isNode() && element.hasClass('expanded')) {
+    const box=state.labelBoxes?.get(element.id()),p=pointer;
+    if(!box||!p||p.x<box.x1||p.x>box.x2||p.y<box.y1||p.y>box.y2){
+      if(element.hasClass('hovered'))unfocus();return;
+    }
+  }
+  if(element.hasClass('hovered'))return;
   const cy = state.cy;
+  // Native node and edge hover events can overlap; an old target must not clear a newer trace.
+  cy.elements('.hovered').not(element).removeClass('hovered');
   if (element.isNode()) {
     const family = cy.nodes().filter(n => state.universe.contains(element.id(), n.id()));
     const edges = family.connectedEdges();
-    focus(family.union(edges).union(edges.connectedNodes()));
     element.addClass('hovered');
-    const node = state.universe.nodes.get(element.id()), refs = state.universe.references(node.id);
-    const outgoing = refs.filter(e => state.universe.contains(node.id, e.source)).length;
-    const incoming = refs.filter(e => state.universe.contains(node.id, e.target)).length;
+    focus(family.union(edges).union(edges.connectedNodes()));
+    const node = state.universe.nodes.get(element.id()), stats = state.universe.referenceStats.get(node.id);
+    const outgoing = stats.outgoing+stats.within, incoming = stats.incoming+stats.within;
     showTooltip(`${node.label} (${node.level})`, `${outgoing} outgoing / ${incoming} incoming` +
       (node.boundary ? ' / further external dependencies not analysed' : ''), element.renderedPosition());
   } else {
+    element.addClass('hovered');
     focus(element.union(element.connectedNodes()));
     const edge = state.shard.edges.find(e => e.id === element.data('referenceId'));
-    showTooltip(`${label(edge.source)} -> ${label(edge.target)}`, `${edge.refs.length} exact reference(s) / ` +
+    showTooltip(`${label(edge.source)} -> ${label(edge.target)}`, `${referenceTotal(edge.refs)} exact reference(s) / ` +
       [...new Set(edge.refs.map(e => typeLabel(e.type)))].join(', '), element.renderedMidpoint());
   }
 }
@@ -189,7 +259,10 @@ function showTooltip(title, text, point) {
 }
 
 function unfocus() {
-  if (state.cy) { state.cy.elements().removeClass('faded focus hovered'); readableLabels(); }
+  if (state.cy) {
+    const marked=state.cy.elements('.faded,.focus,.hovered');
+    if(marked.length){marked.removeClass('faded focus hovered');readableLabels();}
+  }
   $('map-tooltip').hidden = true;
 }
 
@@ -198,32 +271,49 @@ function applyFilters() {
 }
 
 function readableLabels() {
-  if (!state.cy || state.styling) return;
+  if (!state.cy || state.styling || state.gestureActive) return;
   state.styling = true;
   const cy = state.cy, zoom = cy.zoom(), leaves = cy.nodes().not('.expanded');
-  cy.batch(() => {
-    cy.nodes().style({ 'font-size': 13 / zoom, 'text-max-width': 150 / zoom, 'text-background-padding': 3 / zoom,
-      'border-width': n => (n.selected() ? 3 : n.hasClass('expanded') ? 1 : n.hasClass('group') ? 2 : 1) / zoom });
-    const diameter = n => n.hasClass('group') ?
-      Math.max(27, Math.min(100, 2 * state.universe.radii.get(n.id()) * zoom * 0.3)) : n.hasClass('member') ? 15 : 11;
-    leaves.style({ width: n => diameter(n) / zoom,
-      height: n => diameter(n) / zoom,
-      'underlay-padding': 6 / zoom,
-      'text-halign': n => n.renderedPosition('x') < 155 ? 'right' : n.renderedPosition('x') > cy.width() - 155 ? 'left' : 'center',
-      'text-valign': 'bottom', 'text-margin-y': 8 / zoom });
-    cy.nodes('.expanded').style({ padding: 26 / zoom, 'text-margin-y': -8 / zoom });
-    cy.edges().style({ 'font-size': 11 / zoom, 'underlay-padding': 3 / zoom });
-    cy.edges().style({ width: e => (e.hasClass('focus') ? 2.5 : Math.min(2.5, 1 + Math.log10(e.data('weight')) * 0.6)) / zoom,
-      'arrow-scale': 0.7 / zoom, 'line-dash-pattern': [6 / zoom, 4 / zoom] });
+  const styleZoom=2**(Math.round(Math.log2(zoom)*2)/2);
+  const changed = !state.labelGeometry || state.labelGeometry.cy !== cy || state.labelGeometry.zoom !== styleZoom;
+  const border = n => (n.selected() ? 3 : n.hasClass('expanded') ? 1 : n.hasClass('group') ? 2 : 1) / zoom;
+  const alignments = leaves.map(n => {
+    const x = n.renderedPosition('x');
+    return [n, x < 155 ? 'right' : x > cy.width() - 155 ? 'left' : 'center'];
   });
+  cy.batch(() => {
+    if (changed) {
+      cy.nodes().style({ 'font-size': 13 / zoom, 'text-max-width': 150 / zoom,
+        'text-background-padding': 3 / zoom, 'border-width': border });
+      const diameter = n => n.hasClass('group') ?
+        Math.max(27, Math.min(100, 2 * state.universe.radii.get(n.id()) * worldZoom() * 0.3)) : n.hasClass('member') ? 15 : 11;
+      leaves.style({ width: n => diameter(n) / zoom, height: n => diameter(n) / zoom,
+        'underlay-padding': 6 / zoom, 'text-valign': 'bottom', 'text-margin-y': 8 / zoom });
+      cy.nodes('.expanded').style({width:n=>n.data('spanX'),height:n=>n.data('spanY'),
+        padding: 26 / zoom, 'text-margin-y': -8 / zoom,'text-valign':'top','text-halign':'center' });
+      cy.edges('.loop').forEach(edge => edge.data('loopDistance',
+        2*Math.max(edge.source().outerWidth(),edge.source().outerHeight())+20/zoom));
+      state.labelAlign = new Map();
+    }
+    for (const [n, align] of alignments) {
+      if (state.labelAlign.get(n.id()) !== align) {
+        n.style('text-halign', align); state.labelAlign.set(n.id(), align);
+      }
+    }
+  });
+  state.labelGeometry = {cy, zoom:styleZoom};
   declutterLabels();
   state.styling = false;
 }
 
-function nonOverlappingLabels(candidates) {
+function nonOverlappingLabels(candidates, glyphs = []) {
   const kept = [], ids = new Set();
+  const obstacles = glyphs.length ? new SpatialIndex(glyphs.length) : null;
+  for (const {box:b} of glyphs) obstacles.add(b.x1,b.y1,b.x2,b.y2);
+  if (obstacles) obstacles.finish();
   for (const item of candidates.sort((a, b) => b.priority - a.priority)) {
     const a = item.box;
+    if (obstacles && item.priority < 5 && obstacles.search(a.x1,a.y1,a.x2,a.y2).some(i => glyphs[i].id !== item.id)) continue;
     if (kept.some(b => a.x1 < b.x2 + 4 && a.x2 + 4 > b.x1 && a.y1 < b.y2 + 4 && a.y2 + 4 > b.y1)) continue;
     kept.push(a); ids.add(item.id);
   }
@@ -233,21 +323,59 @@ function nonOverlappingLabels(candidates) {
 function declutterLabels() {
   if (!state.cy) return;
   const cy = state.cy;
+  const inspected = new Set(cy.edges(':selected').connectedNodes().map(n => n.id()));
+  const traced = new Set(cy.edges('.focus').connectedNodes().map(n => n.id()));
   const candidates = cy.nodes().map(n => {
-    const lines = n.data('caption').split('\n'), width = Math.min(150, Math.max(...lines.map(s => s.length)) * 7);
-    const height = lines.reduce((sum, s) => sum + Math.max(1, Math.ceil(s.length * 7 / 150)) * 15, 0);
-    const p = n.renderedPosition(), expanded = n.hasClass('expanded');
-    const x = expanded || n.style('text-halign') === 'center' ? p.x - width / 2 :
-      n.style('text-halign') === 'right' ? p.x + n.renderedWidth()/2 : p.x - n.renderedWidth()/2 - width;
-    const y = expanded ? n.renderedBoundingBox({includeLabels:false,includeOverlays:false,includeUnderlays:false}).y1 - height - 8 :
-      p.y + n.renderedHeight()/2 + 8;
-    return { id: n.id(), box: { x1:x, y1:y, x2:x+width, y2:y+height },
-      priority: n.hasClass('hovered') || n.selected() ? 5 : n.hasClass('match') || n.id() === state.scopeShard.scope ? 4 : expanded ? 2 : 1 };
+    const expanded = n.hasClass('expanded');
+    return { id: n.id(), box:n.renderedBoundingBox({includeNodes:false,includeEdges:false,includeLabels:true,
+      includeOverlays:false,includeUnderlays:false}),
+      priority: n.hasClass('hovered') || n.selected() ? 8 : inspected.has(n.id()) ? 7 :
+        n.hasClass('match') || n.id() === state.scopeShard.scope ? 6 : traced.has(n.id()) ? 5 : expanded ? 2 : 1 };
   });
+  const glyphs = cy.nodes().not('.expanded').map(n => ({id:n.id(),box:n.renderedBoundingBox({includeLabels:false,
+    includeOverlays:false,includeUnderlays:false})}));
   const names = nonOverlappingLabels(candidates.filter(n => n.box.x1 >= 0 && n.box.y1 >= 0 &&
-    n.box.x2 <= cy.width() && n.box.y2 <= cy.height()));
-  cy.batch(() => cy.nodes().forEach(n => n.style({ 'text-opacity': names.has(n.id()) ? 1 : 0,
-    'text-events': names.has(n.id()) ? 'yes' : 'no' })));
+    n.box.x2 <= cy.width() && n.box.y2 <= cy.height()), glyphs);
+  cy.batch(() => cy.nodes().forEach(n => {
+    if (!state.visibleLabels || state.visibleLabels.has(n.id()) !== names.has(n.id())) {
+      n.style({ 'text-opacity': names.has(n.id()) ? 1 : 0, 'text-events': names.has(n.id()) ? 'yes' : 'no' });
+    }
+  }));
+  state.visibleLabels = names;
+  state.labelBoxes=new Map(candidates.filter(n=>names.has(n.id)).map(n=>[n.id,n.box]));
+}
+
+function grabConstellationLabel(event) {
+  if(event.button!==0 || !state.cy)return;
+  if(state.gestureActive){
+    clearTimeout(state.gestureTimer);state.gestureActive=false;readableLabels();
+  }
+  const box=$('graph').getBoundingClientRect(),x=event.clientX-box.left,y=event.clientY-box.top;
+  for(const [id,bounds] of state.labelBoxes || []) {
+    const node=state.cy.getElementById(id);
+    if(node.hasClass('expanded') && x>=bounds.x1 && x<=bounds.x2 && y>=bounds.y1 && y<=bounds.y2) {
+      const cy=state.cy,family=cy.nodes().filter(n=>state.universe.contains(id,n.id()));
+      const edges=family.connectedEdges().not(':selected');
+      const hitEdges=cy.edges();
+      state.labelDrag={cy,map:state.universe,selected:cy.nodes(':selected'),pannable:family.filter(n=>n.pannable()),edges,hitEdges};
+      // Native selected-node dragging uses the renderer's drag layer for the entire visible constellation.
+      // Crossing wires yield hit-testing until the label gesture finishes.
+      cy.batch(()=>{cy.nodes(':selected').unselect();family.unpanify().select();edges.addClass('arranging');hitEdges.style('events','no');});
+      return;
+    }
+  }
+}
+
+function releaseConstellationLabel(redraw=true) {
+  const drag=state.labelDrag;
+  if(!drag)return;
+  state.labelDrag=null;
+  drag.cy.batch(()=>{
+    drag.edges.removeClass('arranging');drag.hitEdges.removeStyle('events');drag.pannable.panify();
+    drag.cy.nodes(':selected').unselect();drag.selected.filter(e=>!e.removed()).select();
+  });
+  state.labelGeometry=null;
+  if(redraw!==false && drag.cy===state.cy && drag.map===state.universe && !drag.cy.destroyed())readableLabels();
 }
 
 function galaxyPositions(nodes, width, height) {
@@ -270,37 +398,84 @@ function galaxyPositions(nodes, width, height) {
 
 function updateScopeSummary() {
   const view = state.shard;
-  const exact = view.edges.reduce((sum, e) => sum + e.refs.length, 0);
-  const internal = [...view.internal.values()].reduce((sum, refs) => sum + refs.length, 0);
+  const exact = view.edges.reduce((sum, e) => sum + referenceTotal(e.refs), 0);
+  const internal = [...view.internal.values()].reduce((sum, refs) => sum + referenceTotal(refs), 0);
   $('scope-summary').textContent = `${view.nodes.length} stars & constellations / ${exact} references / ` +
-    `${internal} inside collapsed groups${view.hidden ? ` / ${view.hidden} filtered` : ''}`;
+    `${internal} inside collapsed groups${view.outside ? ` / ${view.outside} beyond view` : ''}${view.hidden ? ` / ${view.hidden} filtered` : ''}`;
   $('map-empty').hidden = view.nodes.length > 0;
-  $('map-empty').textContent = 'No stars are visible. Change the filters to reveal the map.';
+  $('map-empty').textContent = 'No stars in this area. Use Fit map to return to the overview.';
+}
+
+function worldZoom() { return state.cy.zoom() * (state.renderScale || 1); }
+
+function nodeGeometry(id,expanded,scale=state.renderScale||1) {
+  const box=expanded&&state.universe.bounds.get(id);
+  const p=box?{x:(box.x1+box.x2)/2,y:(box.y1+box.y2)/2}:state.universe.positions.get(id);
+  return {position:{x:p.x*scale,y:p.y*scale},...(box?{spanX:(box.x2-box.x1)*scale,spanY:(box.y2-box.y1)*scale}:{})};
+}
+
+function beginViewportGesture() {
+  state.gestureActive=true;
+  clearTimeout(state.gestureTimer);
+  const cy=state.cy;
+  state.gestureTimer=setTimeout(()=>{
+    state.gestureActive=false;
+    if(state.cy===cy&&!cy.destroyed())readableLabels();
+  },120);
+}
+
+function setWorldViewport(level, pan, gesture = false) {
+  const cy = state.cy, before = worldZoom(), framing = state.framing;
+  level = Math.max(cy.minZoom(), Math.min(cy.maxZoom(), level));
+  const scale = level > 2 ? 2 ** Math.ceil(Math.log2(level)) : 1;
+  if(gesture)beginViewportGesture();
+  state.framing = true;
+  cy.startBatch();
+  if (scale !== (state.renderScale || 1)) {
+    state.renderScale = scale;
+    cy.nodes().positions(n => {
+      const {position,...size}=nodeGeometry(n.id(),n.hasClass('expanded'),scale);
+      if(n.hasClass('expanded'))n.data(size);
+      return position;
+    });
+    state.labelGeometry = null;
+  }
+  cy.viewport({zoom:level/scale,pan});
+  cy.endBatch();
+  state.lastZoom = level;
+  state.framing = framing;
+  readableLabels();
+  if(gesture) scheduleViewport();
+  if (gesture && !framing && state.pointer && level !== before) semanticZoom(Math.sign(level-before));
 }
 
 function frame(bounds, padding = 75, maxZoom = 1.2) {
-  state.framing = true;
   const cy = state.cy;
   const zoom = Math.max(cy.minZoom(), Math.min(maxZoom, cy.maxZoom(),
-    Math.max(10, cy.width() - 2 * padding) / Math.max(1, bounds.x2 - bounds.x1),
-    Math.max(10, cy.height() - 2 * padding) / Math.max(1, bounds.y2 - bounds.y1)));
-  cy.viewport({zoom, pan:{x:cy.width()/2-(bounds.x1+bounds.x2)*zoom/2,
-    y:cy.height()/2-(bounds.y1+bounds.y2)*zoom/2}});
-  state.lastZoom = state.cy.zoom();
-  state.framing = false;
-  readableLabels(); rememberView();
+    Math.max(10, cy.width() - 2 * padding) / Math.max(Number.EPSILON, bounds.x2 - bounds.x1),
+    Math.max(10, cy.height() - 2 * padding) / Math.max(Number.EPSILON, bounds.y2 - bounds.y1)));
+  setWorldViewport(zoom,{x:cy.width()/2-(bounds.x1+bounds.x2)*zoom/2,
+    y:cy.height()/2-(bounds.y1+bounds.y2)*zoom/2});
+  rememberView();
 }
 
 function fitMap() {
-  if (!state.cy || !state.cy.nodes().length) return;
-  frame(state.cy.elements().boundingBox({includeLabels:false,includeOverlays:false,includeUnderlays:false}));
+  if (!state.cy) return;
+  const map=state.universe,top=[...map.childIds(map.root),...map.childIds(null).filter(id=>id!==map.root)];
+  if(!top.length || map.directReferences.get(map.root).length)top.push(map.root);
+  const points=top.filter(id=>state.boundary||!map.nodes.get(id).boundary).map(id=>map.positions.get(id));
+  if(!points.length)points.push(map.positions.get(map.root));
+  frame({x1:Math.min(...points.map(p=>p.x)),y1:Math.min(...points.map(p=>p.y)),
+    x2:Math.max(...points.map(p=>p.x)),y2:Math.max(...points.map(p=>p.y))});
+  refreshMap();
 }
 
 function frameNode(id) {
   if (id === state.universe.root) { fitMap(); return; }
   const map = state.universe, p = map.positions.get(id), r = map.isGroup(id) ? map.radii.get(id) :
-    Math.max(8, (map.radii.get(map.nodes.get(id).parent) || 80) * 0.5);
-  frame({ x1:p.x-r, y1:p.y-r, x2:p.x+r, y2:p.y+r, w:r*2, h:r*2 }, 110, 160 / r);
+    (map.radii.get(map.nodes.get(id).parent) || 80) * 0.5;
+  frame(map.isGroup(id)?map.bounds.get(id):{x1:p.x-r,y1:p.y-r,x2:p.x+r,y2:p.y+r},110,160/r);
+  if(state.cy)refreshMap();
 }
 
 function layout() {

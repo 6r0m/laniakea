@@ -43,8 +43,8 @@
     <aside id="filters" aria-label="Browse and filters" hidden></aside>
     <section id="map" tabindex="-1" aria-label="Dependency map">
       <div id="graph" tabindex="0" role="group" aria-label="Dependency graph" aria-describedby="map-help"></div>
-      <p id="map-legend">Rings: constellations / Dots: stars / Diamonds: external / Numbers: bundled references</p>
-      <p id="map-help">Wheel into a constellation to reveal it. Drag space to fly. Hover to trace. Double-click also expands.</p>
+      <p id="map-legend">Rings: constellations / Dots: stars / Diamonds: external / Hover connections to count references</p>
+      <p id="map-help">Wheel to explore. Drag space to fly; drag stars or constellation names to arrange. Hover to trace. Double-click expands.</p>
       <div id="map-tooltip" role="tooltip" hidden></div>
       <div id="map-empty" role="status" hidden></div>
     </section>
@@ -52,10 +52,12 @@
   </main>
   <footer id="coverage"></footer>
   <script src="vendor/cytoscape.min.js"></script>
+  <script src="vendor/flatbush.js"></script>
   <script src="universe.js"></script>
   <script src="map.js"></script>
   <script src="scene.js"></script>
   <script src="positions.js"></script>
+  <script src="references.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -12,6 +12,28 @@
     "edges": {"type": "array", "items": {"$ref": "#/$defs/edge"}}
   },
   "$defs": {
+    "map": {
+      "type": "object", "required": ["schema", "nodes", "references"], "additionalProperties": false,
+      "properties": {
+        "schema": {"const": "laniakea.map/1"},
+        "nodes": {"type": "array", "items": {"$ref": "#/$defs/node"}},
+        "references": {"type": "array", "items": {"$ref": "#/$defs/referenceGroup"}}
+      }
+    },
+    "referenceGroup": {
+      "type": "object", "required": ["source", "target", "type", "count"], "additionalProperties": false,
+      "description": "One endpoint/type group. Source and target index map.nodes; its page-query group id is its array index plus one.",
+      "properties": {"source": {"type": "integer"}, "target": {"type": "integer"},
+                     "type": {"type": "string"}, "count": {"type": "integer"}}
+    },
+    "referencePage": {
+      "type": "object", "required": ["items", "total", "next_cursor"], "additionalProperties": false,
+      "properties": {
+        "items": {"type": "array", "items": {"type": "object", "required": ["reference", "group"],
+          "additionalProperties": false, "properties": {"reference": {"$ref": "#/$defs/edge"}, "group": {"type": "integer"}}}},
+        "total": {"type": "integer"}, "next_cursor": {"type": ["integer", "null"]}
+      }
+    },
     "node": {
       "type": "object",
       "required": ["id", "level", "label", "parent", "boundary", "status"],
@@ -105,8 +127,10 @@
         "levels": {"type": "array", "items": {"type": "string"}},
         "edge_types": {"type": "array", "items": {"$ref": "#/$defs/edgeType"}},
         "target": {"type": "object"},
+        "timings_seconds": {"type": "object", "additionalProperties": {"type": "number"},
+                            "description": "Elapsed seconds. Profile and total contain the named subphases; values are not additive. Total ends before manifest serialization and promotion."},
         "sources": {"type": "array", "items": {"$ref": "#/$defs/tool"}},
-        "inputs": {"type": "object", "additionalProperties": {"type": "string"}, "description": "Build input path to sha256."},
+        "inputs": {"type": "object", "additionalProperties": {"type": "string"}, "description": "Build input identity to sha256; the profile owns the fingerprinted representation."},
         "coverage": {"$ref": "#/$defs/coverage"},
         "entry": {"type": "string", "description": "The shard file the viewer opens first."}
       }

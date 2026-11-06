@@ -6,6 +6,7 @@ import json
 import tempfile
 import threading
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 from urllib.parse import quote
 
@@ -17,6 +18,58 @@ from support import copy_sample, fake_engine, recorded_ubt
 
 
 class Server(unittest.TestCase):
+    def test_layout_post_acknowledges_without_echoing_the_growing_cache(self):
+        status, body = self.post('/layout/sample/entry.json', {
+            'layout': 'ack_probe', 'positions': {'module:SampleProject': {'x': 1, 'y': 2}}})
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body), {'saved': True})
+
+    def test_pin_requests_reuse_allowed_ids_of_the_advertised_run(self):
+        import laniakea.server as owner
+        reads=[]
+        original=owner.read_json
+        def read(path):
+            if Path(path).name=='graph.json':reads.append(path)
+            return original(path)
+        if hasattr(self.server,'layout_node_ids'):
+            self.server.layout_node_ids.clear()
+        with patch('laniakea.server.read_json',side_effect=read):
+            self.assertEqual(self.get('/layout/sample/entry.json')[0],200)
+            self.assertEqual(self.get('/layout/sample/entry.json')[0],200)
+            self.assertEqual(self.post('/layout/sample/entry.json',{'layout':'cache_probe','positions':{}})[0],200)
+        self.assertEqual(len(reads),0,'released drags must not parse the complete reference graph')
+
+    def test_compact_map_and_paged_references_stay_on_the_advertised_run(self):
+        _, data = self.get('/data/targets.json')
+        [target] = json.loads(data)
+        status, data = self.get(target['map_url'])
+        self.assertEqual(status,200)
+        topology = json.loads(data)
+        self.assertEqual(topology['schema'],'laniakea.map/1')
+        self.assertTrue(all(isinstance(r['source'],int) for r in topology['references']))
+        refs, cursor = [], 0
+        while True:
+            status, data = self.get(target['references_url'] + f'?node=project&direction=incident&limit=3&cursor={cursor}')
+            self.assertEqual(status,200)
+            page = json.loads(data)
+            refs += [item['reference'] for item in page['items']]
+            cursor = page['next_cursor']
+            if cursor is None:
+                break
+        workspace = self.server.workspace_for_tests
+        advertised = workspace.target_dir('sample') / 'runs' / target['run']
+        self.assertEqual(refs,read_json(advertised / 'graph.json')['edges'])
+        self.assertEqual(self.get(target['references_url']+'?node=missing')[0],400)
+        self.assertEqual(self.get(target['references_url']+'?node=project&source_tree=invalid')[0],400)
+        self.assertEqual(self.get(target['map_url'].replace('topology.json','references.sqlite'))[0],404)
+        before = self.get('/layout/sample/entry.json')
+        status, body = self.post(target['references_url'], {'groups':[1], 'limit':3})
+        self.assertEqual(status,200)
+        self.assertTrue(json.loads(body)['items'])
+        self.assertEqual(self.get('/layout/sample/entry.json'),before)
+        self.assertEqual(self.post(target['references_url'],{'groups':[1]}, {'Origin':'https://foreign.example'})[0],403)
+        for query in ({'node':'project','direction':[]},{'node':'project','cursor':2**64}):
+            self.assertEqual(self.post(target['references_url'],query)[0],400)
     @classmethod
     def setUpClass(cls):
         cls.temporary = tempfile.TemporaryDirectory()

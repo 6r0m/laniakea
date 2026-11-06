@@ -3,6 +3,7 @@
 
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from laniakea import LaniakeaError, cli, pipeline, schema
@@ -48,6 +49,40 @@ class Pipeline(unittest.TestCase):
         self.assertEqual(self.workspace.latest("sample"), good)
         failed = [p.name for p in (self.workspace.target_dir("sample") / "runs").iterdir() if p.name.endswith(".failed")]
         self.assertEqual(len(failed), 1)
+
+    def test_symbol_failure_keeps_latest_and_source_edits_mark_it_stale(self):
+        good, _ = self.extract()
+        with patch("laniakea.unreal.compiler.extract", side_effect=LaniakeaError("native compiler failed")):
+            with self.assertRaisesRegex(LaniakeaError, "native compiler failed"):
+                self.extract()
+        self.assertEqual(self.workspace.latest("sample"), good)
+        source = self.project / "Source/SampleProject/SampleProject.cpp"
+        source.write_bytes(source.read_bytes() + b"\n// source edit\n")
+        self.assertIn("Source/SampleProject/SampleProject.cpp", pipeline.freshness(self.workspace, self.target)[1])
+
+    def test_concurrent_extraction_refuses_before_changing_runs_or_copy(self):
+        good,_=self.extract()
+        copy=self.workspace.target_dir("sample") / "copy/protected.cpp"
+        copy.parent.mkdir()
+        copy.write_text("protected")
+        runs=set(good.parent.iterdir())
+        with self.workspace.extraction_lock("sample"):
+            with self.assertRaisesRegex(LaniakeaError,"another extraction"):
+                self.extract()
+        self.assertEqual(self.workspace.latest("sample"),good)
+        self.assertEqual(set(good.parent.iterdir()),runs)
+        self.assertEqual(copy.read_text(),"protected")
+        self.extract()
+
+    def test_failed_run_diagnostics_name_the_retained_folder(self):
+        self.extract()
+        def fail(_target,run,*_args,**_kwargs):
+            raise LaniakeaError(f"compiler failed; see {run / 'compiler/index.log'}")
+        with patch("laniakea.unreal.compiler.extract",side_effect=fail):
+            with self.assertRaises(LaniakeaError) as raised:
+                self.extract()
+        self.assertIn(".failed",str(raised.exception))
+        self.assertNotIn(".partial",str(raised.exception))
 
     def test_edited_build_rules_make_the_run_stale(self):
         self.extract()
