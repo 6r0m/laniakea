@@ -46,9 +46,10 @@
     <aside id="filters" aria-label="Browse and filters" hidden></aside>
     <section id="map" tabindex="-1" aria-label="Dependency map">
       <div id="graph" tabindex="0" role="group" aria-label="Dependency graph" aria-describedby="map-help"></div>
-      <p id="map-legend">Rings: constellations / Dots: stars / Diamonds: external / Hover connections to count references</p>
+      <p id="map-legend">Rings: groups / Dots: stars / Diamonds: external / Idle colors: types in Browse &amp; filters<br>
+        Trace: <span class="trace-outgoing">-&gt; Outgoing</span> / <span class="trace-incoming">&lt;- Incoming</span> / <span class="trace-within">Within/self</span></p>
       <p id="map-help">Wheel to explore. Drag space to fly; drag stars or constellation names to arrange. Hover to trace. Double-click expands.</p>
-      <div id="map-tooltip" role="tooltip" hidden></div>
+      <div id="map-tooltip" role="status" aria-live="polite" aria-atomic="true" tabindex="0" aria-label="Connection trace">Hover a star or connection to trace references in this view.</div>
       <div id="map-empty" role="status" hidden></div>
     </section>
     <aside id="details" aria-label="Selection details" hidden></aside>
@@ -57,6 +58,7 @@
   <script src="vendor/cytoscape.min.js"></script>
   <script src="vendor/flatbush.js"></script>
   <script src="universe.js"></script>
+  <script src="traces.js"></script>
   <script src="map.js"></script>
   <script src="scene.js"></script>
   <script src="positions.js"></script>

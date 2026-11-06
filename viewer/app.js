@@ -69,7 +69,7 @@ async function start() {
   $('fit').onclick = fitOverview;
   $('reset-layout').onclick = resetPositions;
   $('toggle-configuration').onclick = () => { setConfiguration(!configurationVisible()); applyFilters(); };
-  $('clear').onclick = () => { unfocus(); renderDetails(null); };
+  $('clear').onclick = () => { unfocus(true); renderDetails(null); };
   $('up').onclick = up;
   $('find').oninput = () => find().catch(reportError);
   $('find').onkeydown = (event) => {
@@ -234,7 +234,7 @@ function onKey(event) {
   if (typing || event.altKey || event.ctrlKey || event.metaKey) return;
   if (event.key === 'Backspace') { event.preventDefault(); up(); }
   if (event.key === '/') { event.preventDefault(); $('find').focus(); }
-  if (event.key === 'Escape') { unfocus(); renderDetails(null); }
+  if (event.key === 'Escape') { unfocus(true); renderDetails(null); }
   if (event.target === $('graph') && state.cy && ['+', '=', '-'].includes(event.key)) {
     event.preventDefault();
     state.pointer = {x:state.cy.width()/2,y:state.cy.height()/2};
@@ -437,13 +437,21 @@ function typeLabel(type, refs) {
     state.manifest.edge_types.find(t => t.id === id)?.label || id).join(' / ') + ' (summary)' : type;
 }
 
+function inspectPair(source,target) {
+  const pair=ConnectionTrace.pair(state.shard,source,target);
+  if(pair)renderDetails({...pair,signature:ConnectionTrace.signature(pair),pairInspection:true});
+}
+
 function renderDetails(item) {
   const isNode = item && item.level !== undefined;
   const requested = item;
-  item = requested && (isNode ? state.shard.nodes : requested.referenceGroup ? [] : state.shard.edges)
+  const pair=requested?.pairInspection&&ConnectionTrace.pair(state.shard,requested.source,requested.target);
+  const signature=pair&&ConnectionTrace.signature(pair);
+  item = requested?.pairInspection ? pair&&signature===requested.signature ? {...pair,signature,pairInspection:true} : null :
+    requested && (isNode ? state.shard.nodes : requested.referenceGroup ? [] : state.shard.edges)
     .find(current => current.id === requested.id) || null;
   let connection = item;
-  if (!item && requested && !isNode) {
+  if (!item && requested && !isNode && !requested.pairInspection) {
     for (const projected of state.shard.edges) {
       const exact = projected.refs?.find(reference => reference.id === requested.id);
       if (!requested.referenceGroup && exact && projected.source === exact.source && projected.target === exact.target) {
@@ -455,16 +463,18 @@ function renderDetails(item) {
       }
     }
   }
-  const rendered = item && state.cy.getElementById(isNode ? item.id : state.universe.renderPrefix + connection.id);
+  const rendered = item && (item.pairInspection ? state.cy.edges().filter(edge=>item.roles.has(edge.data('referenceId'))) :
+    state.cy.getElementById(isNode ? item.id : state.universe.renderPrefix + connection.id));
   if (item && (!rendered.length || !rendered.visible())) item = null;
   state.selection = item;
   if (state.cy) {
     state.cy.elements().unselect();
-    if (item) rendered.select();
+    state.cy.edges('.pair-inspected').removeClass('pair-inspected');
+    if (item) { rendered.select();if(item.pairInspection)rendered.addClass('pair-inspected'); }
     readableLabels();
   }
   const panel = $('details');
-  const key = state.universe.paged && item ? JSON.stringify([item.id,item.referenceGroup||null,
+  const key = state.universe.paged && item ? JSON.stringify([item.pairInspection?item.key:item.id,item.signature||null,item.referenceGroup||null,
     [...state.hidden].sort(),state.boundary,configurationVisible(),item.refs?.map(r=>r.group)]) : null;
   if (key && key===state.detailsKey) {
     const control = panel.querySelector('[data-action="toggle-group"]');
@@ -484,6 +494,7 @@ function renderDetails(item) {
     return;
   }
   togglePanel('details', true);
+  if(item.pairInspection) { renderPairDetails(panel,item);return; }
   const list = el('dl');
   if (item.level !== undefined) {
     panel.append(el('h2', item.label), el('p', nodeDescription(item), {class:'muted'}));
@@ -526,6 +537,29 @@ function renderDetails(item) {
   if (state.universe.paged && !item.referenceGroup) {
     appendReferencePage(panel,{groups:item.refs.map(r=>r.group)},referenceTotal(item.refs));
   } else appendReferences(panel, item.refs || [item]);
+}
+
+function renderPairDetails(panel,trace) {
+  panel.append(el('h2','Connections in this view'));
+  const endpoints=el('p',null,{class:'endpoints'});
+  for(const [key,id] of [['A',trace.source],['B',trace.target]]) {
+    if(key==='B'&&trace.source===trace.target)continue;
+    const button=el('button',`${key}: ${traceName(id)}`,{type:'button'});
+    button.onclick=()=>flyToNode(id);endpoints.append(button);
+  }
+  panel.append(endpoints,el('p','Includes all shown reference types between these endpoints. Exact rows name their original owners.',{class:'muted'}));
+  const summary=el('p',null,{class:'direction-summary'});panel.append(summary);
+  for(const [role,heading] of trace.source===trace.target ? [['within','Within / self']] :
+    [['outgoing','A -> B'],['incoming','B -> A']]) {
+    const refs=trace.groups[role],count=trace.counts[role];
+    const title=el('h3',`${heading} (${count} refs)`,{tabindex:'-1',class:'trace-'+role});
+    const jump=el('button',`${heading}: ${count} refs`,{type:'button',class:'trace-'+role});
+    jump.onclick=()=>{title.scrollIntoView({block:'start',behavior:'instant'});title.focus({preventScroll:true});};
+    summary.append(jump);panel.append(title);
+    if(!count)panel.append(el('p','No references in this direction in this view.',{class:'muted'}));
+    else if(state.universe.paged)appendReferencePage(panel,{groups:refs.map(ref=>ref.group)},count);
+    else appendReferences(panel,refs);
+  }
 }
 
 function updateGroupControl(button, id) {
@@ -626,6 +660,7 @@ function appendReferences(panel, references) {
 
 function renderConnections(panel, node) {
   const map = state.universe;
+  panel.append(el('p','All recorded references. Map filters and the viewport apply to the trace readout.',{class:'muted'}));
   if (map.isGroup(node.id)) panel.append(el('p','Includes references of descendants. Folder and constellation connections are summaries of their original owners.',{class:'muted'}));
   if(map.paged){
     const stats=map.referenceStats.get(node.id);

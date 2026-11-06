@@ -40,7 +40,8 @@ nothing installed, configured or committed for it.
   manifest.
 - **Server** (`laniakea/server.py`) and **viewer** (`viewer/`, Cytoscape.js): presentation and saved user positions.
   The viewer's `app.js` owns startup and HTML controls; `universe.js` owns the canonical hierarchy, reference
-  projection and world positions; `map.js` owns canvas rendering and hover; `scene.js` owns camera gestures and
+  projection and world positions; `traces.js` derives node/pair direction scopes from that projection for hover and
+  inspection; `map.js` owns canvas rendering and hover; `scene.js` owns camera gestures and
   navigation; `positions.js` owns loading and ordered saves of released pins; `references.js` owns bounded reference-page
   retention and cancellation. See [viewport and memory lifetime](graph-model.md#viewport-and-memory-lifetime).
 - **Layout store** (`laniakea/layouts.py`): validated user positions under each target's `layouts/` directory in the

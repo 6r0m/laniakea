@@ -18,9 +18,10 @@ Editor/Development and reports the missing build context. `--target <name>` fixe
 the map describes current build rules, not a historical source snapshot. Extraction prints phase timings in seconds, then opens the viewer
 at `http://127.0.0.1:8737/`. Wheel into a constellation to reveal its children in place; wheel out to fold it.
 Drag empty space to fly between constellations. Hover a star or connection to trace its references without selecting
-it. Rings are collapsed groups, dots are individual stars, and diamonds are external. Connections become counted
-bundles at a distance and reconnect to their exact endpoints as detail appears. Internal references remain counted
-inside collapsed groups. Click to inspect every exact reference or jump to source; following a reference reveals
+it. The docked readout names the focus and shows outgoing, incoming and within counts. Hover a connection for both
+directions; click to inspect their exact references. Rings are collapsed groups, dots are individual stars, and diamonds
+are external. Connections become counted bundles at a distance and reconnect to their exact endpoints as detail appears.
+Internal references remain counted inside collapsed groups. Inspection also links to source; following a reference reveals
 its destination while retaining the surrounding map.
 
 Choose **galaxy** in Layout for an Engine-centered overview with project constellations around it. **Configuration**
@@ -59,10 +60,12 @@ The optional compiler argument enables preprocessing-validated reuse on subseque
 be expensive; `serve` opens a published run without extracting again, checking input freshness at startup.
 
 Checks: `python -m unittest discover -s tests`. Viewer regressions also run with
-`node --test tests/viewer.test.cjs tests/universe.test.cjs tests/references.test.cjs` when Node.js 18 or later is available; it is not needed to run Laniakea.
+`node --test tests/viewer.test.cjs tests/universe.test.cjs tests/references.test.cjs tests/traces.test.cjs` when Node.js 18 or later is available; it is not needed to run Laniakea.
 The Playwright function in `tests/viewer.browser.js` checks wheel expansion and folding, hover tracing, exact
 reference navigation, centered layout/configuration, constellation and label dragging, saved positions in a fresh browser, and a narrow viewport
 against a served synthetic sample.
+`tests/traces.browser.js` checks trusted pointer movement on reciprocal, mixed-type, crossing, one-way and recursive
+connections, both-direction inspection, filters, theme contrast and the keyboard-accessible narrow readout on that sample.
 `tests/viewer.performance.js` measures trusted mouse/wheel input, frame intervals, main-thread work and heap through
 Playwright/CDP on the current map, then restores its camera. Compare the same scope and expansion state; frame times
 depend on hardware and local load. It checks that zooming changes no world positions or saved pins.

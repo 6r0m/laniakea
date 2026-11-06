@@ -83,16 +83,36 @@ the viewer never guesses from names, levels, implicit-reference flags or generat
 
 Wheel zoom reveals a pointed group when its local contents have room on screen; zooming out folds groups at a
 separate threshold to avoid flicker. Other constellations retain their positions. Hover temporarily emphasizes
-connections to a star or a group's descendants. Inspecting a connection lists every original reference; following
+connections to a star or a group's descendants. Inspecting a connection lists both directions between its displayed endpoints; following
 one reveals its endpoints without closing other groups. The destination's direct references remain available,
 with remote endpoints grouped until the operator approaches them.
-Bundle counts appear on hover or inspection; the overview keeps the connection lines without a label on every bundle.
-Bundle names and colors use manifest metadata. A summary without its own manifest type inherits the exact type's color;
+Bundle counts appear in the trace readout or inspection; the overview keeps the connection lines without a label on every bundle.
+Idle bundle names and colors use manifest metadata. A summary without its own manifest type inherits the exact type's color;
 mixed types use a neutral color and name each recorded type rather than implying one kind of reference.
+
+Tracing uses theme roles defined in CSS: cyan outgoing, amber incoming and violet within/self. The visible legend,
+direction words and native arrowheads provide alternatives to color. Node colors keep their existing meaning.
+A node trace names its focus and partitions represented references by canonical endpoints in its containment subtree:
+source inside/target outside is outgoing, the reverse is incoming, and both inside is within. These counts are disjoint
+and retain compact group weights. They describe the current projection after type, configuration, boundary and viewport
+filtering, labelled "In this view". Node inspection separately labels its all-recorded reference scope.
+
+Connection hover combines all shown families and both directions for the same unordered endpoint pair. A deterministic
+ID order fixes the displayed A/B identities, with full ownership paths and levels. Both directional totals and a bounded
+type breakdown remain stable across native family/direction hits. A one-way pair explicitly reports zero in reverse;
+a real self-loop reports within/self. Coincident reciprocal paths have a neutral stroke and direction-colored arrows.
+Tracing styles existing edges only: no extra lanes, geometry changes, graph facts, hover requests or saved positions.
+During pair tracing, endpoint captions yield native pointer hits to connections so newly revealed text cannot steal
+the click; endpoint glyphs remain interactive. Leaving the trace restores normal caption interaction.
+The docked, keyboard-focusable readout retains the last summary after pointer exit while emphasis clears. Escape,
+clear, gestures and projection changes reset it. Its reserved height does not change when trace text changes.
 Following an exact reference enables its type, configuration subset and boundary visibility if a current filter would hide it.
 Following an internal reference opens its owner and reference list rather than inventing a visible self-loop.
 Optional click inspection keeps its marker through projection refreshes while that exact item remains visible.
-Bundle details use the references in the current projection. Hiding an inspected item closes its details instead
+Pair details use the same represented groups and directions as the readout. Both totals and shortcuts precede separate
+exact-reference pages per direction, so reaching the reverse list does not require scrolling through the forward list.
+Changing that group set or its weights closes the pair inspection; it never falls back to a single hit family.
+Exact-reference navigation retains its original identity. Hiding an inspected item closes its details instead
 of highlighting a different ancestor. Hover and wheel exploration do not require an inspected item.
 Node inspection keeps identity, source and analysis state visible; secondary metadata has a separate disclosure so
 references and navigation remain reachable. Constellation controls track expansion without resetting the reference reader.

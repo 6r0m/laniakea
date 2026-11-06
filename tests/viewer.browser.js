@@ -232,6 +232,7 @@ async (page) => {
       'An expanded background must pan without moving or saving its descendants');
     await page.evaluate(pan=>setWorldViewport(worldZoom(),pan),body.pan);
     await page.waitForFunction(()=>!state.gestureActive);
+    await page.evaluate(()=>frameNode('module:SampleGameplay'));await frames();
     const source=await point('module:SampleGameplay');
     await page.mouse.click(source.x,source.y);
     await page.waitForFunction(()=>state.selection?.id==='module:SampleGameplay');

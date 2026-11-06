@@ -63,6 +63,11 @@ function style() {
     { selector: 'edge:selected', style: { opacity: 1,width:3,'line-color':css('--selection'),'target-arrow-color':css('--selection'), 'underlay-color': css('--selection'),
       'underlay-opacity': 0.15, 'underlay-padding': 3 } },
     { selector: 'edge.focus', style: { width: 2.5, opacity: 1, 'z-index': 5,'target-arrow-shape':'triangle' } },
+    ...['outgoing','incoming','within'].map(role=>({selector:'edge.trace-'+role,style:{
+      'line-color':css('--trace-'+role),'target-arrow-color':css('--trace-'+role),
+      'target-arrow-shape':'triangle',opacity:1,width:2.5,label:''}})),
+    {selector:'edge.trace-both, edge.trace-reciprocal',style:{'line-color':css('--context')}},
+    {selector:'edge.pair-inspected',style:{label:''}},
     { selector: 'node:selected', style: { 'border-color': css('--selection'), 'border-width': 3 } },
   ];
 }
@@ -91,7 +96,10 @@ function renderGraph() {
     }, 270);
     else selectNode(id);
   });
-  cy.on('tap', 'edge', event => renderDetails(state.shard.edges.find(e => e.id === event.target.data('referenceId'))));
+  cy.on('tap', 'edge', event => {
+    const edge=state.shard.edges.find(e=>e.id===event.target.data('referenceId'));
+    if(edge)inspectPair(edge.source,edge.target);
+  });
   cy.on('tap', event => { if (event.target === cy) { unfocus(); renderDetails(null); } });
   cy.on('dbltap', 'node', event => { clearTimeout(state.inspectTimer); toggleGroup(event.target.id()); });
   cy.on('mouseover', 'node, edge', event => preview(event.target,event.renderedPosition));
@@ -151,8 +159,7 @@ function refreshMap() {
   state.drag = null;
   $('graph').classList.remove('dragging');
   const universe = state.universe, cy = state.cy;
-  cy.elements().removeClass('faded focus hovered');
-  $('map-tooltip').hidden = true;
+  clearTrace();
   state.viewportCut=viewportCamera();
   const view = universe.project(state.hidden, state.boundary,state.viewportCut,configurationVisible());
   const members = new Set(view.nodes.filter(n => !n.boundary).map(n => n.id));
@@ -211,6 +218,8 @@ function selectNode(id) {
   const n = state.universe.nodes.get(id);
   if (!n) return;
   renderDetails(n);
+  const trace=ConnectionTrace.node(state.universe,state.shard,id);
+  if(trace)showTraceReadout(trace);
 }
 
 function focus(elements) {
@@ -218,7 +227,6 @@ function focus(elements) {
     state.cy.elements('.focus').not(elements).removeClass('focus');
     elements.not('.focus').addClass('focus');
   });
-  readableLabels();
 }
 
 function preview(element, pointer = state.pointer) {
@@ -229,42 +237,90 @@ function preview(element, pointer = state.pointer) {
       if(element.hasClass('hovered'))unfocus();return;
     }
   }
-  if(element.hasClass('hovered'))return;
+  const edge=element.isEdge()&&state.shard.edges.find(e=>e.id===element.data('referenceId'));
+  if(element.isEdge()&&!edge)return;
+  const key=edge?ConnectionTrace.key(edge.source,edge.target):JSON.stringify(['node',element.id()]);
+  if(state.trace?.key===key) {
+    state.cy.elements('.hovered').not(element).removeClass('hovered');element.addClass('hovered');return;
+  }
   const cy = state.cy;
   // Native node and edge hover events can overlap; an old target must not clear a newer trace.
-  cy.elements('.hovered').not(element).removeClass('hovered');
-  if (element.isNode()) {
-    const family = cy.nodes().filter(n => state.universe.contains(element.id(), n.id()));
-    const edges = family.connectedEdges();
+  state.trace=edge?ConnectionTrace.pair(state.shard,edge.source,edge.target):ConnectionTrace.node(state.universe,state.shard,element.id());
+  if(!state.trace)return;
+  cy.batch(()=>{
+    cy.elements('.hovered,.trace-endpoint,.trace-outgoing,.trace-incoming,.trace-within,.trace-both,.trace-reciprocal')
+      .removeClass('hovered trace-endpoint trace-outgoing trace-incoming trace-within trace-both trace-reciprocal');
     element.addClass('hovered');
-    focus(family.union(edges).union(edges.connectedNodes()));
-    const node = state.universe.nodes.get(element.id()), stats = state.universe.referenceStats.get(node.id);
-    const outgoing = stats.outgoing+stats.within, incoming = stats.incoming+stats.within;
-    showTooltip(`${node.label} (${node.level})`, `${outgoing} outgoing / ${incoming} incoming` +
-      (node.boundary ? ' / further external dependencies not analysed' : ''), element.renderedPosition());
-  } else {
-    element.addClass('hovered');
-    focus(element.union(element.connectedNodes()));
-    const edge = state.shard.edges.find(e => e.id === element.data('referenceId'));
-    showTooltip(`${label(edge.source)} -> ${label(edge.target)}`, `${referenceTotal(edge.refs)} exact reference(s) / ` +
-      [...new Set(edge.refs.map(e => typeLabel(e.type)))].join(', '), element.renderedMidpoint());
-  }
+    if (element.isNode()) {
+      const family = cy.nodes().filter(n => state.universe.contains(element.id(), n.id()));
+      const edges = family.connectedEdges();
+      focus(family.union(edges).union(edges.connectedNodes()));
+    } else {
+      const family=cy.edges().filter(e=>state.trace.roles.has(e.data('referenceId')));
+      family.connectedNodes().addClass('trace-endpoint');
+      focus(family.union(family.connectedNodes()));
+    }
+    for(const [id,role] of state.trace.roles) {
+      const wire=cy.getElementById(state.universe.renderPrefix+id);wire.addClass('trace-'+role);
+      if(wire.source().id()!==wire.target().id()&&wire.parallelEdges().some(other=>
+        other.source().id()===wire.target().id()&&other.target().id()===wire.source().id()))wire.addClass('trace-reciprocal');
+    }
+  });
+  readableLabels();
+  showTraceReadout(state.trace);
 }
 
-function showTooltip(title, text, point) {
+function traceName(id) {
+  const node=state.universe.nodes.get(id);
+  const names=state.universe.paths.get(id).map(label).join(' / ');
+  return `${names} (${node.level})`;
+}
+
+function traceTypes(refs) {
+  const counts=new Map();for(const ref of refs)counts.set(ref.type,(counts.get(ref.type)||0)+ConnectionTrace.total([ref]));
+  const rows=[...counts].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
+  return rows.slice(0,3).map(([type,count])=>`${count} ${typeLabel(type)}`).join(', ')+
+    (rows.length>3?`, +${rows.length-3} types`:'');
+}
+
+function showTraceReadout(trace) {
+  const counts=trace.counts;
+  if(trace.kind==='node')showTooltip(`In this view / Focus: ${traceName(trace.source)}`,
+    `Outgoing: ${counts.outgoing} / Incoming: ${counts.incoming} / Within: ${counts.within}`+
+    (state.universe.nodes.get(trace.source).boundary?' / Further external references not analysed':''));
+  else if(trace.source===trace.target)showTooltip(`In this view / Self: ${traceName(trace.source)}`,
+    `Within/self: ${counts.within} refs (${traceTypes(trace.groups.within)})`);
+  else showTooltip(`In this view / A: ${traceName(trace.source)} / B: ${traceName(trace.target)}`,
+    `A -> B: ${counts.outgoing} refs${counts.outgoing?' ('+traceTypes(trace.groups.outgoing)+')':''} / `+
+    `B -> A: ${counts.incoming} refs${counts.incoming?' ('+traceTypes(trace.groups.incoming)+')':''}`);
+}
+
+function showTooltip(title, text) {
   const tip = $('map-tooltip');
-  tip.replaceChildren(el('strong', title), el('span', text));
+  if(tip.firstElementChild?.textContent!==title||tip.lastElementChild?.textContent!==text)
+    tip.replaceChildren(el('strong', title), el('span', text));
   tip.hidden = false;
-  tip.style.left = Math.max(8, Math.min(state.cy.width() - 292, point.x + 18)) + 'px';
-  tip.style.top = Math.max(8, Math.min(state.cy.height() - 90, point.y + 24)) + 'px';
 }
 
-function unfocus() {
+function clearTrace() {
+  if(state.cy)state.cy.elements('.faded,.focus,.hovered,.trace-endpoint,.trace-outgoing,.trace-incoming,.trace-within,.trace-both,.trace-reciprocal')
+    .removeClass('faded focus hovered trace-endpoint trace-outgoing trace-incoming trace-within trace-both trace-reciprocal');
+  state.trace=null;
+  $('map-tooltip').hidden=false;
+  $('map-tooltip').textContent='Hover a star or connection to trace references in this view.';
+}
+
+function unfocus(clearReadout = false) {
   if (state.cy) {
-    const marked=state.cy.elements('.faded,.focus,.hovered');
-    if(marked.length){marked.removeClass('faded focus hovered');readableLabels();}
+    const marked=state.cy.elements('.faded,.focus,.hovered,.trace-endpoint,.trace-outgoing,.trace-incoming,.trace-within,.trace-both,.trace-reciprocal');
+    if(marked.length){marked.removeClass('faded focus hovered trace-endpoint trace-outgoing trace-incoming trace-within trace-both trace-reciprocal');readableLabels();}
   }
-  $('map-tooltip').hidden = true;
+  state.trace=null;
+  if(clearReadout)clearTrace();
+  else {
+    const title=$('map-tooltip').firstElementChild;
+    if(title&&!title.textContent.startsWith('Last traced: '))title.textContent='Last traced: '+title.textContent;
+  }
 }
 
 function applyFilters() {
@@ -426,8 +482,10 @@ function declutterLabels() {
   cy.batch(() => {
     kept.forEach(item=>caption(item,item.text));
     cy.nodes().forEach(n => {
-      if (!state.visibleLabels || state.visibleLabels.has(n.id()) !== names.has(n.id())) {
-        n.style({ 'text-opacity': names.has(n.id()) ? 1 : 0, 'text-events': names.has(n.id()) ? 'yes' : 'no' });
+      // Captions revealed by pair tracing must not take the connection's pointer hit.
+      const hit=names.has(n.id())&&!n.hasClass('trace-endpoint')?'yes':'no';
+      if (!state.visibleLabels || state.visibleLabels.has(n.id()) !== names.has(n.id()) || n.style('text-events')!==hit) {
+        n.style({ 'text-opacity': names.has(n.id()) ? 1 : 0, 'text-events': hit });
       }
     });
   });
@@ -507,6 +565,7 @@ function nodeGeometry(id,expanded,scale=state.renderScale||1) {
 }
 
 function beginViewportGesture() {
+  if(!state.gestureActive)clearTrace();
   state.gestureActive=true;
   clearTimeout(state.gestureTimer);
   const cy=state.cy;
@@ -521,9 +580,9 @@ function setWorldViewport(level, pan, gesture = false) {
   level = Math.max(cy.minZoom(), Math.min(cy.maxZoom(), level));
   const scale = level > 2 ? 2 ** Math.ceil(Math.log2(level)) : 1;
   const rescaled = scale !== (state.renderScale || 1);
-  if(gesture)beginViewportGesture();
   state.framing = true;
   cy.startBatch();
+  if(gesture)beginViewportGesture();
   if (rescaled) {
     state.renderScale = scale;
     cy.nodes().positions(n => {
