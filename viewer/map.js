@@ -271,8 +271,8 @@ function applyFilters() {
   if (state.cy) { unfocus(); refreshMap(); }
 }
 
-function readableLabels() {
-  if (!state.cy || state.styling || state.gestureActive) return;
+function readableLabels(geometryOnly = false) {
+  if (!state.cy || state.styling || state.gestureActive && !geometryOnly) return;
   state.styling = true;
   const cy = state.cy, zoom = cy.zoom(), leaves = cy.nodes().not('.expanded');
   const styleZoom=2**(Math.round(Math.log2(zoom)*2)/2);
@@ -303,7 +303,7 @@ function readableLabels() {
     }
   });
   state.labelGeometry = {cy, zoom:styleZoom};
-  declutterLabels();
+  if (!geometryOnly) declutterLabels();
   state.styling = false;
 }
 
@@ -520,10 +520,11 @@ function setWorldViewport(level, pan, gesture = false) {
   const cy = state.cy, before = worldZoom(), framing = state.framing;
   level = Math.max(cy.minZoom(), Math.min(cy.maxZoom(), level));
   const scale = level > 2 ? 2 ** Math.ceil(Math.log2(level)) : 1;
+  const rescaled = scale !== (state.renderScale || 1);
   if(gesture)beginViewportGesture();
   state.framing = true;
   cy.startBatch();
-  if (scale !== (state.renderScale || 1)) {
+  if (rescaled) {
     state.renderScale = scale;
     cy.nodes().positions(n => {
       const {position,...size}=nodeGeometry(n.id(),n.hasClass('expanded'),scale);
@@ -533,6 +534,8 @@ function setWorldViewport(level, pan, gesture = false) {
     state.labelGeometry = null;
   }
   cy.viewport({zoom:level/scale,pan});
+  // Pixel-sized styles must change units with positions before the renderer can paint.
+  if (rescaled) readableLabels(true);
   cy.endBatch();
   state.lastZoom = level;
   state.framing = framing;

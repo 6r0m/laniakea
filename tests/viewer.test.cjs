@@ -499,6 +499,40 @@ test('renderer rescaling preserves world positions and camera history across dee
   assert.equal(run('JSON.stringify([...state.universe.positions])===worldPoints'),true);
 });
 
+test('wheel scale changes keep stars, fonts and expanded backgrounds in the same painted units',()=>{
+  const {run}=viewer();
+  run(`globalThis.css=()=>'#888';state.scopeShard={scope:'app'};state.index={nodes:[]};
+    state.manifest={edge_types:[]};state.universe.place({},'auto');state.universe.reveal('app.core.db');
+    state.cy=cytoscape({headless:true,styleEnabled:true,style:style(),elements:[]});
+    globalThis.viewportCamera=()=>null;globalThis.declutterLabels=()=>globalThis.collisions++;
+    globalThis.collisions=0;globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=()=>{};
+    globalThis.setTimeout=callback=>{globalThis.settle=callback;return 1;};globalThis.clearTimeout=()=>{};
+    refreshMap();globalThis.pins=JSON.stringify([...state.universe.positions]);
+    globalThis.paints=[];const renderer=state.cy.renderer(),notify=renderer.notify;
+    renderer.notify=function(...args){
+      const star=state.cy.getElementById('app.core.db'),group=state.cy.getElementById('app.core'),z=state.cy.zoom();
+      paints.push({font:parseFloat(star.style('font-size'))*z,glyph:star.width()*z,
+        background:group.width()*z,padding:parseFloat(group.style('padding'))*z});
+      return notify.apply(this,args);
+    };`);
+  for(const [from,to] of [[2.04,1.735],[4.04,3.4],[8.04,6.8],[1024.04,900],[1.96,2.3],[3.96,4.6]]) {
+    run(`setWorldViewport(${from},{x:120,y:80});paints=[];collisions=0;
+      setWorldViewport(${to},{x:118,y:79},true);`);
+    assert.ok(run('paints.length')>0);
+    for(const paint of run('paints')) {
+      assert.ok(Math.abs(paint.font-13)<0.001,`font flashed at ${from} -> ${to}: ${paint.font}px`);
+      assert.ok(Math.abs(paint.glyph-15)<0.001,`star flashed at ${from} -> ${to}: ${paint.glyph}px`);
+      const span=run("state.universe.bounds.get('app.core').x2-state.universe.bounds.get('app.core').x1");
+      assert.ok(Math.abs(paint.background-span*to)<0.001,'background retained its old renderer scale');
+      assert.ok(Math.abs(paint.padding-26)<0.001,'background padding retained its old renderer scale');
+    }
+    assert.equal(run('collisions'),0,'wheel frames must defer label collision work');
+    run('settle()');assert.equal(run('collisions'),1,'labels settle once after the gesture');
+    assert.equal(run('JSON.stringify([...state.universe.positions])'),run('pins'));
+  }
+  run('state.cy.destroy()');
+});
+
 test('compiler locations become source links and structured metadata stays readable',()=>{
   const {run}=viewer();
   run(`state.target.roots={project:'C:/Sample'};

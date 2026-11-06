@@ -151,8 +151,10 @@ with transitive and public-exposure paths; this is not reported as a violation.
 Native header-tool manifests map generated declarations back to their module, checked against JsonExport ownership.
 Generated-only declarations do not become project stars; references to them keep their module endpoint.
 If normalization maps both ends of a reference or semantic relation to the same owner and at least one original
-symbol was not retained, it marks the reference internal to that owner. Authored function recursion keeps its resolved
-function endpoints and remains explicit. Canonical identities and compiler location/status are unchanged by this classification.
+symbol was not retained, it marks the reference internal to that owner. A retained class referencing its own type
+is also internal: aliases, own-type fields and macro-expanded definitions describe that class rather than another entity.
+Authored function recursion and function self-address references keep their resolved function endpoints and remain explicit.
+References between distinct classes remain explicit. Canonical identities and compiler location/status are unchanged by this classification.
 Module metadata distinguishes native compilation units, declarations reached through other units, and modules with no observed symbol
 analysis. Execution, diagnostics and observed symbols do not establish complete relationship correctness.
 

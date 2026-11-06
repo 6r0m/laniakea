@@ -74,8 +74,8 @@ and references to ancestors remain represented. With no filters, every recorded 
 visible connection, internal-reference count, or explicit count beyond the viewport. Filters have their own count.
 Parallel exact references also share one connection, with every original call site retained in its reference list.
 
-A profile can classify a reference as internal to its normalized owner when endpoint abstraction would otherwise
-make it look like an explicit self-relationship. Such references contribute to internal counts even when the owner
+A profile can classify an owner-local reference as internal to its normalized owner, including references whose endpoints
+collapse through abstraction. Such references contribute to internal counts even when the owner
 is visible or expanded; exact reference pages retain their status, location and classification. Authored recursion
 remains an explicit loop. Compact groups keep internal and explicit references separate. The schema validates
 the classification, including its identical-endpoint constraint. Unmarked older runs retain their original meaning;
@@ -90,7 +90,7 @@ Bundle counts appear on hover or inspection; the overview keeps the connection l
 Bundle names and colors use manifest metadata. A summary without its own manifest type inherits the exact type's color;
 mixed types use a neutral color and name each recorded type rather than implying one kind of reference.
 Following an exact reference enables its type, configuration subset and boundary visibility if a current filter would hide it.
-Following an abstracted internal reference opens its owner and reference list rather than inventing a visible self-loop.
+Following an internal reference opens its owner and reference list rather than inventing a visible self-loop.
 Optional click inspection keeps its marker through projection refreshes while that exact item remains visible.
 Bundle details use the references in the current projection. Hiding an inspected item closes its details instead
 of highlighting a different ancestor. Hover and wheel exploration do not require an inspected item.
@@ -142,9 +142,10 @@ A previous hover target cannot clear a newer trace.
 Constellation dragging uses Cytoscape's native selected-node drag layer. Moving wires settle on release while the selected
 connection remains visible; reference facts and counts are retained throughout the gesture.
 Native viewport textures and straight summary lines reduce gesture rendering work. Direction arrows and bundle counts
-appear on tracing or inspection. Label sizing and collision work settle after input pauses; wheel events and viewport
-updates coalesce by animation frame. Renderer rescaling keeps deep zoom numerically useful; history and pins stay in
-world coordinates.
+appear on tracing or inspection. Label collision work settles after input pauses; wheel events and viewport
+updates coalesce by animation frame. Renderer rescaling keeps deep zoom numerically useful. A change of renderer units
+updates positions, background dimensions and pixel-sized styles in one batch before painting, even during a gesture;
+collision work remains deferred. History and pins stay in world coordinates.
 Self-reference loops scale with their star or container so zooming out does not hide them inside its shape.
 Fit map restores root navigation and uses canonical top-level world positions, so it also recovers the overview from an
 empty viewport. Reset layout requires confirmation before discarding the current mode's saved positions.

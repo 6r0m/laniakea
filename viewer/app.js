@@ -544,7 +544,7 @@ function referenceRow(edge) {
   const origin=state.manifest.sources.find(s=>s.id===edge.origin);
   row.append(button,el('small',`${typeLabel(edge.type)} / ${edge.status}`+
     ` / ${origin?origin.name+' '+origin.version:edge.origin}`+
-    (edge.internal_to_owner?' / within owner (abstracted)':'')+
+    (edge.internal_to_owner?' / within owner':'')+
     (state.hidden.has(edge.type)||!configurationVisible()&&state.universe.isConfiguration(edge)||
       !state.boundary&&(source.boundary||target.boundary)?' / hidden by filters':'')));
   const ownerPath=id=>state.universe.paths.get(id).map(label).join(' / ');

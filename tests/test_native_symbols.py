@@ -175,6 +175,25 @@ class NativeSymbols(unittest.TestCase):
         self.assertEqual((calls[0]['source'],calls[0]['target']),(node['id'],node['id']))
         self.assertFalse(calls[0].get('internal_to_owner',False))
 
+    def test_class_own_type_references_are_internal_without_hiding_function_self_references(self):
+        self.source.write_text(
+            '#define SAMPLE_CATEGORY(Name) struct Name { using Self=Name; Name* next; };\n'
+            'SAMPLE_CATEGORY(SampleCategory)\n'
+            'struct SampleNode {using Self=SampleNode; SampleNode* next; static int Recur(int depth);};\n'
+            'int SampleNode::Recur(int depth){auto callback=&SampleNode::Recur; return depth?Recur(depth-1):0;}\n'
+            'struct SamplePeer {SampleNode* node;};\n')
+        built=self.normalize([self.index()])
+        nodes={n['id']:n for n in built['nodes']}
+        own_types=[e for e in built['edges'] if e['source']==e['target'] and e['type']=='uses.type']
+        self.assertEqual({nodes[e['source']]['label'] for e in own_types},{'SampleNode','SampleCategory'})
+        self.assertTrue(all(e.get('internal_to_owner') for e in own_types),
+                        'class aliases, own-pointer fields and macro type references belong within their owner')
+        function_self=[e for e in built['edges'] if e['source']==e['target'] and nodes[e['source']]['level']=='function']
+        self.assertEqual({e['type'] for e in function_self},{'calls','uses.function'})
+        self.assertTrue(all(not e.get('internal_to_owner',False) for e in function_self))
+        self.assertTrue(any(nodes[e['source']]['label']=='SamplePeer' and nodes[e['target']]['label']=='SampleNode'
+                            and not e.get('internal_to_owner',False) for e in built['edges']))
+
     def test_calls_addresses_inheritance_overrides_source_links_and_edit(self):
         batch = self.index()
         built = self.normalize([batch])

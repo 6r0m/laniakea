@@ -25,7 +25,7 @@
       "description": "One endpoint/type/internal-classification group. Source and target index map.nodes; its page-query group id is its array index plus one.",
       "properties": {"source": {"type": "integer"}, "target": {"type": "integer"},
                      "type": {"type": "string"}, "count": {"type": "integer"},
-                     "internal_to_owner": {"type": "boolean", "description": "An abstracted reference within one owner, not an explicit self-relationship."}}
+                     "internal_to_owner": {"type": "boolean", "description": "An owner-local reference, not an explicit self-relationship."}}
     },
     "referencePage": {
       "type": "object", "required": ["items", "total", "next_cursor"], "additionalProperties": false,
@@ -71,7 +71,7 @@
         "target": {"type": "string"},
         "status": {"enum": ["declared", "derived", "resolved", "partial"]},
         "origin": {"type": "string", "description": "The id of the manifest source that produced the edge."},
-        "internal_to_owner": {"type": "boolean", "description": "Normalization abstracted a reference within one owner. Source and target must be identical; exact reference metadata is retained."},
+        "internal_to_owner": {"type": "boolean", "description": "Normalization classified an owner-local reference. Source and target must be identical; exact reference metadata is retained."},
         "attrs": {"type": "object"}
       }
     },

@@ -156,7 +156,8 @@ def merge(built, batches, project, copy, engine, exported, generated_owners=None
                                              "symbol": "::".join(filter(None, (symbol.get("scope"), symbol.get("signature")))),
                                              "dispatch": "virtual target declaration" if reference["role"] & 64 else "static",
                                              "implicit": reference["implicit"]}}
-        if source == target and (reference["source"] not in ids or reference["target"] not in ids):
+        if source == target and (reference["source"] not in ids or reference["target"] not in ids
+                                 or (kind == "uses.type" and symbol.get("level") == "class")):
             builder.edges[identity]["internal_to_owner"] = True
     result = {"schema": built["schema"], "nodes": list(builder.nodes.values()), "edges": list(builder.edges.values())}
     _dependency_reviews(result, exported)
