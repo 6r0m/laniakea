@@ -10,7 +10,8 @@ Needs Windows, Python 3.9 or later, and an installed Unreal Engine 5. Clone the 
 python laniakea.py up path/to/YourProject.uproject
 ```
 
-Later, `python laniakea.py up` alone reopens the newest project; with make installed, `make up` does the same.
+Later, `python laniakea.py up` alone extracts the newest project's module graph; with make installed, `make up` does the same.
+Ordinary `up` and `extract` remain module-only even when LLVM is installed. Use `serve` to reopen a published map without extracting again.
 
 The first run exports the target/configuration from the latest usable project build receipt; without one it uses
 Editor/Development and reports the missing build context. `--target <name>` fixes the target. Receipts select configuration;
@@ -40,12 +41,14 @@ For classes, functions, inheritance, overrides and calls, install locally suppli
 
 ```text
 python laniakea.py setup-symbols --libclang <llvm>/bin/libclang.dll --resources <llvm>/lib/clang/21 --compiler <llvm>/bin/clang-cl.exe
-python laniakea.py up
+python laniakea.py up --symbols
 ```
 
-The tools are copied into `workspace/`; extraction and serving do not download anything. Symbol analysis uses current
+The tools are copied into `workspace/`; extraction and serving do not download anything. `--symbols` requests native analysis
+for that extraction only; installation does not enable it implicitly. Symbol analysis uses current
 sources in the last usable build's target/configuration. It prepares compiler inputs in an isolated workspace copy and
-reports timing and compiler diagnostics. A compiler failure retains the previous published map. Engine symbols remain
+reports timing and compiler diagnostics. Missing tools, missing successful-build context or a compiler failure retain the
+previous published map; omit `--symbols` for module exploration. Engine symbols remain
 module/plugin boundaries. Calls are statically resolved; other callable references remain visible as function references.
 The optional compiler argument enables preprocessing-validated reuse on subsequent extractions. Cold symbol analysis can
 be expensive; `serve` opens a published run without extracting again, checking input freshness at startup.

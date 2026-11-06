@@ -25,9 +25,27 @@ class Pipeline(unittest.TestCase):
     def tearDown(self):
         self.temporary.cleanup()
 
-    def extract(self, **kwargs):
+    def extract(self, symbols=False, **kwargs):
         with recorded_ubt(self.project, self.engine, **kwargs):
-            return pipeline.extract(self.workspace, self.target)
+            return pipeline.extract(self.workspace, self.target, **({'symbols':True} if symbols else {}))
+
+    def test_module_extraction_ignores_installed_or_broken_symbol_tools_and_source_edits(self):
+        tools = self.workspace.root / 'tools/unreal'
+        tools.mkdir(parents=True)
+        (tools / 'tools.json').write_text('{broken optional installation')
+        with patch('laniakea.unreal.compiler.extract', side_effect=AssertionError('native analysis must be explicit')), \
+                patch('laniakea.unreal.source_inputs.fingerprints', side_effect=AssertionError('M1 must not hash C++ sources')):
+            run, manifest = self.extract()
+        self.assertNotIn('class', manifest['levels'])
+        source = self.project / 'Source/SampleProject/SampleProject.cpp'
+        self.assertNotIn(source.relative_to(self.project).as_posix(), manifest['inputs'])
+        source.write_bytes(source.read_bytes() + b'\n// not a build-rule change\n')
+        self.assertEqual(pipeline.freshness(self.workspace, self.target)[1], [])
+        self.assertEqual(self.workspace.latest('sample'), run)
+
+    def test_cli_symbols_are_an_explicit_per_run_choice(self):
+        self.assertFalse(cli.parser().parse_args(['extract', 'sample']).symbols)
+        self.assertTrue(cli.parser().parse_args(['up', 'sample', '--symbols']).symbols)
 
     def test_run_is_complete_before_latest_moves(self):
         run, manifest = self.extract()
@@ -51,14 +69,24 @@ class Pipeline(unittest.TestCase):
         self.assertEqual(len(failed), 1)
 
     def test_symbol_failure_keeps_latest_and_source_edits_mark_it_stale(self):
-        good, _ = self.extract()
+        def indexed(_target, _run, built, *_args):
+            return built, {'enabled':True,'units':1,'external_inputs':{},'unknown':{'source':0,'target':0}}
+        with patch('laniakea.unreal.compiler.extract', side_effect=indexed):
+            good, manifest = self.extract(symbols=True)
+        self.assertIn('class', manifest['levels'])
         with patch("laniakea.unreal.compiler.extract", side_effect=LaniakeaError("native compiler failed")):
             with self.assertRaisesRegex(LaniakeaError, "native compiler failed"):
-                self.extract()
+                self.extract(symbols=True)
         self.assertEqual(self.workspace.latest("sample"), good)
         source = self.project / "Source/SampleProject/SampleProject.cpp"
         source.write_bytes(source.read_bytes() + b"\n// source edit\n")
         self.assertIn("Source/SampleProject/SampleProject.cpp", pipeline.freshness(self.workspace, self.target)[1])
+
+    def test_explicit_symbols_without_tools_refuses_without_replacing_latest(self):
+        good, _ = self.extract()
+        with self.assertRaisesRegex(LaniakeaError, 'without local LLVM tools'):
+            self.extract(symbols=True)
+        self.assertEqual(self.workspace.latest('sample'), good)
 
     def test_concurrent_extraction_refuses_before_changing_runs_or_copy(self):
         good,_=self.extract()
@@ -80,7 +108,7 @@ class Pipeline(unittest.TestCase):
             raise LaniakeaError(f"compiler failed; see {run / 'compiler/index.log'}")
         with patch("laniakea.unreal.compiler.extract",side_effect=fail):
             with self.assertRaises(LaniakeaError) as raised:
-                self.extract()
+                self.extract(symbols=True)
         self.assertIn(".failed",str(raised.exception))
         self.assertNotIn(".partial",str(raised.exception))
 

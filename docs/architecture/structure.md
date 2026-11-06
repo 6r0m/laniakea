@@ -56,6 +56,8 @@ Through the profile contract: a profile is a module with `NAME`, `project_file`,
 `inputs(target, manifest=None)` and `extract(target, run_dir, previous_manifest=None, tools_dir=None)`. The previous successfully published manifest is
 read-only context; retention and optional local-tool policy belong to its profile. Adding a language is one adapter and one registry line; the core and the viewer change
 nothing.
+The CLI's per-run `--symbols` request enables the pipeline to supply a tool directory. Ordinary extraction supplies none;
+installing a tool does not opt future extractions into compiler analysis.
 
 The manifest's optional `timings_seconds` records elapsed phases. The profile supplies its extraction phases;
 the pipeline supplies profile execution, shard writing/validation and total time through graph serialization, before

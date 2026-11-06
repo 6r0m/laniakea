@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 
 from .. import LaniakeaError
+from .source_tree import SourceTree
 
 # Folders that never hold descriptors or build rules. Skipping them keeps a walk of a large project fast.
 SKIP_DIRS = {"Binaries", "Intermediate", "Saved", "DerivedDataCache", "Content", ".git", "node_modules", "__pycache__"}
@@ -21,8 +22,8 @@ def read(path):
         raise LaniakeaError(f"cannot read descriptor {path}: {error}") from error
 
 
-def _walk(top):
-    for current, dirs, files in os.walk(top):
+def _walk(top, tree, discover_plugins=False):
+    for current, dirs, files in tree.walk(top, discover_plugins):
         dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS)
         yield Path(current), dirs, sorted(files)
 
@@ -33,9 +34,12 @@ def project_plugins(project_dir):
     plugins = Path(project_dir) / "Plugins"
     if not plugins.is_dir():
         return found
-    for current, dirs, files in _walk(plugins):
+    tree = SourceTree(project_dir)
+    for current, dirs, files in _walk(plugins, tree, discover_plugins=True):
         descriptors = [name for name in files if name.endswith(".uplugin")]
         if descriptors:
+            for name in descriptors:
+                tree.require(current / name)
             found.extend(current / name for name in descriptors)
             dirs[:] = []
     return found
@@ -44,15 +48,17 @@ def project_plugins(project_dir):
 def build_inputs(project_dir):
     """sha256 of every file that defines the build: the .uproject, each .uplugin, *.Build.cs and *.Target.cs."""
     project_dir = Path(project_dir)
+    tree = SourceTree(project_dir, project_plugins(project_dir))
     inputs = {}
     for top in (project_dir, project_dir / "Source", project_dir / "Plugins"):
         if not top.is_dir():
             continue
-        walker = _walk(top) if top != project_dir else [(project_dir, [], sorted(os.listdir(project_dir)))]
+        walker = _walk(top, tree) if top != project_dir else [(project_dir, [], sorted(os.listdir(project_dir)))]
         for current, _, files in walker:
             for name in files:
                 if name.endswith((".uproject", ".uplugin", ".Build.cs", ".Target.cs")):
                     path = current / name
+                    tree.require(path)
                     inputs[path.relative_to(project_dir).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
     return dict(sorted(inputs.items()))
 

@@ -60,6 +60,22 @@ class Layouts(unittest.TestCase):
         self.update({"a": {"x": 1, "y": 2}, "b": {"x": 3, "y": 4}})
         self.assertEqual(self.store.read("sample", "entry.json", {"a"})["auto"], {"a": {"x": 1, "y": 2}})
 
+    def test_module_only_moves_and_reset_preserve_temporarily_unavailable_symbol_pins(self):
+        self.update({'a':{'x':1,'y':2},'b':{'x':3,'y':4}})
+        self.update({'b':{'x':5,'y':6}}, mode='grid')
+        self.store.update('sample','entry.json',{'layout':'auto','positions':{'a':{'x':7,'y':8}}},{'a'})
+        self.assertEqual(self.read()['auto']['b'], {'x':3,'y':4})
+        self.assertEqual(self.read()['grid']['b'], {'x':5,'y':6})
+        self.assertNotIn('b', self.store.read('sample','entry.json',{'a'})['auto'])
+        before = self.read()
+        with self.assertRaises(ValueError):
+            self.store.update('sample','entry.json',{'layout':'auto','positions':{'b':{'x':9,'y':10}}},{'a'})
+        self.assertEqual(self.read(), before)
+        self.store.update('sample','entry.json',{'layout':'auto','positions':None},{'a'})
+        self.assertNotIn('a', self.read()['auto'])
+        self.assertEqual(self.read()['auto']['b'], {'x':3,'y':4})
+        self.assertEqual(self.read()['grid']['b'], {'x':5,'y':6})
+
     def test_parallel_tabs_do_not_drop_each_others_pin_updates(self):
         with ThreadPoolExecutor(max_workers=2) as pool:
             list(pool.map(self.update, [{"a": {"x": 1, "y": 2}}, {"b": {"x": 3, "y": 4}}]))

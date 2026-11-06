@@ -104,6 +104,8 @@ world coordinates.
 Self-reference loops scale with their star or container so zooming out does not hide them inside its shape.
 Fit map restores root navigation and uses canonical top-level world positions, so it also recovers the overview from an
 empty viewport. Reset layout requires confirmation before discarding the current mode's saved positions.
+Layout updates retain pins absent from the current run, so module-only extraction does not erase native-symbol positions.
+Reset clears the selected mode's pins belonging to the current graph; temporarily unavailable pins remain stored.
 
 Exact-reference inspection replaces at most 50 rows per page, with Previous/Next and explicit retry on failure. Its LRU
 retains at most 64 pages and 8 MiB of serialized page/key data; parsed-object overhead is additional. Changing inspection

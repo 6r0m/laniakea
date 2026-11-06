@@ -82,9 +82,9 @@ def batches(out, count):
 def extract(target, run_dir, built, exported, chosen, tools_dir):
     installed = tools.load(tools_dir)
     if installed is None:
-        return built, {"enabled": False, "reason": "class/function analysis: run setup-symbols with local LLVM tools"}
+        raise LaniakeaError('symbol analysis requested without local LLVM tools; run setup-symbols first')
     if chosen["build_context"]["selection"] not in {"receipt", "retained-receipt"}:
-        return built, {"enabled": False, "reason": "class/function analysis requires usable successful-build context"}
+        raise LaniakeaError('symbol analysis requires usable successful-build context; omit --symbols for module exploration')
     run_dir = Path(run_dir)
     # run is <workspace>/targets/<id>/runs/<run>; mutable preparation belongs to the target, not a published run.
     target_dir = run_dir.parent.parent

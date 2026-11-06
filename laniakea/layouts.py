@@ -37,7 +37,7 @@ class LayoutStore:
     def _path(self, target, scope):
         return self.workspace.target_dir(target) / "layouts" / scope
 
-    def _read(self, target, scope, allowed):
+    def _read(self, target, scope, allowed=None):
         path = self._path(target, scope)
         try:
             try:
@@ -50,7 +50,7 @@ class LayoutStore:
             for mode, positions in data["layouts"].items():
                 if not _MODE.fullmatch(mode):
                     raise ValueError("invalid saved layout name")
-                result[mode] = {node: point for node, point in _positions(positions).items() if node in allowed}
+                result[mode] = {node: point for node, point in _positions(positions).items() if allowed is None or node in allowed}
             return result
         except (OSError, ValueError) as error:
             raise LaniakeaError(f"could not read saved positions: {error}") from error
@@ -68,10 +68,15 @@ class LayoutStore:
         if positions is not None:
             _positions(positions, allowed)
         with _LOCK:
-            layouts = self._read(target, scope, allowed)
+            layouts = self._read(target, scope)
             if positions is None:
-                layouts.pop(mode, None)
+                remaining = {node:point for node,point in layouts.get(mode, {}).items() if node not in allowed}
+                if remaining:
+                    layouts[mode] = remaining
+                else:
+                    layouts.pop(mode, None)
             else:
                 layouts.setdefault(mode, {}).update(positions)
             write_json(self._path(target, scope), {"version": 1, "layouts": layouts})
-            return layouts
+            return {mode:{node:point for node,point in positions.items() if node in allowed}
+                    for mode,positions in layouts.items()}

@@ -41,9 +41,11 @@ def default_id(project):
     return Path(project).stem.lower()
 
 
-def inputs(target, manifest=None):
+def inputs(target, manifest=None, *, symbols=False):
+    native = symbols or any(source['id'] == 'compiler' for source in (manifest or {}).get('sources', []))
     return {**descriptors.build_inputs(Path(target["project_file"]).parent),
-            **builds.fingerprints(target["project_file"]), **source_inputs.fingerprints(target["project_file"], manifest)}
+            **builds.fingerprints(target["project_file"]),
+            **(source_inputs.fingerprints(target["project_file"], manifest) if native else {})}
 
 
 def _choose(targets, wanted):
@@ -64,7 +66,7 @@ def extract(target, run_dir, previous_manifest=None, tools_dir=None):
     root = Path(target["engine_root"])
     out = Path(run_dir) / "ubt"
     out.mkdir(parents=True, exist_ok=True)
-    inputs_before = inputs(target)
+    inputs_before = inputs(target, symbols=tools_dir is not None)
     start = perf_counter()
     targets = ubt.query_targets(root, project, out)
     timings = {"query_targets": perf_counter() - start}
@@ -82,7 +84,7 @@ def extract(target, run_dir, previous_manifest=None, tools_dir=None):
     start = perf_counter()
     built, counts = graph.build(project, root, exported)
     timings["graph"] = perf_counter() - start
-    compiler_result = {"enabled": False, "reason": "levels: class, function (symbol compiler is not installed)"}
+    compiler_result = {"enabled": False, "reason": "levels: class, function (not requested; pass --symbols)"}
     if tools_dir is not None:
         from . import compiler
         built, compiler_result = compiler.extract(target, run_dir, built, exported, chosen, tools_dir)

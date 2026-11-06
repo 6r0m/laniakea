@@ -24,7 +24,8 @@ How `laniakea/unreal/` reads a project, and the engine behaviour it is built aro
 - Project-owned `Binaries/Win64/*.target` receipts select build context as described below.
 - Build inputs for freshness: the `.uproject`, each `.uplugin`, and every `*.Build.cs` and `*.Target.cs` under `Source/`
   and `Plugins/`.
-- Authored C++ source/header contents participate in freshness, including code reached through project plugin junctions.
+- Authored C++ source/header contents participate in freshness only for native-symbol runs, including code reached through
+  declared project plugin junctions. Module-only runs fingerprint build inputs and receipt metadata without scanning C++ bytes.
 - Native jobs hash the compiler's actual input buffers, including generated and external headers. External hashes enter
   manifest freshness; conflicting bytes for one external input abort normalization.
 
@@ -118,11 +119,17 @@ Native AST validation is needed before such references can be labelled as static
 `tools.py` installs supplied LLVM 21.1.8 `libclang.dll` and resource headers into the workspace. Setup is explicit and offline;
 extraction never downloads a tool. The installation records content hashes and checks them before use. Python uses LLVM's
 stable C indexing API through `ctypes`, without a Python package dependency or a C++ parser in Laniakea.
+`--symbols` opts one extraction into this path. Ordinary extraction does not load or validate an installed compiler.
+An explicit native request without tools or usable build context fails visibly and retains the published run.
 
 With tools and usable build context, `compiler.py` synchronizes a marked, incremental target copy. It refuses an unmarked
 destination or a copy overlapping the analysed source tree. Source directories survive the asset/cache denylist; secrets,
 Windows device names and large assets are excluded. Only files in the previous copy inventory may be removed. UBT exports
 from the original and copy must agree on dependencies, definitions and PCH settings after root normalization.
+`source_tree.py` constrains descriptor discovery, source fingerprints and copy reads to the physical project root plus
+descriptor-owning plugin mounts under its logical `Plugins/` tree. Logical paths remain project-relative. An unrelated
+external directory or file link, including a nested escape inside an otherwise declared plugin, is refused before its bytes
+are read or copied. Unreadable retained directories fail visibly; containment cycles are not traversed repeatedly.
 
 Inside that copy only, UBT `-Mode=Build -WriteOutdatedActions` exports current native unity/PCH actions without compiling or
 linking. The target/configuration comes from the successful-build context; `-DisableAdaptiveUnity` avoids treating every
@@ -148,8 +155,14 @@ analysis. Execution, diagnostics and observed symbols do not establish complete 
 
 Native compilers run in disposable, hidden processes with bounded timeouts. Concurrency is capped by available memory.
 Each job retains compressed facts, diagnostics, elapsed time and peak working-set measurement. A worker failure, compiler
-error, changed tool identity or copy-fidelity failure aborts publication and retains the previous published run. Without
-tools or successful-build context, module-level exploration remains available with explicit missing-symbol coverage.
+error, changed tool identity or copy-fidelity failure aborts publication and retains the previous published run.
+Module-level exploration remains available without requesting symbols, with explicit missing-symbol coverage.
+
+Native acceptance distinguishes execution, diagnostics, symbol ownership and relationship correctness. Synthetic compiler
+controls cover calls versus references, inheritance, overrides and source coordinates. A selected real-project proof path
+checks expected definitions and exact call sites; per-module coverage, worker diagnostics, extraction/repeat timings, peak
+memory and artifact sizes remain in the ignored workspace. Passing viewer tests or parsing without errors cannot establish
+complete relationship coverage. Private proof names, paths and identifying counts never enter tracked documentation.
 
 Optional matching `clang-cl.exe` enables `symbol_cache.py`. Every reuse runs native preprocessing again, including header
 search and negative `__has_include` probes. The key binds flags, tools, native adapter code and relevant compiler environment;

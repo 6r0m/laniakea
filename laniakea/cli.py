@@ -39,7 +39,7 @@ def _extract(args, workspace):
     target = _target(workspace, args.project, args.engine, args.name, args.target)
     print(f"laniakea: extracting {target['project_file']}")
     print(f"laniakea: engine {target['engine_root']}")
-    run, manifest = pipeline.extract(workspace, target)
+    run, manifest = pipeline.extract(workspace, target, symbols=args.symbols)
     counts = manifest["coverage"]["counts"]
     summary = ", ".join(f"{key.split('.', 1)[1]} {value}" for key, value in counts.items() if key.startswith("nodes."))
     print(f"laniakea: {target['id']}: target {manifest['target']['name']}, run {run.name}")
@@ -82,6 +82,7 @@ def parser():
         command.add_argument("--engine", help="engine root, when EngineAssociation does not resolve")
         command.add_argument("--name", help="target id in the workspace; defaults to the project name")
         command.add_argument("--target", help="build target to export; defaults to the latest usable build receipt, then Editor")
+        command.add_argument("--symbols", action="store_true", help="also analyse classes/functions with locally installed LLVM tools")
 
     def serve_options(command):
         command.add_argument("--port", type=int, default=DEFAULT_PORT,

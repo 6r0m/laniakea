@@ -38,6 +38,7 @@ This repository is public. An analysed project may be private, and its owner may
 python laniakea.py up [<project>]        extract, then serve; a .uproject, its folder, a target id, or the newest
 make up [PROJECT=<project>]              the same through make
 python laniakea.py extract <project>     [--engine <root>] [--name <id>] [--target <name>]
+python laniakea.py extract <project> --symbols  include native classes/functions for this extraction
 python laniakea.py serve                 [--port <n>, default 8737] [--no-browser]
 python laniakea.py setup-symbols          --libclang <llvm>/bin/libclang.dll --resources <llvm>/lib/clang/21
 python -m unittest discover -s tests     whole suite; engine tests run when the sample's engine resolves

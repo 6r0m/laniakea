@@ -8,13 +8,13 @@ from . import LaniakeaError, __version__, profiles, schema, shards
 from .workspace import read_json, write_json
 
 
-def extract(workspace, target):
+def extract(workspace, target, *, symbols=False):
     """Run the target's profile into a new run. latest.json moves only after every file validated and was written."""
     with workspace.extraction_lock(target["id"]):
-        return _extract_locked(workspace, target)
+        return _extract_locked(workspace, target, symbols)
 
 
-def _extract_locked(workspace, target):
+def _extract_locked(workspace, target, symbols):
     profile = profiles.get(target["profile"])
     start = perf_counter()
     latest = workspace.latest(target["id"])
@@ -22,7 +22,8 @@ def _extract_locked(workspace, target):
     run = workspace.begin_run(target["id"])
     try:
         profile_start = perf_counter()
-        graph, fields = profile.extract(target, run, previous, tools_dir=workspace.root / "tools" / profile.NAME)
+        graph, fields = profile.extract(target, run, previous,
+                                        tools_dir=workspace.root / "tools" / profile.NAME if symbols else None)
         profile_seconds = perf_counter() - profile_start
         schema.validate(graph)
         shards_start = perf_counter()

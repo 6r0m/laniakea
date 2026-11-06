@@ -3,12 +3,13 @@
 
 import hashlib
 import json
-import os
 import shutil
 from pathlib import Path
 
 from .. import LaniakeaError
 from ..workspace import write_json
+from . import descriptors
+from .source_tree import SourceTree
 
 MARKER = ".laniakea-copy.json"
 ROOT_EXCLUDES = {".git", "tmp", "workspace", ".venv", "venv", "node_modules", "DerivedDataCache", "Saved", "Binaries", "Intermediate", "Content"}
@@ -40,14 +41,9 @@ def sync(project, destination, workspace, source_directories=(), excludes=()):
     files, digest = set(), hashlib.sha256()
     destination.mkdir(parents=True, exist_ok=True)
     write_json(marker, {"source": str(project), "workspace": str(workspace)})
-    visited = set()
-    for directory, dirs, names in os.walk(source, followlinks=True):
+    tree = SourceTree(source, descriptors.project_plugins(source))
+    for directory, dirs, names in tree.walk(source):
         folder = Path(directory)
-        physical = folder.resolve()
-        if physical in visited:
-            dirs[:] = []
-            continue
-        visited.add(physical)
         relative = folder.relative_to(source)
         in_source = any(folder == p or folder.is_relative_to(p) for p in protected)
         plugin = any(name.endswith(".uplugin") for name in names)
@@ -75,6 +71,7 @@ def sync(project, destination, workspace, source_directories=(), excludes=()):
             rel = (relative / name).as_posix()
             if rel in excludes or rel == MARKER:
                 continue
+            tree.require(original)
             data = original.read_bytes()
             file_hash = hashlib.sha256(data).hexdigest()
             files.add(rel)
