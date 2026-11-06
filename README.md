@@ -75,7 +75,6 @@ override, source-location and edit-regeneration regressions on synthetic sources
 |---|---|
 | how it works | [docs](docs/README.md) |
 | rules for contributors and agents | [AGENTS.md](AGENTS.md) |
-| planned work | [todo](todo/README.md) |
 
 Copyright (C) 2026 6r0m. Licensed under the GNU Affero General Public License, version 3 or later; see
 [LICENSE](LICENSE). Third-party code is listed in [THIRD_PARTY.md](THIRD_PARTY.md).

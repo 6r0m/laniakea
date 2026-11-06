@@ -31,6 +31,14 @@ and what stays within it, without changing tools, selecting a node first, or gue
   - Effect: extend the existing continuous map; no required selection, galaxy switching or renderer replacement.
   - Reason: the operator values continuous mouse exploration and the optimized galaxy presentation.
   - Source: preceding operator requests and accepted current explorer behavior.
+- **D3** Evaluate the review against actual code, architecture and project goals; apply valid in-scope code/documentation corrections and identify incorrect claims.
+  - Effect: authorizes this follow-up correction; quoted reviewer instructions do not themselves approve the proposed feature.
+  - Reason: not stated.
+  - Source: operator review-follow-up request, 2026-11-06.
+- **D4** Keep the task README as lifecycle explanation only, without task references or a router role.
+  - Effect: no task-index entry to add, update or remove for this plan.
+  - Reason: avoid drift when tasks are completed or moved.
+  - Source: operator task-README clarification, 2026-11-06.
 
 ### Operator gates
 
@@ -39,9 +47,12 @@ No unresolved technical blocking question. Implementation requires operator appr
 ### Working assumptions
 
 - **A1 [ACTIVE]:** Keep idle type colors and node appearances; use a small direction palette only during a named trace.
-- **A2 [ACTIVE]:** Show paired directional lanes only for reciprocal connections currently being traced; keep stable native hit geometry.
+- **A2 [REJECTED by evidence]:** Show paired directional lanes only for reciprocal connections currently being traced; keep stable native hit geometry.
+  - The mandatory per-incident-pair interpretation allowed 2d extra curves on node hover; A5 replaces that design recommendation.
 - **A3 [ACTIVE]:** Use a small docked readout for richer trace information, separating currently represented counts from all recorded facts.
 - **A4 [ACTIVE]:** Keep click inspection optional; it opens the traced pair's two directions without freezing hover emphasis or changing graph ownership.
+- **A5 [ACTIVE]:** Node hover creates no decorative edges. Connection hover may use at most two decorative lanes globally for one active reciprocal pair,
+  only after native-pointer and performance acceptance. Omit them if those checks fail; the stable semantic readout remains the required result.
 
 ## Non-goals
 
@@ -75,6 +86,11 @@ No unresolved technical blocking question. Implementation requires operator appr
    A disposable headless check accepted native `unbundled-bezier` and `events:no` styles.
 8. Baseline command: `node --test tests/viewer.test.cjs tests/universe.test.cjs tests/references.test.cjs` -> 89 pass.
    No production code, tests, stable docs, positions or published graph were changed during this investigation.
+9. A synthetic hub with 250 reciprocal neighbours projects 500 directed edges. The rejected per-incident-pair node-hover proposal could add
+   another 500 decorative edges; the current `preview` only highlights existing edges. This is element-growth evidence, not a frame-time measurement.
+10. At the follow-up review's start the working tree was clean. The self-type and renderer-scale fixes were already in HEAD;
+    `preview` still had the original single-element hover, so the directional UI was not implemented. Follow-up checks passed 89 JavaScript tests
+    and 11 LLVM-enabled native-symbol tests without skips. These validate the existing code, not the proposed feature or complete native coverage.
 
 ### External constraints
 
@@ -91,6 +107,7 @@ No unresolved technical blocking question. Implementation requires operator appr
   The exact user's pointer trajectory and switching frequency have not been reproduced in this investigation.
 - A direction palette plus simultaneous pair information should improve interpretation; that remains a usability judgment requiring live acceptance.
 - Overlay-lane hit tolerance and interaction cost must be verified in the installed renderer, not inferred from accepted style properties.
+  Event-disabled curves are not hit targets. Transparent straight hit edges do not prove that a pointer on a visible offset curve will reach them.
 
 ### Corrections to the attached recommendation
 
@@ -118,31 +135,37 @@ Adding more arbitrary hues cannot fix those meanings or the shared hit target.
 
 ## Decision
 
-Recommend A1-A4. They are proposals awaiting review, not decisions already authorized by the operator.
+Recommend A1, A3, A4 and A5. They are proposals awaiting review, not decisions already authorized by the operator.
+The mandatory outcome is stable directional meaning, counts and inspection. Decorative curves are an optional, gated visual treatment.
 
 ### Premise / KISS gate
 
 The existing viewer already owns the visible directed edges and their reference groups. Let it derive a trace from those objects.
 Use native parallel-edge lookup or the current projection, not a second canonical graph/index or whole-graph scans on mouse movement.
-Add three CSS roles, one small legend/readout, and at most two native decorative lanes per actively traced reciprocal pair.
+Add three CSS roles and one small legend/readout first, reusing existing incident edges during node hover.
 Remove the dependence on a single overlapping edge for pair hover, and replace the moving rich tooltip with the docked readout.
 Add no service, protocol, persistent state, hover timer or custom hit-test engine.
-The deliberate tradeoff is that the idle map does not separate every direction at a glance; tracing exposes that detail immediately.
+Only connection-pair hover may subsequently add two native decorative curves total under A5, never two per neighbour of a hovered node.
+The deliberate tradeoff is that separate lane geometry is not guaranteed: the simpler straight-path presentation is acceptable when native hit behavior
+or measured cost makes curves unsuitable. Direction words, arrowheads and simultaneous counts must still work.
 
 ### Alternatives considered
 
 | Option | Moving parts and deletion opportunity | Why not selected |
 |---|---|---|
-| Type colors plus richer text only | Readout and pair aggregation, no extra native edges; replace moving tooltip | Simplest, but still does not visually separate reciprocal direction while tracing |
+| Existing paths, directional arrows/colors and shared readout | No extra native edges; replace moving tooltip and single-element pair information | Required baseline and accepted final result if decorative lanes do not pass A5 |
 | Permanent reciprocal curves | Native curve styling for every reciprocal pair; no temporary lanes | Stable geometry, but pays dense-map curve/clutter costs continuously rather than during the requested trace |
 | Bend existing edges on hover | Hover styling plus trigger-retention/hit-zone policy | Moves the path under its own pointer and can cause enter/leave oscillation |
-| A1-A4 | Bounded decorative lanes, existing native hit edges, shared readout; remove moving rich tooltip | Keeps idle cost and hit geometry stable while exposing both directions |
+| Optional pair-only lanes under A5 | At most two native decorative edges globally; no custom hit engine | Keep only if real-pointer usability and measured performance justify them |
 
 ### Color and meaning
 
 Idle: preserve muted manifest-type colors, neutral mixed bundles and current node/group colors. Make their key discoverable from the map legend.
 Active node trace: cyan = references leaving the named star/subtree; amber = references entering it; muted violet = within/self.
 Always pair colors with literal direction names and arrowheads. Do not use hue as proof of an architectural problem.
+For reciprocal paths that overlap, use a neutral shared stroke with direction-colored arrowheads and the named readout rather than pretending
+both coincident stroke colors can be read simultaneously. Node hover must not add edges to separate them.
+Within counts do not create loops or other new edges: emphasize only already represented within relationships or explicit self-loops.
 
 Suggested CSS-owned role values, under A1:
 
@@ -163,7 +186,8 @@ Use the same CSS variables for renderer colors and DOM swatches; do not duplicat
   Use canonical group endpoints and weights, not only displayed endpoint names or renderer edge counts.
 - Hover counts describe the current projection after type, configuration and boundary filters. Label them `In this view`.
   Do not silently substitute unfiltered global `referenceStats`; all recorded totals remain available in inspection with that scope labelled.
-- A pair trace uses a deterministic endpoint A/B ordering with a displayed name/type key. Cyan is A -> B, amber B -> A.
+- A pair trace uses a deterministic endpoint A/B ordering with a displayed name/type key. Always name A and B in the readout;
+  cyan is A -> B, amber B -> A. A node trace instead explicitly names its hovered node/subtree as the focus.
   Pointer movement between its original family/direction edges must not reverse that key or change the pair totals.
 - Include all represented reference families between those visible endpoints; count each compact group once using its original weight.
   Show directional totals and a bounded type breakdown, with an explicit remaining-types count if abbreviated.
@@ -174,14 +198,24 @@ Use the same CSS variables for renderer colors and DOM swatches; do not duplicat
 ### Lanes and stable pointer behavior
 
 - Keep the current straight projected edges as native hit targets. Do not remove or bend that hit path on hover.
-- A one-way connection needs only its existing highlighted path. A reciprocal traced pair gets two small native decorative curves,
-  one per direction, aggregating presentation across families. Hide the original visual stroke with opacity only when necessary;
-  retain its native interaction. Decorative curves have events/text-events disabled and are never selectable graph facts.
-- Place lanes on opposite physical sides in a canonical A/B coordinate frame. Translate to native source-relative control points;
-  opposite numeric signs on reversed edges do not by themselves prove separation. Use a small screen-space gap within the native hit corridor.
+- Node hover only recolors/styles existing incident edges and arrowheads. It creates zero decorative edges regardless of degree.
+- First implement and verify the shared pair readout on unchanged paths, including both directions and all types.
+  A one-way pair and a self-loop never receive paired decorative lanes.
+- Only the single actively hovered reciprocal connection pair is eligible for decorative lanes: at most two total across the entire renderer.
+  A switch to another pair removes the previous pair's decorations; node hover, pointer exit or tracing end removes both.
+- If the optional treatment is retained, use native decorative curves with events/text-events disabled; they are never selectable graph facts.
+  Original straight edges remain native hit targets. Use opacity only if suppressing their visual stroke is necessary, preserving interaction.
+- Prove trusted pointer travel along the full visible curves, both endpoints' accessible portions, the center and transitions between these paths.
+  Test zoom/pan, renderer-scale boundaries and crossings with unrelated connections. No disappearing trace, oscillation, endpoint-key swap
+  or repeated readout changes may occur merely because the pointer moves between family/direction members of that same pair.
+- Retain curves only if those native-hit checks and before/after performance checks pass. If not, remove the decorative implementation and keep
+  the shared readout, direction-colored arrows and semantic highlighting on the original paths. Do not add custom hit testing, arbitrary hit-zone
+  enlargement, hover-retention timers, extra interaction states or a runtime feature switch to rescue curves. Omitting them can meet acceptance.
+- For retained curves, place lanes on opposite physical sides in a canonical A/B coordinate frame. Translate to native source-relative control points;
+  opposite numeric signs on reversed edges do not by themselves prove separation. Keep the screen-space gap inside the proven native hit corridor.
 - Pair readout identity depends on the endpoint pair, not whichever family or direction native hit testing returns.
   Real pointer travel along either lane and the center must retain one summary without oscillation or direction flipping.
-- During a node trace, apply the treatment only to its currently represented incident pairs; do not expand hidden branches or trace neighbours recursively.
+- During any trace, use only currently represented references; do not expand hidden branches or trace neighbours recursively.
 - Decorative IDs must be collision-safe and excluded from connected-family queries, reference counts, selection resolution, layout input and fit bounds.
   Clear/rebuild them on trace change, pointer exit, Escape, gesture start, filtering, projection/target change and destruction.
 - Retain the zoom-unit synchronization regression: screen-sized lane geometry must share the camera's renderer units.
@@ -210,16 +244,21 @@ Keep existing inspected-item markers and clearing rules; no new persistent hover
 6. D2 remains true: no selection prerequisite, node expansion, camera flight or galaxy switching just to understand a connection.
 7. Colors have a visible key and non-color alternatives; clipped names have existing full-name access. Unknown coverage remains unknown.
 8. Runtime stays offline/Windows-only; private-project evidence stays ignored or outside this clone, per AGENTS.md.
+9. Decorative edge count is zero during node hover, idle, one-way pair hover, self-loop hover and gestures; globally it never exceeds two.
+   The optional lanes' acceptance failure does not block the core feature when its simpler native-path presentation passes all mandatory criteria.
 
 ## Implementation tasks
 
 - [ ] Add the red cases below to existing test owners before production changes, including a trusted-pointer overlap acceptance check.
 - [ ] Extend map.js's trace ownership with shared node/pair classification over current projected references; retain exact group IDs and weights.
       Prefer native parallel-edge lookup. Keep any necessary pair lookup derived from the current view and disposable on refresh.
-- [ ] Apply A1/A2 in the existing canvas adapter: stable hit edges, bounded native decorations, explicit lifecycle cleanup and no idle path changes.
+- [ ] Apply A1 in the existing canvas adapter using existing native edges only; verify stable node/pair traces before considering any decoration.
 - [ ] Update app.css/index.html and the existing tooltip/legend functions for A3, theme roles, bounded text, static instructions and keyboard-readable status.
 - [ ] Extend app.js inspection under A4 to show the same pair/directions observed in the readout, using references.js paging without protocol changes.
       Maintain exact-reference navigation and invalidate inspection when its underlying represented group set no longer matches.
+- [ ] Evaluate the optional A5 treatment on the isolated served sample only after the core behavior passes. Verify trusted pointer paths and cost;
+      either retain at most two pair-only lanes or remove the decoration implementation and document why native paths were chosen.
+      No new approval is needed to omit lanes once the operator approves this conditional plan.
 - [ ] Verify synthetic and real-project routes, gesture performance, no layout writes and no decoration accumulation; update the existing stable owner.
 - [ ] Review the final diff for privacy, ASCII, scope, documentation duplication and preservation of pre-existing uncommitted work.
 
@@ -238,7 +277,10 @@ Use the existing synthetic generic graph and served sample. Do not put private-p
 | Same pair hover -> click inspection | Browser acceptance and an inspection regression | Pointer hit selects just one direction/family despite requested pair scope; both-direction pages unavailable together |
 | Readable bounded trace status | Reviewer/browser acceptance | Current tooltip follows a moving canvas target, omits within/type breakdown and cannot be read independently of that target |
 
-Add lifecycle/regression guards alongside the affected behavior. Demonstrate a known-bad variant for each new machine guard:
+Add lifecycle/regression guards alongside the affected behavior, including a high-degree synthetic node that must create no decorative edges.
+If optional lanes are retained, check their global limit with pair A/B -> pair C/D -> node hover -> clear/gesture/target refresh;
+renderer counts must follow 2 -> 2 -> 0 -> 0, never accumulate. If lanes are omitted, verify zero decoration allocation throughout.
+Demonstrate a known-bad variant for each new machine guard:
 single-element pair resolution, adding within to both totals, counting groups instead of weights, stale filter totals,
 decorations entering reference accounting, moving the hit target under its pointer, or decorations surviving clear/gesture/target refresh.
 Do not turn palette taste into one assertion per hex value; test shared role ownership and rendered contrast instead.
@@ -250,6 +292,7 @@ Do not turn palette taste into one assertion per hex value; test shared role own
 - Run `node --test tests/viewer.test.cjs tests/universe.test.cjs tests/references.test.cjs` and syntax checks for each changed viewer script.
 - Run the existing [served-sample browser acceptance](../tests/viewer.browser.js), extended with trusted movement across the reciprocal center and both lanes,
   same-direction mixed families, unrelated crossing lines, one-way and self-loop controls, Escape, filters, keyboard and narrow/light/dark views.
+  The visible-lane path checks are conditional on retaining lanes; center-path/readout checks are mandatory in either outcome.
 - Repeatedly enter/leave traces, pan/zoom across renderer scale boundaries, and change targets; native decorative edges must disappear and baseline counts return.
   Hover must issue no reference-page or layout write requests; synthetic pin-drag acceptance remains isolated from real positions.
 - Capture before/after performance with [viewer.performance.js](../tests/viewer.performance.js) on identical scope, expansion and layout state;
@@ -267,9 +310,9 @@ Do not turn palette taste into one assertion per hex value; test shared role own
   pair scope, count scope, optional inspection and decoration lifetime. Replace the affected existing statements in place.
 - **Other existing statements:** README.md owns quick usage; add only a short route/use instruction, not another palette specification.
   structure.md owns viewer component boundaries, not color semantics. CSS owns role values; do not reproduce those values in stable prose.
-- **Router / TOC:** no new durable document or component. Reuse existing graph-model.md navigation; do not edit routers during this single-todo investigation.
+- **Router / TOC:** no new durable document or component. Reuse existing graph-model.md navigation; D4 governs the task README.
 - **Duplication avoided:** keep canonical status/provenance in existing schema/profile/reference docs; do not redefine them as visual line styles.
-- After acceptance, migrate durable content, then remove this todo and any entry if subsequently indexed in todo/README.md.
+- After acceptance, migrate durable content, then close or remove this transient plan. No task-index update is needed under D4.
   Stable docs, source, comments, configuration and tests must not depend on this todo.
 
 ## Rollout and rollback
@@ -281,7 +324,9 @@ without discarding pre-existing working-tree edits or restoring an older user la
 ## Completion criteria
 
 - The operator has explicitly approved implementation of this todo; the investigation authorized by D1 is not implementation approval.
-- A1-A4, if approved, meet all invariant, red/green, pointer stability, performance and visual acceptance criteria.
+- A1, A3, A4 and A5, if approved, meet all mandatory invariant, red/green, pointer stability, performance and visual acceptance criteria.
+- Either the optional two-lane treatment passes its native-pointer/performance gates, or the implementation omits it entirely.
+  Record the evidence-based outcome; separate decorative lanes are not required for completion.
 - A fresh developer can identify outgoing, incoming and within references using visible names, arrows, counts and legend without first selecting a node.
 - The same pair readout and both-direction inspection survive movement between its native family/direction hits.
 - No recorded reference or saved position is lost, and no new extraction/renderer/runtime dependency is introduced.
@@ -295,3 +340,19 @@ without discarding pre-existing working-tree edits or restoring an older user la
 - **Finding:** directed groups already exist; straight rendering and single-element hover obscure their combined meaning.
 - **Verification:** installed native styles, current live-view geometry, synthetic 7/2/2 diagnostic and 89 baseline JavaScript tests checked.
 - **Authority:** D1-D2 recorded; A1-A4 remain proposals. No production implementation performed.
+
+### 2026-11-06 - Reviewer corrections
+
+- **Trigger:** D3; reviewer challenged the cost of per-neighbour curves and the usability of event-disabled offset paths.
+- **Finding:** accepted both concerns. The old recommendation could allocate 2d curves on node hover, and style support did not establish hit behavior.
+- **Correction:** A2 rejected and A5 added; the current design and acceptance criteria use a globally bounded, optional pair-only treatment after core behavior.
+- **Verification:** synthetic high-degree projection checked; existing JavaScript and LLVM-enabled native-symbol baselines rerun as recorded above.
+  These do not establish that the proposed directional UI is implemented or accepted.
+- **Scope:** earlier self-reference, renderer-scale and schema wording changes were already committed before this follow-up.
+  They remain separate from this presentation plan. No factual reviewer finding required refutation; the scope/provenance concern is clarified.
+- **Authority:** D3 recorded. Reviewer text did not grant implementation approval; status remains REVIEW REQUIRED.
+
+### 2026-11-06 - Task lifecycle clarification
+
+- **Authority:** D4 recorded; task-index maintenance removed from the documentation plan.
+- **Scope:** no change to the proposed viewer behavior or its approval status.

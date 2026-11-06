@@ -1,8 +1,8 @@
 # todo
 
-Planned work in flight. Each plan is one change; it is deleted once its durable content moves to `docs/`.
+Transient implementation plans and investigations. Each task file owns its scope, decisions, progress and verification.
 
-| change | file |
-|---|---|
-| deferred Engine internals; investigate-change required | [engine_internals.md](engine_internals.md) |
-| deferred Rust/Python profiles; investigate-change required | [language_profiles.md](language_profiles.md) |
+This README explains the lifecycle only. It contains no task list or links to individual plans.
+
+Before closing a task, move lasting contracts, decisions and operational knowledge to their stable owner.
+Completing, moving or removing a task requires no update here. Durable documentation and live code remain independent of task files.

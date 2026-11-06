@@ -1,8 +1,8 @@
 # Prior-art audits
 
 A record, not current truth: the final reports of independent audits run on 2026-11-02, which the comparison in
-[prior-art.md](prior-art.md) summarises. Sections 1-4 are verbatim apart from ASCII normalization and labels for
-source-build-only files. Section 5 is condensed, with details of a private validation project removed. A report is a
+[prior-art.md](prior-art.md) summarises. Sections 1-4 are verbatim apart from ASCII normalization, citation repairs and
+labels for source-build-only files. Section 5 is condensed, with details of a private validation project removed. A report is a
 claim set: its own VERIFIED/UNVERIFIED tags apply, and where it disagrees with [the architecture](architecture/README.md),
 the architecture describes the system. The architecture review that followed is not reproduced.
 
@@ -107,7 +107,7 @@ These come from local UE 5.8 UnrealBuildTool (UBT) source, which goes beyond the
 - **CLI:** `print --json`, `snapshot`, `stats`, `lint`, `test`, and an experimental SQLite [`expt-convert`](https://raw.githubusercontent.com/scip-code/scip/main/docs/CLI.md).
 - **Governance:** [independent since March 2026](https://sourcegraph.com/blog/the-future-of-scip).
 - **Viewer:** Sourcegraph [lists only Enterprise, from $16K](https://sourcegraph.com/pricing), and its [core repo has been private since 2024](https://devclass.com/2024/08/21/sourcegraph-makes-core-repository-private-co-founder-complains-open-source-means-extra-work-and-risk).
-- **LSIF:** superseded. [Sourcegraph removed read support at 4.6](https://5.10.sourcegraph.com/admin/how-to/lsif_scip_migration), and a [mirrored README](https://gitee.com/mirrors_sourcegraph/lsif-node) says its indexer is unmaintained.
+- **LSIF:** superseded. [Sourcegraph removed read support at 4.6](https://5.10.sourcegraph.com/admin/how-to/lsif_scip_migration), and the [archived upstream README](https://github.com/sourcegraph/lsif-node/blob/master/README.md) says its indexer is unmaintained.
 
 #### Rejected
 - **Repowise** (AGPL-3.0, weekly releases, top author 76%): [tree-sitter only, no clang dependency](https://raw.githubusercontent.com/repowise-dev/repowise/main/pyproject.toml), and telemetry is on until you opt out. Its [vendor-run C++ benchmark](https://raw.githubusercontent.com/repowise-dev/repowise/main/docs/BENCHMARKS.md) shows precision 0.84-0.94, recall 0.61-0.71, on small repos. Unreal-scale macro code is likely worse (UNVERIFIED).
