@@ -29,6 +29,21 @@ class MapIndex(unittest.TestCase):
         map_index.build(self.graph, destination)
         return map_index.MapIndex(destination)
 
+    def test_internal_and_explicit_self_references_keep_separate_groups_and_exact_metadata(self):
+        base = {'id':'internal','source':'app.core.db','target':'app.core.db','type':'calls',
+                'status':'resolved','origin':'compiler'}
+        self.graph['edges'] = [{**base,'internal_to_owner':True}, {**base,'id':'explicit'}]
+        index = self.build()
+        rows = index.topology()['references']
+        self.assertEqual(len(rows),2,'abstraction classification must survive compact grouping')
+        self.assertEqual(sorted(bool(r.get('internal_to_owner')) for r in rows),[False,True])
+        self.assertEqual([item['reference'] for item in index.references({'node':'app.core.db'})['items']],self.graph['edges'])
+        self.graph['edges'][0]['target']='app.web.views'
+        for value,definition in [(self.graph,None),(self.graph['edges'][0],'edge'),
+                                 ({'source':0,'target':1,'type':'calls','count':1,'internal_to_owner':True},'referenceGroup')]:
+            with self.subTest(definition=definition),self.assertRaisesRegex(LaniakeaError,'internal'):
+                schema.validate(value,definition)
+
     def test_small_topology_preserves_counts_and_pages_every_exact_reference(self):
         before = json.dumps(self.graph)
         index = self.build()

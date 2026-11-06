@@ -12,12 +12,18 @@ async (page) => {
   const wheel = async (id, expanded, delta) => {
     for (let i = 0; i < 80; i++) {
       if (await page.evaluate(({id,expanded}) => state.universe.expanded.has(id) === expanded, {id,expanded})) return i;
-      const p = await point(id);
+      let p = await point(id);
+      if (delta>0) {
+        const box=await page.locator('#graph').boundingBox();
+        p={x:Math.max(box.x+20,Math.min(box.x+box.width-20,p.x)),y:Math.max(box.y+20,Math.min(box.y+box.height-20,p.y))};
+      }
       await page.mouse.move(p.x,p.y);
       await page.mouse.wheel(0,delta);
       await frames();
     }
-    throw new Error(`Wheel did not ${expanded?'expand':'collapse'} ${id}`);
+    const diagnostic=await page.evaluate(id=>({zoom:worldZoom(),pan:state.cy.pan(),size:{width:state.cy.width(),height:state.cy.height()},
+      point:state.cy.getElementById(id).renderedPosition(),pointer:state.pointer,scope:state.scopeShard.scope,drag:state.drag}),id);
+    throw new Error(`Wheel did not ${expanded?'expand':'collapse'} ${id}: ${JSON.stringify(diagnostic)}`);
   };
   const accounted = () => page.evaluate(() => {
     const refs = [...state.shard.edges.flatMap(e=>e.refs),...[...state.shard.internal.values()].flat()];
@@ -39,12 +45,34 @@ async (page) => {
   page.on('dialog',acceptInitialReset);
   try {await page.evaluate(async()=>{await resetPositions();});}
   finally {page.off('dialog',acceptInitialReset);}
+  if(original.mode!=='galaxy')await page.evaluate(async()=>{await state.positionCache.write('galaxy',null);});
   await frames();
   const posts=[],errors=[];
   const observe = request => {if(request.method()==='POST'&&new URL(request.url()).pathname.startsWith('/layout/'))posts.push(request.url());};
   const error = value => errors.push(value.message);
   page.on('request',observe);page.on('pageerror',error);
   try {
+    const initialMode=await page.locator('#layout').inputValue();
+    await page.selectOption('#layout','galaxy');await frames();
+    check(await page.evaluate(()=>!configurationVisible()&&state.universe.positions.get('engine').x===0&&
+      state.universe.positions.get('engine').y===0&&!state.cy.getElementById(state.universe.root).length),
+      'Galaxy must center the declared boundary and hide only root configuration by default');
+    check(await page.evaluate(()=>state.shard.edges.some(e=>e.refs.some(r=>r.type==='requires'&&r.source!==state.universe.root))),
+      'Galaxy hid plugin-to-plugin descriptor dependencies');
+    check(await page.evaluate(()=>state.visibleLabels.has('folder:Sample')&&state.visibleLabels.has('module:SampleProject')),
+      'Important constellation/source names disappeared from the overview');
+    const configuration=page.locator('#toggle-configuration');
+    await configuration.focus();await page.keyboard.press('Enter');await frames();
+    check(await configuration.getAttribute('aria-pressed')==='true'&&await page.evaluate(()=>
+      state.cy.getElementById(state.universe.root).length===1),'Keyboard configuration toggle lost the project endpoint');
+    await page.keyboard.press('Enter');await frames();
+    check(await accounted(),'Configuration subset filtering lost or double-counted references');
+    await page.evaluate(()=>flyToNode('plugin:SampleCore'));
+    await page.getByRole('button',{name:'SampleProject (project) -> SampleCore (plugin)',exact:true}).click();
+    check(await page.evaluate(()=>configurationVisible()&&state.selection?.source===state.universe.root&&
+      state.cy.getElementById(state.universe.root).length===1),'Following a hidden root declaration did not enable its configuration subset');
+    await page.evaluate(()=>{renderDetails(null);state.universe.expanded=new Set([state.universe.root]);setSceneScope(state.universe.root);});
+    await page.selectOption('#layout',initialMode);await frames();
     await page.evaluate(()=>{
       globalThis.bannerProbe=state.target;
       state.target={...state.target,stale:true,changed_count:40,
@@ -251,9 +279,11 @@ async (page) => {
     check(await accounted(),'References disappeared while folding the folder');
     await page.evaluate(()=>renderDetails(null));await frames();
     const empty=await page.evaluate(()=>{
-      const boxes=state.cy.nodes().map(n=>n.renderedBoundingBox()),b=$('graph').getBoundingClientRect();
+      const cy=state.cy,b=$('graph').getBoundingClientRect(),pan=cy.pan(),zoom=cy.zoom();
       for(let y=80;y<state.cy.height()-100;y+=80)for(let x=40;x<state.cy.width()-120;x+=80){
-        if(boxes.every(a=>x<a.x1-20||x>a.x2+20||y<a.y1-20||y>a.y2+20))return{x:b.x+x,y:b.y+y,pan:{...state.cy.pan()}};
+        const hit=cy.renderer().findNearestElements((x-pan.x)/zoom,(y-pan.y)/zoom,true,false);
+        if(hit.every(n=>!n.isNode()||n.hasClass('expanded'))&&[...state.labelBoxes.values()].every(a=>x<a.x1-20||x>a.x2+20||y<a.y1-20||y>a.y2+20))
+          return{x:b.x+x,y:b.y+y,pan:{...pan}};
       }
       throw new Error('No empty space for the flight check');
     });
@@ -359,6 +389,26 @@ async (page) => {
     const narrow=await page.evaluate(()=>({width:document.documentElement.scrollWidth,viewport:innerWidth,
       count:state.cy.nodes().length,error:$('error').hidden}));
     check(narrow.width<=narrow.viewport&&narrow.count>0&&narrow.error,'Narrow viewport overflows or loses the map');
+    await page.setViewportSize({width:1440,height:1000});
+    await page.evaluate(()=>{renderDetails(null);state.universe.expanded=new Set([state.universe.root]);});
+    await page.selectOption('#layout','galaxy');await frames();
+    const legacy=await page.evaluate(()=>JSON.stringify(Object.fromEntries(Object.entries(state.positionCache.layouts).filter(([key])=>key!=='galaxy'))));
+    await page.waitForFunction(()=>!state.gestureActive);
+    const center=await point('engine');
+    check(await page.evaluate(()=>{
+      const cy=state.cy,n=cy.getElementById('engine');
+      return cy.renderer().findNearestElements(n.position('x'),n.position('y'),true,false)[0]?.id()==='engine';
+    }),'A connection intercepts the exact center of the external star');
+    await page.mouse.move(center.x,center.y);await page.mouse.down();
+    await page.mouse.move(center.x+38,center.y+25,{steps:8});await page.mouse.up();
+    await page.waitForFunction(()=>state.positionCache.pending===0&&state.positionCache.layouts.galaxy?.engine);
+    const galaxyPin=await page.evaluate(()=>({...state.positionCache.layouts.galaxy.engine}));
+    check(Math.hypot(galaxyPin.x-center.world.x,galaxyPin.y-center.world.y)>1,'Galaxy drag did not move the center');
+    await page.goto(base+'/');await page.waitForFunction(()=>typeof state!=='undefined'&&state.cy&&state.positionCache);
+    check(await page.evaluate(({galaxyPin,legacy})=>$('layout').value==='galaxy'&&
+      JSON.stringify(state.universe.positions.get('engine'))===JSON.stringify(galaxyPin)&&
+      JSON.stringify(Object.fromEntries(Object.entries(state.positionCache.layouts).filter(([key])=>key!=='galaxy')))===legacy,
+      {galaxyPin,legacy}),'Bare URL reload lost the galaxy pin or changed a legacy mode');
     check(errors.length===0,`Browser errors: ${errors.join('; ')}`);
     return {connectionsUsesDependencies:true,optionalInspectionStable:true,
       wheelExpansion:true,wheelCollapse:true,hoverOnlyTracing:true,allReferencesAccounted:true,
@@ -366,7 +416,7 @@ async (page) => {
       groupDragSaved:true,deepPinSaved:true,labelDragSaved:true,freshBrowserRestored:true,
       narrowViewport:true,keyboardPaging:true,stickyPager:true,boundedReferenceRows:true,
       compactStaleWarning:true,metadataDisclosure:true,liveGroupControl:true,overviewAddress:true,resetRefusal:true,
-      interiorConnectionTracing:true,openSteps,errors};
+      interiorConnectionTracing:true,centeredGalaxy:true,configurationSubset:true,primaryNames:true,galaxyPinIsolated:true,openSteps,errors};
   } finally {
     page.off('request',observe);page.off('pageerror',error);
     await page.evaluate(async original=>{
@@ -374,6 +424,10 @@ async (page) => {
       if(!await cache.write(original.mode,null))throw new Error('Could not restore the synthetic layout');
       if(Object.hasOwn(original.layouts,original.mode)&&!await cache.moveMany(original.mode,original.layouts[original.mode]))
         throw new Error('Could not restore the synthetic pins');
+      if(original.mode!=='galaxy'){
+        if(!await cache.write('galaxy',null))throw new Error('Could not restore the synthetic galaxy layout');
+        if(original.layouts.galaxy&&!await cache.moveMany('galaxy',original.layouts.galaxy))throw new Error('Could not restore synthetic galaxy pins');
+      }
       $('layout').value=original.mode;layout();
     },original);
   }

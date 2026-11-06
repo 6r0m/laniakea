@@ -52,6 +52,7 @@ def _extract_locked(workspace, target, symbols):
         write_json(run / "graph.json", graph)
         manifest["timings_seconds"]["total"] = perf_counter() - start
         schema.validate(manifest, "manifest")
+        schema.validate_overview(manifest, graph)
         write_json(run / "manifest.json", manifest)
     except BaseException as error:
         failed = workspace.fail_run(run)

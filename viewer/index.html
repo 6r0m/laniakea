@@ -22,6 +22,7 @@
     <label>Layout
       <select id="layout">
         <option value="auto">orbits</option>
+        <option value="galaxy">galaxy</option>
         <option value="breadthfirst">hierarchy</option>
         <option value="cose">connections</option>
         <option value="grid">grid</option>
@@ -33,6 +34,8 @@
   <div class="scope-bar">
     <button id="toggle-filters" type="button" aria-controls="filters" aria-expanded="false">Browse &amp; filters</button>
     <span id="scope-summary" role="status"></span>
+    <button id="toggle-configuration" type="button" aria-pressed="false" hidden>Configuration</button>
+    <span id="layout-hint" role="status" hidden></span>
     <button id="fit" type="button">Fit map</button>
     <button id="reset-layout" type="button" title="Forget saved positions for this map and layout">Reset layout</button>
     <span id="position-status" role="status"></span>

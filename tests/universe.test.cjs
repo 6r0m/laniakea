@@ -6,6 +6,61 @@ const path=require('node:path');
 const {Universe}=require('../viewer/universe.js');
 const fixture=()=>JSON.parse(fs.readFileSync(path.join(__dirname,'../fixtures/generic.graph.json'),'utf8'));
 
+test('abstracted internal facts stay counted while authored recursion remains a visible loop',()=>{
+  const graph=fixture();
+  graph.nodes.push({id:'recursive',label:'Recur',level:'function',parent:'app.core.db',boundary:false,status:'in-target'});
+  const nodes=graph.nodes,at=id=>nodes.findIndex(n=>n.id===id);
+  const map=new Universe({schema:'laniakea.map/1',nodes,references:[
+    {source:at('app.core.db'),target:at('app.core.db'),type:'uses.function',count:9,internal_to_owner:true},
+    {source:at('recursive'),target:at('recursive'),type:'calls',count:2},
+    {source:at('recursive'),target:at('app.core.db'),type:'uses.type',count:1},
+  ]});
+  map.reveal('recursive');
+  const view=map.project();
+  assert.equal(view.internal.get('app.core.db')?.reduce((sum,e)=>sum+e.count,0),9);
+  assert.ok(view.edges.some(e=>e.source==='recursive'&&e.target==='recursive'));
+  assert.ok(view.edges.some(e=>e.source==='recursive'&&e.target==='app.core.db'));
+  assert.equal(view.edges.reduce((sum,e)=>sum+e.count,0)+9,12);
+  assert.throws(()=>new Universe({schema:'laniakea.map/1',nodes,references:[
+    {source:at('app.core.db'),target:at('recursive'),type:'uses.type',count:1,internal_to_owner:true}]}),/internal/i);
+});
+
+test('a root that owns only an internal fact remains available for exact inspection',()=>{
+  const graph=fixture();
+  graph.edges=[{id:'root-internal',source:'app',target:'app',type:'uses.type',status:'resolved',origin:'synthetic',internal_to_owner:true}];
+  const view=new Universe(graph).project();
+  assert.equal(view.internal.get('app').length,1);
+  assert.ok(view.nodes.some(n=>n.id==='app'));
+  assert.equal(view.edges.length,0);
+});
+
+test('configuration filtering hides only original root declarations and accounts for them once',()=>{
+  const graph=fixture();
+  graph.edges=[
+    {id:'configured',source:'app',target:'app.core.db',type:'imports',status:'declared',origin:'synthetic'},
+    {id:'dependency',source:'app.web.views',target:'app.core.db',type:'imports',status:'declared',origin:'synthetic'},
+  ];
+  const manifest={overview:{anchor:'stdlib',configuration_types:['imports']},edge_types:[{id:'imports'}]};
+  const map=new Universe(graph,manifest);
+  const view=map.project(new Set(),true,null,false);
+  assert.equal(view.hidden,1);
+  assert.equal(view.edges.flatMap(e=>e.refs).length,1);
+  assert.equal(view.edges[0].refs[0].id,'dependency');
+  assert.ok(!view.nodes.some(n=>n.id==='app'));
+  assert.equal(map.project().hidden,0);
+  assert.equal(map.project(new Set(['imports']),true,null,false).hidden,2);
+  assert.equal(map.configurationCount,1);
+});
+
+test('overview hints refuse foreign anchors and undeclared configuration types before use',()=>{
+  const graph=fixture(),manifest={overview:{anchor:'stdlib',configuration_types:['imports']},edge_types:[{id:'imports'}]};
+  for(const overview of [{...manifest.overview,anchor:'missing'},{...manifest.overview,anchor:'app.core'},
+    {...manifest.overview,configuration_types:['missing']},{...manifest.overview,configuration_types:['imports','imports']},null,false]){
+    assert.throws(()=>new Universe(graph,{...manifest,overview}),/overview/i);
+  }
+  assert.equal(new Universe(graph).overview,null);
+});
+
 test('viewport cuts evict distant detail, retain crossing references and preserve pins on return',()=>{
   const map=new Universe(difficultGraph());map.place({},'auto');map.reveal('app.core.nested.leaf');map.reveal('app.web.views');
   const before=JSON.stringify([...map.positions]);

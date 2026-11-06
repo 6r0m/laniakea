@@ -4,7 +4,7 @@
 
 const PALETTE = ['#4e79a7', '#f28e2b', '#59a14f', '#e15759', '#76b7b2', '#b07aa1', '#9c755f', '#edc948', '#ff9da7', '#bab0ac'];
 const state = { targets: [], target: null, manifest: null, shard: null, file: null, cy: null,
-  hidden: new Set(), boundary: true, navigation: 0, selection: null };
+  hidden: new Set(), boundary: true, configuration: {}, navigation: 0, selection: null };
 const $ = (id) => document.getElementById(id);
 
 function el(tag, text, attrs) {
@@ -68,6 +68,7 @@ async function start() {
   }
   $('fit').onclick = fitOverview;
   $('reset-layout').onclick = resetPositions;
+  $('toggle-configuration').onclick = () => { setConfiguration(!configurationVisible()); applyFilters(); };
   $('clear').onclick = () => { unfocus(); renderDetails(null); };
   $('up').onclick = up;
   $('find').oninput = () => find().catch(reportError);
@@ -128,7 +129,7 @@ async function show(id, file, mode) {
     let wanted = file || manifest.entry;
     let shard, universe;
     if (target.map_url) {
-      universe = changed || !state.universe ? new Universe(await getJson(target.map_url)) : state.universe;
+      universe = changed || !state.universe ? new Universe(await getJson(target.map_url),manifest) : state.universe;
       if (navigation !== state.navigation) return;
       let entry = index.nodes.find(n=>n.file===wanted);
       if (!entry) {
@@ -153,17 +154,18 @@ async function show(id, file, mode) {
       }
       if (navigation !== state.navigation) return;
       universe = changed || !state.universe ?
-        new Universe(await getJson(`/data/${encodeURIComponent(id)}/graph.json`)) : state.universe;
+        new Universe(await getJson(`/data/${encodeURIComponent(id)}/graph.json`),manifest) : state.universe;
     }
     if (navigation !== state.navigation) return;
     const positionCache = changed || !state.positionCache ? await loadPositionCache(id, manifest.entry) : state.positionCache;
     if (navigation !== state.navigation) return;
-    if (changed) { state.hidden = new Set(); state.referencePages?.clear(); }
+    if (changed) { state.hidden = new Set(); state.configuration = {}; state.referencePages?.clear(); }
     const referencePages = universe.paged && (changed || !state.referencePages) ?
       new ReferencePages(target.references_url,{validate:page=>{
         for(const item of page.items) {
           const group=universe.graph.edges[item.group-1],edge=item.reference;
-          if(!group||group.source!==edge.source||group.target!==edge.target||group.type!==edge.type)throw new Error('Reference page does not match this map');
+          if(!group||group.source!==edge.source||group.target!==edge.target||group.type!==edge.type||
+            Boolean(group.internal_to_owner)!==Boolean(edge.internal_to_owner))throw new Error('Reference page does not match this map');
         }
       }}) : state.referencePages;
     const fresh = changed || !state.cy;
@@ -342,6 +344,25 @@ function renderFilters() {
   if (focused >= 0) panel.querySelectorAll('input')[focused]?.focus({preventScroll:true});
 }
 
+function configurationVisible() {
+  return state.configuration?.[$('layout').value] ?? $('layout').value !== 'galaxy';
+}
+
+function setConfiguration(visible) {
+  state.configuration ||= {};
+  state.configuration[$('layout').value] = visible;
+}
+
+function renderConfiguration() {
+  const count=state.universe.configurationCount,button=$('toggle-configuration');
+  button.hidden=!count;
+  button.textContent=`Configuration ${configurationVisible()?'on':'off'} (${count || 0})`;
+  button.setAttribute('aria-pressed',String(configurationVisible()));
+  button.title=`${configurationVisible()?'Hide':'Show'} project-root configuration declarations; plugin dependencies keep their type filters`;
+  $('layout-hint').hidden=$('layout').value!=='galaxy'||Boolean(state.universe.overview);
+  $('layout-hint').textContent='No center hint in this run; using orbits. Extract again to get profile presentation hints.';
+}
+
 function findHits() {
   const query = $('find').value.trim().toLowerCase();
   if (!query || !state.cy) return state.cy ? state.cy.collection() : [];
@@ -444,7 +465,7 @@ function renderDetails(item) {
   }
   const panel = $('details');
   const key = state.universe.paged && item ? JSON.stringify([item.id,item.referenceGroup||null,
-    [...state.hidden].sort(),state.boundary,item.refs?.map(r=>r.group)]) : null;
+    [...state.hidden].sort(),state.boundary,configurationVisible(),item.refs?.map(r=>r.group)]) : null;
   if (key && key===state.detailsKey) {
     const control = panel.querySelector('[data-action="toggle-group"]');
     if (control) updateGroupControl(control, item.id);
@@ -501,6 +522,7 @@ function renderDetails(item) {
     endpoints.append(button);
   }
   panel.append(endpoints);
+  if (item.status==='derived') panel.append(el('p','References of descendants, grouped for this view. The rows name the original owners.',{class:'muted'}));
   if (state.universe.paged && !item.referenceGroup) {
     appendReferencePage(panel,{groups:item.refs.map(r=>r.group)},referenceTotal(item.refs));
   } else appendReferences(panel, item.refs || [item]);
@@ -522,7 +544,11 @@ function referenceRow(edge) {
   const origin=state.manifest.sources.find(s=>s.id===edge.origin);
   row.append(button,el('small',`${typeLabel(edge.type)} / ${edge.status}`+
     ` / ${origin?origin.name+' '+origin.version:edge.origin}`+
-    (state.hidden.has(edge.type)||!state.boundary&&(source.boundary||target.boundary)?' / hidden by filters':'')));
+    (edge.internal_to_owner?' / within owner (abstracted)':'')+
+    (state.hidden.has(edge.type)||!configurationVisible()&&state.universe.isConfiguration(edge)||
+      !state.boundary&&(source.boundary||target.boundary)?' / hidden by filters':'')));
+  const ownerPath=id=>state.universe.paths.get(id).map(label).join(' / ');
+  row.append(el('small',`${ownerPath(edge.source)} -> ${ownerPath(edge.target)}`));
   if(edge.attrs){const metadata=el('dl');attributes(metadata,edge.attrs);row.append(metadata);}
   if(source.source){const link=sourceLink(source.source);if(link)row.append(link);}
   return row;
@@ -600,6 +626,7 @@ function appendReferences(panel, references) {
 
 function renderConnections(panel, node) {
   const map = state.universe;
+  if (map.isGroup(node.id)) panel.append(el('p','Includes references of descendants. Folder and constellation connections are summaries of their original owners.',{class:'muted'}));
   if(map.paged){
     const stats=map.referenceStats.get(node.id);
     for(const [heading,direction] of [['Outgoing','outgoing'],['Incoming','incoming'],['Within','within']]){

@@ -67,6 +67,97 @@ function treeElements(run) {
   `);
 }
 
+test('centered positions use the named boundary rather than guessing from names or weights',()=>{
+  const {run}=viewer();
+  run(`globalThis.top=['one','two','stdlib','another-boundary'].map(id=>({id:()=>id,hasClass:()=>id==='one'||id==='two'}));
+    globalThis.centered=galaxyPositions(top,1440,1000,'stdlib');`);
+  assert.ok(run("Math.hypot(centered.get('stdlib').x,centered.get('stdlib').y)<0.000001"));
+  assert.ok(run("Math.hypot(centered.get('another-boundary').x,centered.get('another-boundary').y)>0"));
+});
+
+test('a name survives when secondary caption text cannot fit the viewport',t=>{
+  const {run}=viewer();
+  run(`globalThis.css=()=>'#888888';state.cy=cytoscape({headless:true,styleEnabled:true,style:style(),elements:[
+    {data:{id:'a',label:'Useful name',caption:'Useful name\\nmodule / many inside\\nreferences within'}}]});
+    state.cy.width=()=>400;state.cy.height=()=>200;state.scopeShard={scope:'a'};
+    state.cy.nodes()[0].renderedBoundingBox=options=>options.includeLabels===false?{x1:190,y1:155,x2:210,y2:175}:
+      {x1:150,y1:180,x2:250,y2:state.cy.nodes()[0].style('label').includes('\\n')?250:198};
+    declutterLabels();`);
+  t.after(()=>run('state.cy.destroy()'));
+  assert.equal(run("state.cy.nodes()[0].style('text-opacity')"),'1');
+  assert.equal(run("state.cy.nodes()[0].style('label')"),'Useful name');
+  assert.equal(run("state.labelBoxes.get('a').y2"),198);
+});
+
+test('label fitting builds its glyph index once per settled scene rather than once per name',t=>{
+  const {run}=viewer();
+  run(`state.cy=cytoscape({headless:true,styleEnabled:true,elements:[
+    {data:{id:'a',label:'First',caption:'First'}},{data:{id:'b',label:'Second',caption:'Second'}}]});
+    state.cy.width=()=>800;state.cy.height=()=>600;state.scopeShard={scope:'root'};
+    state.cy.nodes().forEach((n,i)=>n.renderedBoundingBox=()=>({x1:50+i*250,y1:50,x2:150+i*250,y2:75}));
+    globalThis.indexBuilds=0;const finish=SpatialIndex.prototype.finish;
+    SpatialIndex.prototype.finish=function(){indexBuilds++;return finish.call(this);};
+    declutterLabels();`);
+  t.after(()=>run('state.cy.destroy()'));
+  assert.equal(run('state.visibleLabels.size'),2);
+  assert.equal(run('indexBuilds'),1);
+});
+
+test('caption fallback batches style writes instead of invalidating native geometry once per star',t=>{
+  const {run}=viewer();
+  run(`state.cy=cytoscape({headless:true,styleEnabled:true,elements:[
+    {data:{id:'a',label:'First',caption:'First\\nmetadata'}},{data:{id:'b',label:'Second',caption:'Second\\nmetadata'}}]});
+    state.cy.width=()=>800;state.cy.height=()=>600;state.scopeShard={scope:'root'};
+    globalThis.unbatched=0;
+    state.cy.nodes().forEach((n,i)=>{
+      n.renderedBoundingBox=()=>({x1:50+i*250,y1:50,x2:150+i*250,y2:75});
+      const style=n.style;n.style=function(name,...args){
+        if((args.length||typeof name==='object')&&!state.cy.batching())unbatched++;
+        return style.call(this,name,...args);
+      };
+    });declutterLabels();`);
+  t.after(()=>run('state.cy.destroy()'));
+  assert.equal(run('state.visibleLabels.size'),2);
+  assert.equal(run('unbatched'),0);
+});
+
+test('settled captions reuse measured variants and translate their real hit boxes with the star',t=>{
+  const {run}=viewer();
+  run(`state.cy=cytoscape({headless:true,styleEnabled:true,layout:{name:'preset',fit:false},elements:[
+    {data:{id:'a',label:'First',caption:'First\\nmetadata'},position:{x:100,y:100}}]});
+    state.cy.width=()=>800;state.cy.height=()=>600;state.scopeShard={scope:'a'};
+    const n=state.cy.nodes()[0],baseStyle=n.style;globalThis.captionWrites=0;
+    n.style=function(name,...args){if(name==='label'&&args.length)captionWrites++;return baseStyle.call(this,name,...args);};
+    n.renderedBoundingBox=()=>{const p=n.renderedPosition(),w=80*parseFloat(n.style('font-size'))/16;
+      return{x1:p.x-w/2,y1:p.y+10,x2:p.x+w/2,y2:p.y+40,w,h:30};};
+    declutterLabels();captionWrites=0;declutterLabels();`);
+  t.after(()=>run('state.cy.destroy()'));
+  assert.equal(run('captionWrites'),0,'unchanged labels must not repeatedly switch between primary and full captions');
+  run("state.cy.nodes()[0].position({x:180,y:140});declutterLabels();");
+  assert.equal(run("state.labelBoxes.get('a').x1"),140);
+  assert.equal(run("state.labelBoxes.get('a').y1"),150);
+  run("state.cy.nodes()[0].style('font-size',32);declutterLabels();");
+  assert.equal(run("state.labelBoxes.get('a').x1"),100,'a font change must invalidate cached metrics');
+  run("for(let i=0;i<20;i++)measureLabelVariants([{node:state.cy.nodes()[0]}],()=>'Variant'+i);");
+  assert.equal(run('labelMetrics.get(state.cy.nodes()[0]).variants.size'),4);
+});
+
+test('identical text and geometry share one native measurement without sharing positions',t=>{
+  const {run}=viewer();
+  run(`state.cy=cytoscape({headless:true,styleEnabled:true,layout:{name:'preset',fit:false},elements:[
+    {data:{id:'a',label:'Shared',caption:'Shared'},position:{x:100,y:100}},
+    {data:{id:'b',label:'Shared',caption:'Shared'},position:{x:400,y:100}}]});
+    state.cy.width=()=>800;state.cy.height=()=>600;state.scopeShard={scope:'root'};
+    globalThis.measurements=0;state.cy.nodes().forEach(n=>n.renderedBoundingBox=options=>{
+      if(options.includeLabels)measurements++;
+      const p=n.renderedPosition();return{x1:p.x-40,y1:p.y+10,x2:p.x+40,y2:p.y+40,w:80,h:30};
+    });declutterLabels();`);
+  t.after(()=>run('state.cy.destroy()'));
+  assert.equal(run('measurements'),3,'two visibility probes plus one shared native text measurement');
+  assert.equal(run("state.labelBoxes.get('a').x1"),60);
+  assert.equal(run("state.labelBoxes.get('b').x1"),360);
+});
+
 test('stale warnings disclose complete diagnostics without filling the collapsed banner',()=>{
   const {run}=viewer();treeElements(run);
   run(`state.target={id:'sample',project:'SampleProject',stale:true,run:'synthetic-run',changed_count:30,

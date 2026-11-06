@@ -106,7 +106,9 @@ def build(graph):
         for index in sorted(container_edges[scope]):
             edge = canonical_edges[index]
             source, target = shown_as(edge["source"]), shown_as(edge["target"])
-            if source is None or target is None or source == target:
+            if source is None or target is None:
+                continue
+            if source == target and (edge.get("internal_to_owner") or (source, target) != (edge["source"], edge["target"])):
                 continue
             if source not in members and target not in members:
                 continue

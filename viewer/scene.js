@@ -38,6 +38,7 @@ function fitOverview() {
 function rememberView() {
   if (!state.cy || !state.universe || state.framing) return;
   const scene = { target: state.target.id, run: state.target.run, expanded: [...state.universe.expanded],
+    layout:$('layout').value,configuration:{...state.configuration},
     pan: { ...state.cy.pan() }, zoom: worldZoom(), size:{width:state.cy.width(),height:state.cy.height()} };
   history.replaceState({ scene }, '', hashFor(state.target.id, state.file));
 }
@@ -49,6 +50,12 @@ function restoreView(scene) {
       !Number.isFinite(scene.pan.y) || !Number.isFinite(scene.zoom)) return false;
   map.expanded = new Set(scene.expanded.filter(id => map.nodes.has(id) && map.isGroup(id)));
   map.expanded.add(map.root);
+  if (scene.configuration && typeof scene.configuration==='object') {
+    state.configuration=Object.fromEntries(Object.entries(scene.configuration).filter(([,value])=>typeof value==='boolean'));
+  }
+  if (scene.layout && [...($('layout').options||[])].some(option=>option.value===scene.layout) && $('layout').value!==scene.layout) {
+    $('layout').value=scene.layout;layout();
+  }
   refreshMap();
   const size = scene.size && Number.isFinite(scene.size.width) && Number.isFinite(scene.size.height) ? scene.size :
     {width:state.cy.width(),height:state.cy.height()};
@@ -115,6 +122,10 @@ function toggleGroup(id) {
 function flyToNode(id, inspect = true) {
   const map = state.universe;
   if (!map.nodes.has(id)) return;
+  if (id===map.root && map.configurationCount) {
+    setConfiguration(true);
+    for (const type of map.configurationTypes) state.hidden.delete(type);
+  }
   rememberView();
   const entry = scopeFor(id);
   if (entry) history.pushState(null, '', hashFor(state.target.id, entry.file));
@@ -132,12 +143,13 @@ function followReference(edge) {
   const entry = scopeFor(edge.target);
   if (entry) history.pushState(null, '', hashFor(state.target.id, entry.file));
   state.hidden.delete(edge.type);
+  if (map.isConfiguration(edge)) setConfiguration(true);
   state.pendingReference=edge;
   if (map.nodes.get(edge.source).boundary || map.nodes.get(edge.target).boundary) state.boundary = true;
   map.reveal(edge.source); map.reveal(edge.target);
   setSceneScope(edge.target);
   refreshMap(); frameNode(edge.target);
-  renderDetails({...edge,refs:[edge]});
+  renderDetails(edge.internal_to_owner?map.nodes.get(edge.source):{...edge,refs:[edge]});
   state.pendingReference=null;
 }
 

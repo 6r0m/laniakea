@@ -60,6 +60,23 @@ class Pipeline(unittest.TestCase):
         self.assertTrue({"depends.rollup", "requires.rollup"} <= types, "summary types are described")
         self.assertIn("rollup", {s["id"] for s in manifest["sources"]})
 
+    def test_overview_hints_are_profile_owned_and_invalid_hints_keep_the_previous_run(self):
+        good, manifest = self.extract()
+        self.assertEqual(manifest.get('overview'),{'anchor':'engine','configuration_types':['requires']})
+        from laniakea import unreal
+        original = unreal.extract
+        for hint in ({'anchor':'missing','configuration_types':['requires']},
+                     {'anchor':'project','configuration_types':['requires']},
+                     {'anchor':'engine','configuration_types':['missing']}):
+            def invalid(*args,**kwargs):
+                built,fields=original(*args,**kwargs)
+                fields['overview']=hint
+                return built,fields
+            with self.subTest(hint=hint),patch('laniakea.unreal.extract',side_effect=invalid):
+                with self.assertRaisesRegex(LaniakeaError,'overview'):
+                    self.extract()
+            self.assertEqual(self.workspace.latest('sample'),good)
+
     def test_failed_run_keeps_the_last_good_one(self):
         good, _ = self.extract()
         with self.assertRaises(LaniakeaError):

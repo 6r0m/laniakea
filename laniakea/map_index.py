@@ -76,10 +76,12 @@ def build(graph, destination, source_hash=None, generator_hash=None):
         db.executemany('INSERT INTO nodes VALUES (?,?,?)', ((identity, *interval) for identity, interval in bounds.items()))
         def rows():
             for number, edge in enumerate(graph['edges'], 1):
-                key = (indices[edge['source']], indices[edge['target']], edge['type'])
+                key = (indices[edge['source']], indices[edge['target']], edge['type'], bool(edge.get('internal_to_owner')))
                 if key not in groups:
                     groups[key] = len(groups)+1
                     topology['references'].append({'source': key[0], 'target': key[1], 'type': key[2], 'count': 0})
+                    if key[3]:
+                        topology['references'][-1]['internal_to_owner'] = True
                 group = groups[key]
                 topology['references'][group-1]['count'] += 1
                 yield (number, group, bounds[edge['source']][0], bounds[edge['target']][0],

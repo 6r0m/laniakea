@@ -112,6 +112,7 @@ def extract(target, run_dir, previous_manifest=None, tools_dir=None):
         "project": project.stem,
         "levels": graph.LEVELS + (["class", "function"] if compiler_result["enabled"] else []),
         "edge_types": graph.EDGE_TYPES,
+        "overview": {"anchor": graph.ENGINE_ID, "configuration_types": ["requires"]},
         "target": {**chosen, "platform": platform, "configuration": configuration},
         "timings_seconds": timings,
         "sources": [

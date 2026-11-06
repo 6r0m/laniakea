@@ -104,6 +104,16 @@ class GenericScopes(unittest.TestCase):
     def setUp(self):
         self.graph = json.loads((FIXTURES / "generic.graph.json").read_text(encoding="utf-8"))
 
+    def test_container_keeps_explicit_recursion_but_not_abstracted_internal_loops(self):
+        edge={'id':'recursive','source':'app.core.db','target':'app.core.db','type':'calls',
+              'status':'resolved','origin':'synthetic'}
+        self.graph['edges']=[edge,{**edge,'id':'abstracted','internal_to_owner':True}]
+        built=shards.build(self.graph)
+        self.assertEqual(edge_ids(built[shards.file_name('app.core')]),{'recursive'})
+        leaf=built[shards.file_name('app.core.db')]
+        self.assertEqual(edge_ids(leaf),{'recursive','abstracted'})
+        self.assertTrue(next(e for e in leaf['edges'] if e['id']=='abstracted')['internal_to_owner'])
+
     def test_index_requires_the_direct_child_count(self):
         found = shards.index(self.graph)
         del found["nodes"][0]["child_count"]

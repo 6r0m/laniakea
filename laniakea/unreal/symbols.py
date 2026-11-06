@@ -122,6 +122,8 @@ def merge(built, batches, project, copy, engine, exported, generated_owners=None
         if source is None or target is None or builder.nodes[source]["boundary"]:
             continue
         builder.edge(relation["type"], source, target, "resolved", "compiler")
+        if source == target and (relation["source"] not in ids or relation["target"] not in ids):
+            builder.edges[f"{relation['type']}:{source}->{target}"]["internal_to_owner"] = True
     seen = set()
     for reference in references:
         if not reference["role"] & 4:
@@ -154,6 +156,8 @@ def merge(built, batches, project, copy, engine, exported, generated_owners=None
                                              "symbol": "::".join(filter(None, (symbol.get("scope"), symbol.get("signature")))),
                                              "dispatch": "virtual target declaration" if reference["role"] & 64 else "static",
                                              "implicit": reference["implicit"]}}
+        if source == target and (reference["source"] not in ids or reference["target"] not in ids):
+            builder.edges[identity]["internal_to_owner"] = True
     result = {"schema": built["schema"], "nodes": list(builder.nodes.values()), "edges": list(builder.edges.values())}
     _dependency_reviews(result, exported)
     return result, unknown

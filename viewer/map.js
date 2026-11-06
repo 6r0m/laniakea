@@ -38,7 +38,8 @@ function style() {
     { selector: 'node.member', style: { 'background-color': css('--accent'), 'border-color': css('--accent'),
       width: 16, height: 16, 'underlay-color': css('--accent'), 'underlay-opacity': 0.08, 'underlay-padding': 6 } },
     { selector: 'node.group', style: { 'background-opacity': 0.04, 'border-width': 2, 'border-opacity': 1 } },
-    { selector: 'node.boundary', style: { shape: 'diamond', 'background-color': css('--external'),
+    // Rounded diamonds keep native hit-testing reliable at axis-aligned centers.
+    { selector: 'node.boundary', style: { shape: 'round-diamond', 'background-color': css('--external'),
       'border-color': css('--external') } },
     { selector: 'node.not-in-target', style: { 'background-opacity': 0.15, 'border-style': 'dashed' } },
     { selector: 'node.not-analysed', style: { 'border-style': 'dotted' } },
@@ -153,7 +154,7 @@ function refreshMap() {
   cy.elements().removeClass('faded focus hovered');
   $('map-tooltip').hidden = true;
   state.viewportCut=viewportCamera();
-  const view = universe.project(state.hidden, state.boundary,state.viewportCut);
+  const view = universe.project(state.hidden, state.boundary,state.viewportCut,configurationVisible());
   const members = new Set(view.nodes.filter(n => !n.boundary).map(n => n.id));
   const drill = Object.fromEntries(state.index.nodes.map(n => [n.id, n.file]));
   state.shard = { ...state.scopeShard, ...view, members: [...members], drill };
@@ -306,18 +307,75 @@ function readableLabels() {
   state.styling = false;
 }
 
-function nonOverlappingLabels(candidates, glyphs = []) {
-  const kept = [], ids = new Set();
+function labelObstacles(glyphs) {
   const obstacles = glyphs.length ? new SpatialIndex(glyphs.length) : null;
   for (const {box:b} of glyphs) obstacles.add(b.x1,b.y1,b.x2,b.y2);
   if (obstacles) obstacles.finish();
+  return obstacles;
+}
+
+function labelFits(item, kept, glyphs, obstacles) {
+  const a=item.box;
+  if (obstacles && item.priority<5 && obstacles.search(a.x1,a.y1,a.x2,a.y2).some(i=>glyphs[i].id!==item.id)) return false;
+  for(const other of kept) {
+    const b=other.box;
+    if(other.id!==item.id && a.x1<b.x2+4 && a.x2+4>b.x1 && a.y1<b.y2+4 && a.y2+4>b.y1) return false;
+  }
+  return true;
+}
+
+function nonOverlappingLabels(candidates, glyphs = []) {
+  const kept = [], ids = new Set(),obstacles=labelObstacles(glyphs);
   for (const item of candidates.sort((a, b) => b.priority - a.priority)) {
-    const a = item.box;
-    if (obstacles && item.priority < 5 && obstacles.search(a.x1,a.y1,a.x2,a.y2).some(i => glyphs[i].id !== item.id)) continue;
-    if (kept.some(b => a.x1 < b.x2 + 4 && a.x2 + 4 > b.x1 && a.y1 < b.y2 + 4 && a.y2 + 4 > b.y1)) continue;
-    kept.push(a); ids.add(item.id);
+    if (!labelFits(item,kept,glyphs,obstacles))continue;
+    kept.push(item); ids.add(item.id);
   }
   return ids;
+}
+
+// Native-node lifetime and four measured variants bound this derived font-metric cache.
+const labelMetrics = new WeakMap();
+
+function measureLabelVariants(items, textOf) {
+  const groups=new Map(),zoom=state.cy.zoom();
+  const properties=['font-family','font-size','font-weight','font-style','text-max-width','text-wrap',
+    'text-overflow-wrap','text-halign','text-valign','text-margin-x','text-margin-y','text-background-padding'];
+  const boxAt=(item,offset)=>{
+    const p=item.node.renderedPosition();
+    const b={x1:p.x+offset.x1*zoom,y1:p.y+offset.y1*zoom,x2:p.x+offset.x2*zoom,y2:p.y+offset.y2*zoom};
+    return {...b,w:b.x2-b.x1,h:b.y2-b.y1};
+  };
+  for(const item of items){
+    const n=item.node;
+    if(!item.metrics){
+      const signature=JSON.stringify([n.outerWidth(),n.outerHeight(),...properties.map(key=>n.style(key))]);
+      let cached=labelMetrics.get(n);
+      if(!cached||cached.signature!==signature){cached={signature,variants:new Map()};labelMetrics.set(n,cached);}
+      item.metrics=cached;
+    }
+    item.text=textOf(item);
+    const variants=item.metrics.variants,offset=variants.get(item.text);
+    const key=JSON.stringify([item.metrics.signature,item.text]);
+    if(!groups.has(key))groups.set(key,{items:[],offset:null});
+    const group=groups.get(key);group.items.push(item);
+    if(offset)group.offset=offset;
+  }
+  state.cy.batch(()=>groups.forEach(group=>{
+    const item=group.items[0];
+    if(!group.offset&&item.node.style('label')!==item.text)item.node.style('label',item.text);
+  }));
+  for(const group of groups.values()){
+    if(!group.offset){
+      const n=group.items[0].node,p=n.renderedPosition(),b=n.renderedBoundingBox({includeNodes:false,includeEdges:false,
+        includeLabels:true,includeOverlays:false,includeUnderlays:false});
+      group.offset={x1:(b.x1-p.x)/zoom,y1:(b.y1-p.y)/zoom,x2:(b.x2-p.x)/zoom,y2:(b.y2-p.y)/zoom};
+    }
+    for(const item of group.items){
+      const variants=item.metrics.variants;variants.delete(item.text);variants.set(item.text,group.offset);
+      if(variants.size>4)variants.delete(variants.keys().next().value);
+      item.box=boxAt(item,group.offset);
+    }
+  }
 }
 
 function declutterLabels() {
@@ -325,24 +383,56 @@ function declutterLabels() {
   const cy = state.cy;
   const inspected = new Set(cy.edges(':selected').connectedNodes().map(n => n.id()));
   const traced = new Set(cy.edges('.focus').connectedNodes().map(n => n.id()));
-  const candidates = cy.nodes().map(n => {
+  const all = cy.nodes().map(n => {
     const expanded = n.hasClass('expanded');
-    return { id: n.id(), box:n.renderedBoundingBox({includeNodes:false,includeEdges:false,includeLabels:true,
-      includeOverlays:false,includeUnderlays:false}),
+    return { id: n.id(), node:n, name:n.data('label') || (n.data('caption') || '').split('\n')[0],
       priority: n.hasClass('hovered') || n.selected() ? 8 : inspected.has(n.id()) ? 7 :
         n.hasClass('match') || n.id() === state.scopeShard.scope ? 6 : traced.has(n.id()) ? 5 : expanded ? 2 : 1 };
-  });
+  }).sort((a,b)=>b.priority-a.priority);
   const glyphs = cy.nodes().not('.expanded').map(n => ({id:n.id(),box:n.renderedBoundingBox({includeLabels:false,
     includeOverlays:false,includeUnderlays:false})}));
-  const names = nonOverlappingLabels(candidates.filter(n => n.box.x1 >= 0 && n.box.y1 >= 0 &&
-    n.box.x2 <= cy.width() && n.box.y2 <= cy.height()), glyphs);
-  cy.batch(() => cy.nodes().forEach(n => {
-    if (!state.visibleLabels || state.visibleLabels.has(n.id()) !== names.has(n.id())) {
-      n.style({ 'text-opacity': names.has(n.id()) ? 1 : 0, 'text-events': names.has(n.id()) ? 'yes' : 'no' });
-    }
-  }));
+  let kept=new Map();
+  const obstacles=labelObstacles(glyphs);
+  const measure=item=>item.node.renderedBoundingBox({includeNodes:false,includeEdges:false,includeLabels:true,
+    includeOverlays:false,includeUnderlays:false});
+  const inside=b=>b.x1>=0&&b.y1>=0&&b.x2<=cy.width()&&b.y2<=cy.height();
+  const caption=(item,text)=>{if(item.node.style('label')!==text)item.node.style('label',text);};
+  const candidates=all.filter(item=>{
+    const b=measure(item),margin=150;
+    return b.x2>=-margin&&b.y2>=-margin&&b.x1<=cy.width()+margin&&b.y1<=cy.height()+margin;
+  });
+  const choose=()=>{
+    const result=new Map();
+    for(const item of candidates)if(inside(item.box)&&labelFits(item,result.values(),glyphs,obstacles))result.set(item.id,item);
+    return result;
+  };
+  // Reserve readable primary names before allowing any secondary metadata to occupy space.
+  measureLabelVariants(candidates,item=>item.name);
+  kept=choose();
+  for(const limit of [32,18]) {
+    const shorter=candidates.filter(item=>!kept.has(item.id)&&item.name.length>limit);
+    measureLabelVariants(shorter,item=>item.name.slice(0,limit-3)+'...');
+    if(shorter.length)kept=choose();
+  }
+  const fullCandidates=[...kept.values()].filter(item=>{
+    const large=(state.universe?.radii.get(item.id)||0)*worldZoom()>75;
+    return item.node.data('caption')&&item.node.data('caption')!==item.text&&(item.priority>=5||large);
+  }).map(item=>({...item}));
+  measureLabelVariants(fullCandidates,item=>item.node.data('caption'));
+  for(const item of fullCandidates){
+    if(inside(item.box)&&labelFits(item,kept.values(),glyphs,obstacles))kept.set(item.id,item);
+  }
+  const names=new Set(kept.keys());
+  cy.batch(() => {
+    kept.forEach(item=>caption(item,item.text));
+    cy.nodes().forEach(n => {
+      if (!state.visibleLabels || state.visibleLabels.has(n.id()) !== names.has(n.id())) {
+        n.style({ 'text-opacity': names.has(n.id()) ? 1 : 0, 'text-events': names.has(n.id()) ? 'yes' : 'no' });
+      }
+    });
+  });
   state.visibleLabels = names;
-  state.labelBoxes=new Map(candidates.filter(n=>names.has(n.id)).map(n=>[n.id,n.box]));
+  state.labelBoxes=new Map([...kept.values()].map(n=>[n.id,n.box]));
 }
 
 function grabConstellationLabel(event) {
@@ -378,10 +468,10 @@ function releaseConstellationLabel(redraw=true) {
   if(redraw!==false && drag.cy===state.cy && drag.map===state.universe && !drag.cy.destroyed())readableLabels();
 }
 
-function galaxyPositions(nodes, width, height) {
-  const members = nodes.filter(n => n.hasClass('member')), context = nodes.filter(n => !n.hasClass('member'));
+function galaxyPositions(nodes, width, height, anchor = null) {
+  const members = nodes.filter(n => n.id()!==anchor&&n.hasClass('member')), context = nodes.filter(n => n.id()!==anchor&&!n.hasClass('member'));
   const positions = new Map(), aspect = Math.max(0.75, Math.min(1.6, width / Math.max(height, 1)));
-  const radius = members.length === 1 ? 0 : Math.max(170, Math.min(24, members.length) * 18);
+  const radius = anchor ? Math.max(300, Math.min(24,members.length)*32) : members.length === 1 ? 0 : Math.max(170, Math.min(24, members.length) * 18);
   function orbit(group, start) {
     for (let offset = 0; offset < group.length; offset += 24) {
       const band = group.slice(offset, offset + 24), r = start + Math.floor(offset / 24) * 180;
@@ -393,6 +483,7 @@ function galaxyPositions(nodes, width, height) {
   }
   orbit(members, radius);
   orbit(context, radius + Math.max(0, Math.ceil(members.length / 24) - 1) * 180 + 190);
+  if (anchor) positions.set(anchor,{x:0,y:0});
   return positions;
 }
 
@@ -401,7 +492,8 @@ function updateScopeSummary() {
   const exact = view.edges.reduce((sum, e) => sum + referenceTotal(e.refs), 0);
   const internal = [...view.internal.values()].reduce((sum, refs) => sum + referenceTotal(refs), 0);
   $('scope-summary').textContent = `${view.nodes.length} stars & constellations / ${exact} references / ` +
-    `${internal} inside collapsed groups${view.outside ? ` / ${view.outside} beyond view` : ''}${view.hidden ? ` / ${view.hidden} filtered` : ''}`;
+    `${internal} within owners/groups${view.outside ? ` / ${view.outside} beyond view` : ''}${view.hidden ? ` / ${view.hidden} filtered` : ''}`;
+  renderConfiguration();
   $('map-empty').hidden = view.nodes.length > 0;
   $('map-empty').textContent = 'No stars in this area. Use Fit map to return to the overview.';
 }
@@ -462,7 +554,8 @@ function frame(bounds, padding = 75, maxZoom = 1.2) {
 function fitMap() {
   if (!state.cy) return;
   const map=state.universe,top=[...map.childIds(map.root),...map.childIds(null).filter(id=>id!==map.root)];
-  if(!top.length || map.directReferences.get(map.root).length)top.push(map.root);
+  if(!top.length || map.directReferences.get(map.root).some(e=>!state.hidden.has(e.type)&&
+    (configurationVisible()||!map.isConfiguration(e))))top.push(map.root);
   const points=top.filter(id=>state.boundary||!map.nodes.get(id).boundary).map(id=>map.positions.get(id));
   if(!points.length)points.push(map.positions.get(map.root));
   frame({x1:Math.min(...points.map(p=>p.x)),y1:Math.min(...points.map(p=>p.y)),
@@ -483,8 +576,8 @@ function layout() {
   const map = state.universe, mode = $('layout').value;
   const top = [...map.childIds(map.root), ...map.childIds(null).filter(id => id !== map.root)];
   const fake = top.map(id => ({id:()=>id,hasClass:()=>!map.nodes.get(id).boundary}));
-  let positions = galaxyPositions(fake, state.cy.width(), state.cy.height());
-  if (mode !== 'auto') {
+  let positions = galaxyPositions(fake, state.cy.width(), state.cy.height(),mode==='galaxy'?map.overview?.anchor:null);
+  if (mode !== 'auto' && mode !== 'galaxy') {
     const expanded = map.expanded;
     map.expanded = new Set([map.root]);
     const rootView = map.project();

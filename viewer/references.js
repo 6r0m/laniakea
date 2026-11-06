@@ -36,7 +36,8 @@ class ReferencePages {
       for(const item of data.items) {
         const edge=item.reference;
         if(!Number.isSafeInteger(item.group)||item.group<1||!edge||typeof edge.id!=='string'||
-          typeof edge.source!=='string'||typeof edge.target!=='string'||typeof edge.type!=='string') {
+          typeof edge.source!=='string'||typeof edge.target!=='string'||typeof edge.type!=='string'||
+          edge.internal_to_owner!==undefined&&(typeof edge.internal_to_owner!=='boolean'||edge.internal_to_owner&&edge.source!==edge.target)) {
           throw new Error('Invalid exact reference');
         }
       }

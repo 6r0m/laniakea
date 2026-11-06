@@ -22,9 +22,10 @@
     },
     "referenceGroup": {
       "type": "object", "required": ["source", "target", "type", "count"], "additionalProperties": false,
-      "description": "One endpoint/type group. Source and target index map.nodes; its page-query group id is its array index plus one.",
+      "description": "One endpoint/type/internal-classification group. Source and target index map.nodes; its page-query group id is its array index plus one.",
       "properties": {"source": {"type": "integer"}, "target": {"type": "integer"},
-                     "type": {"type": "string"}, "count": {"type": "integer"}}
+                     "type": {"type": "string"}, "count": {"type": "integer"},
+                     "internal_to_owner": {"type": "boolean", "description": "An abstracted reference within one owner, not an explicit self-relationship."}}
     },
     "referencePage": {
       "type": "object", "required": ["items", "total", "next_cursor"], "additionalProperties": false,
@@ -70,6 +71,7 @@
         "target": {"type": "string"},
         "status": {"enum": ["declared", "derived", "resolved", "partial"]},
         "origin": {"type": "string", "description": "The id of the manifest source that produced the edge."},
+        "internal_to_owner": {"type": "boolean", "description": "Normalization abstracted a reference within one owner. Source and target must be identical; exact reference metadata is retained."},
         "attrs": {"type": "object"}
       }
     },
@@ -126,6 +128,7 @@
         "project": {"type": "string"},
         "levels": {"type": "array", "items": {"type": "string"}},
         "edge_types": {"type": "array", "items": {"$ref": "#/$defs/edgeType"}},
+        "overview": {"$ref": "#/$defs/overview"},
         "target": {"type": "object"},
         "timings_seconds": {"type": "object", "additionalProperties": {"type": "number"},
                             "description": "Elapsed seconds. Profile and total contain the named subphases; values are not additive. Total ends before manifest serialization and promotion."},
@@ -133,6 +136,14 @@
         "inputs": {"type": "object", "additionalProperties": {"type": "string"}, "description": "Build input identity to sha256; the profile owns the fingerprinted representation."},
         "coverage": {"$ref": "#/$defs/coverage"},
         "entry": {"type": "string", "description": "The shard file the viewer opens first."}
+      }
+    },
+    "overview": {
+      "type": "object", "required": ["anchor", "configuration_types"], "additionalProperties": false,
+      "description": "Presentation hints only. Anchor names an existing boundary root; configuration types apply only to original references from the analysed project root.",
+      "properties": {
+        "anchor": {"type": "string"},
+        "configuration_types": {"type": "array", "items": {"type": "string"}}
       }
     },
     "tool": {

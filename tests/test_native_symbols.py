@@ -29,10 +29,13 @@ class CompilerBoundary(unittest.TestCase):
             ref={"source":"generated","target":"generated","role":4,"file":str(source / "Sample.cpp"),
                  "line":2,"column":1,"implicit":False,"call_confirmed":False,"unevaluated":False}
             batch={"symbols":[fact],"references":[ref],"relations":[],"diagnostics":[]}
+            batch['symbols'].append({**fact,'usr':'generated-base','name':'SampleGeneratedBase'})
+            batch['relations'].append({'source':'generated','target':'generated-base','type':'overrides'})
             result,unknown=symbols.merge(built,[batch],project,root,root / "engine",exported,{str(generated):"Sample"})
             self.assertEqual(unknown,{"source":0,"target":0})
-            self.assertEqual(len(result["edges"]),1)
+            self.assertEqual(len(result["edges"]),2)
             self.assertEqual((result["edges"][0]["source"],result["edges"][0]["target"]),("module:Sample","module:Sample"))
+            self.assertTrue(all(e.get("internal_to_owner") for e in result["edges"]), "abstracted references are internal facts, not self-dependencies")
             self.assertFalse(any(n["level"]=="function" for n in result["nodes"]))
 
     def test_ownership_lookup_indexes_module_directories_instead_of_scanning_each_file(self):
@@ -162,6 +165,15 @@ class NativeSymbols(unittest.TestCase):
         schema.validate(result)
         self.assertEqual(unknown, {"source": 0, "target": 0})
         return result
+
+    def test_authored_recursion_stays_an_explicit_function_relationship(self):
+        self.source.write_text('int SampleRecur(){return SampleRecur();}\n')
+        built=self.normalize([self.index()])
+        node=next(n for n in built['nodes'] if n['label']=='SampleRecur')
+        calls=[e for e in built['edges'] if e['type']=='calls']
+        self.assertEqual(len(calls),1)
+        self.assertEqual((calls[0]['source'],calls[0]['target']),(node['id'],node['id']))
+        self.assertFalse(calls[0].get('internal_to_owner',False))
 
     def test_calls_addresses_inheritance_overrides_source_links_and_edit(self):
         batch = self.index()

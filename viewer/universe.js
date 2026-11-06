@@ -7,7 +7,7 @@ function referenceCount(edge) { return edge.count === undefined ? 1 : edge.count
 function referenceTotal(edges) { return edges.reduce((sum,edge)=>sum+referenceCount(edge),0); }
 
 class Universe {
-  constructor(graph) {
+  constructor(graph, manifest = {}) {
     this.paged = graph.schema === 'laniakea.map/1';
     if (this.paged) {
       const nodes = graph.nodes;
@@ -17,7 +17,8 @@ class Universe {
           throw new Error('Invalid map reference group');
         }
         return {id:'group:'+(index+1),group:index+1,source:nodes[row.source].id,target:nodes[row.target].id,
-          type:row.type,count:row.count,status:'derived',origin:'rollup'};
+          type:row.type,count:row.count,status:'derived',origin:'rollup',
+          ...(row.internal_to_owner !== undefined ? {internal_to_owner:row.internal_to_owner} : {})};
       })};
     }
     this.graph = graph;
@@ -30,6 +31,20 @@ class Universe {
     const roots = graph.nodes.filter(n => n.parent === null && !n.boundary);
     if (roots.length !== 1) throw new Error('Expected one project root');
     this.root = roots[0].id;
+    this.overview = manifest.overview === undefined ? null : manifest.overview;
+    this.configurationTypes = new Set();
+    if (manifest.overview !== undefined) {
+      const hint=this.overview;
+      if (!hint || typeof hint!=='object' || Array.isArray(hint)) throw new Error('Invalid overview presentation hint');
+      const anchor=this.nodes.get(hint.anchor),declared=new Set((manifest.edge_types||[]).map(t=>t.id));
+      if (!anchor || !anchor.boundary || anchor.parent!==null || !Array.isArray(hint.configuration_types) ||
+          new Set(hint.configuration_types).size!==hint.configuration_types.length ||
+          hint.configuration_types.some(t=>typeof t!=='string'||!declared.has(t)||t.endsWith('.rollup'))) {
+        throw new Error('Invalid overview presentation hint');
+      }
+      this.configurationTypes = new Set(hint.configuration_types);
+    }
+    this.configurationCount = 0;
     for (const n of graph.nodes) {
       if (n.parent !== null && !this.nodes.has(n.parent)) throw new Error('Unknown containment parent');
       if (!this.children.has(n.parent)) this.children.set(n.parent, []);
@@ -52,9 +67,13 @@ class Universe {
     this.referenceIndex = new Map(graph.nodes.map(n => [n.id, []]));
     for (const e of graph.edges) {
       if (!this.nodes.has(e.source) || !this.nodes.has(e.target)) throw new Error('Unknown reference endpoint');
+      if (e.internal_to_owner !== undefined && (typeof e.internal_to_owner!=='boolean' || e.internal_to_owner && e.source!==e.target)) {
+        throw new Error('Invalid internal reference classification');
+      }
       if (edgeIds.has(e.id)) throw new Error('Duplicate reference id');
       edgeIds.add(e.id);
       const count = referenceCount(e), targetPath = this.paths.get(e.target);
+      if (this.isConfiguration(e)) this.configurationCount += count;
       this.typeCounts.set(e.type, (this.typeCounts.get(e.type) || 0) + count);
       for (const id of new Set([e.source,e.target])) this.directReferences.get(id).push(e);
       const sourcePath = this.paths.get(e.source);
@@ -93,6 +112,8 @@ class Universe {
   references(id) {
     return (this.referenceIndex.get(id) || []).slice();
   }
+
+  isConfiguration(edge) { return edge.source===this.root && this.configurationTypes.has(edge.type); }
 
   viewportCut(camera) {
     const expanded = new Set([this.root]);
@@ -138,7 +159,7 @@ class Universe {
     this.spatial.finish();
   }
 
-  project(hiddenTypes = new Set(), boundary = true, camera = null) {
+  project(hiddenTypes = new Set(), boundary = true, camera = null, configuration = true) {
     const internal = new Map(), bundles = new Map(), edges = [];
     const cut = camera && this.spatial ? this.viewportCut(camera) : null;
     const expanded = cut ? cut.expanded : this.expanded;
@@ -147,21 +168,21 @@ class Universe {
       return shown.get(id);
     };
     let hidden = 0;
-    const filterKey=JSON.stringify([boundary,[...hiddenTypes].sort()]);
+    const excluded=e=>hiddenTypes.has(e.type) || !configuration&&this.isConfiguration(e) ||
+      !boundary&&(this.nodes.get(e.source).boundary||this.nodes.get(e.target).boundary);
+    const filterKey=JSON.stringify([boundary,[...hiddenTypes].sort(),configuration]);
     if (!this.filteredTotals.has(filterKey)) {
       this.filteredTotals.clear();
-      this.filteredTotals.set(filterKey,this.graph.edges.reduce((sum,e)=>sum+(
-        hiddenTypes.has(e.type)||!boundary&&(this.nodes.get(e.source).boundary||this.nodes.get(e.target).boundary)?referenceCount(e):0),0));
+      this.filteredTotals.set(filterKey,this.graph.edges.reduce((sum,e)=>sum+(excluded(e)?referenceCount(e):0),0));
     }
     hidden=this.filteredTotals.get(filterKey);
     let represented=0;
     for (const edge of cut ? cut.references : this.graph.edges) {
-      if (hiddenTypes.has(edge.type) || (!boundary &&
-          (this.nodes.get(edge.source).boundary || this.nodes.get(edge.target).boundary))) continue;
+      if (excluded(edge)) continue;
       represented+=referenceCount(edge);
       const source = representative(edge.source), target = representative(edge.target);
       const exact = source === edge.source && target === edge.target;
-      if (source === target && !exact) {
+      if (source === target && (!exact || edge.internal_to_owner)) {
         if (!internal.has(source)) internal.set(source, []);
         internal.get(source).push(edge);
       } else {
@@ -187,7 +208,7 @@ class Universe {
     const admitted = cut && new Set([...cut.seeds,...endpoints,...internal.keys()]);
     if (admitted) for (const id of [...admitted]) for (const parent of this.paths.get(id)) if(expanded.has(parent)) admitted.add(parent);
     const nodes = this.graph.nodes.filter(n => (boundary || !n.boundary) && (!admitted || admitted.has(n.id)) && representative(n.id) === n.id &&
-      (n.id !== this.root || !this.isGroup(n.id) || endpoints.has(n.id)));
+      (n.id !== this.root || !this.isGroup(n.id) || endpoints.has(n.id) || internal.has(n.id)));
     const total=[...this.typeCounts.values()].reduce((a,b)=>a+b,0);
     return { nodes, edges, internal, hidden, expanded, outside:total-hidden-represented };
   }

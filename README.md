@@ -23,6 +23,11 @@ bundles at a distance and reconnect to their exact endpoints as detail appears. 
 inside collapsed groups. Click to inspect every exact reference or jump to source; following a reference reveals
 its destination while retaining the surrounding map.
 
+Choose **galaxy** in Layout for an Engine-centered overview with project constellations around it. **Configuration**
+shows or hides project-root declarations; it starts off in galaxy while plugin dependencies remain visible.
+Names take priority over secondary captions. Select the other layout modes to return to existing arrangements.
+Runs without presentation hints use orbits until extracted again.
+
 Browse & filters provides a keyboard-accessible node list and typed reference filters. `/` finds any recorded node;
 Enter flies to it. Double-click a group, or focus it with arrow keys and press Enter, to expand or collapse it.
 `+` and `-` zoom when the map has focus; Ctrl+wheel remains browser zoom. Existing scope bookmarks fly to that part
@@ -56,7 +61,7 @@ be expensive; `serve` opens a published run without extracting again, checking i
 Checks: `python -m unittest discover -s tests`. Viewer regressions also run with
 `node --test tests/viewer.test.cjs tests/universe.test.cjs tests/references.test.cjs` when Node.js 18 or later is available; it is not needed to run Laniakea.
 The Playwright function in `tests/viewer.browser.js` checks wheel expansion and folding, hover tracing, exact
-reference navigation, constellation and label dragging, saved positions in a fresh browser, and a narrow viewport
+reference navigation, centered layout/configuration, constellation and label dragging, saved positions in a fresh browser, and a narrow viewport
 against a served synthetic sample.
 `tests/viewer.performance.js` measures trusted mouse/wheel input, frame intervals, main-thread work and heap through
 Playwright/CDP on the current map, then restores its camera. Compare the same scope and expansion state; frame times

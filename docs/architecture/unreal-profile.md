@@ -149,8 +149,11 @@ toolchain declarations form a separate boundary. Cross-module calls without a di
 with transitive and public-exposure paths; this is not reported as a violation.
 
 Native header-tool manifests map generated declarations back to their module, checked against JsonExport ownership.
-Generated-only declarations do not become project stars; references to them keep their module endpoint. Module metadata
-distinguishes native compilation units, declarations reached through other units, and modules with no observed symbol
+Generated-only declarations do not become project stars; references to them keep their module endpoint.
+If normalization maps both ends of a reference or semantic relation to the same owner and at least one original
+symbol was not retained, it marks the reference internal to that owner. Authored function recursion keeps its resolved
+function endpoints and remains explicit. Canonical identities and compiler location/status are unchanged by this classification.
+Module metadata distinguishes native compilation units, declarations reached through other units, and modules with no observed symbol
 analysis. Execution, diagnostics and observed symbols do not establish complete relationship correctness.
 
 Native compilers run in disposable, hidden processes with bounded timeouts. Concurrency is capped by available memory.
@@ -188,6 +191,14 @@ and write I/O failures are reported in worker metrics. Compiler errors never pro
 - **Descriptor dependencies.** Each `Plugins[]` entry with `Enabled` true becomes a `requires` edge carrying `Optional`
   and the platform, target and configuration allow and deny lists. An entry with `Enabled` false switches a plugin off,
   so it is recorded on the node as `disables` instead.
+- **Overview presentation.** The profile names the existing Engine boundary as the optional layout anchor and identifies
+  `requires` as configuration only when its original source is the project root. Plugin-to-plugin `requires` edges remain
+  dependency declarations. This changes no node ownership or extraction depth; generic presentation behavior belongs to
+  [the graph model](graph-model.md#centered-overview-and-configuration).
+  Descriptor discovery, explicit enable/disable declarations, `EnabledByDefault`, evaluated module presence and observed
+  code references describe different evidence. Project configuration is not the exhaustive list of enabled or available
+  plugins: target rules and defaults can also participate. The profile does not infer complete effective enablement;
+  content-only and otherwise unobserved target membership remain unknown.
 - **Summaries.** The profile writes no summary edges; each scope makes `depends.rollup` and `requires.rollup` from the
   declared edges ([graph-model.md](graph-model.md)). The profile only labels them.
 - **Status.**

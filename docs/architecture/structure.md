@@ -154,8 +154,8 @@ advertised run. A fresh page reads saved pins from the server rather than treati
   listed completely in its details, including references internal to a collapsed group. A summary of module use can disagree with the
   declared `requires`, and both are shown rather than reconciled.
 - **Wide scopes.** A project without plugin folders puts every plugin in one scope, and a flat scope of a few
-  hundred nodes is hard to read in any layout. The continuous map reveals local detail while keeping other groups collapsed. Overlapping names
-  are hidden without hiding stars or references; hover, zoom, search and the accessible node list reveal them.
+  hundred nodes is hard to read in any layout. The continuous map reveals local detail while keeping other groups collapsed.
+  [Caption fitting and readable-name access](graph-model.md#viewport-and-memory-lifetime) preserve navigation when names collide.
   Very wide groups may still require more zoom or a name search to distinguish their contents.
   The viewport evicts distant detail without forgetting expansion. Unchanged projections retain their renderer elements;
   exact reference pages have bounded retention. A single exceptionally dense local view still costs more to draw than a sparse one.

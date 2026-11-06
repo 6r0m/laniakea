@@ -77,3 +77,29 @@ def validate(value, definition=None):
         shown = "; ".join(problems[:5])
         more = f" (+{len(problems) - 5} more)" if len(problems) > 5 else ""
         raise LaniakeaError(f"{definition or 'graph'} does not match the schema: {shown}{more}")
+    if definition in {"edge", "referenceGroup"}:
+        edges = [value]
+    elif definition == "map":
+        edges = value["references"]
+    elif definition == "referencePage":
+        edges = (item["reference"] for item in value["items"])
+    else:
+        edges = value.get("edges", [])
+    for edge in edges:
+        if edge.get("internal_to_owner") and edge["source"] != edge["target"]:
+            raise LaniakeaError("internal_to_owner reference must have identical endpoints")
+
+
+def validate_overview(manifest, graph):
+    """Check cross-document presentation references before a run can be published."""
+    hint = manifest.get("overview")
+    if hint is None:
+        return
+    nodes = {node["id"]: node for node in graph["nodes"]}
+    anchor = nodes.get(hint["anchor"])
+    types = hint["configuration_types"]
+    declared = {entry["id"] for entry in manifest["edge_types"]}
+    if not anchor or not anchor["boundary"] or anchor["parent"] is not None:
+        raise LaniakeaError("overview anchor must name an existing boundary root")
+    if len(set(types)) != len(types) or any(kind not in declared or kind.endswith(".rollup") for kind in types):
+        raise LaniakeaError("overview configuration types must be unique declared exact types")

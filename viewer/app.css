@@ -41,7 +41,7 @@ label, .muted { color: var(--muted); }
 select, button, input { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line);
   border-radius: 5px; padding: 5px 9px; min-height: 32px; max-width: 100%; }
 button, summary { cursor: pointer; touch-action: manipulation; }
-button:hover, select:hover, button[aria-expanded='true'] { border-color: var(--accent); }
+button:hover, select:hover, button[aria-expanded='true'], button[aria-pressed='true'] { border-color: var(--accent); }
 button:disabled, button[aria-disabled='true'] { opacity: 0.45; cursor: default; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 a { color: var(--accent); text-underline-offset: 3px; }

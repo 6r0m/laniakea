@@ -35,7 +35,9 @@ test('invalid cursor progress and unknown exact-reference shapes stay observable
   const original=global.fetch;t.after(()=>global.fetch=original);
   const cache=new ReferencePages('/map/run/references');
   for(const data of [{...page('a'),next_cursor:0},{...page('a'),items:[{group:0,reference:{}}]},
-    {...page('a'),total:51,items:Array(51).fill(page('a').items[0])}]) {
+    {...page('a'),total:51,items:Array(51).fill(page('a').items[0])},
+    {...page('a'),items:[{group:1,reference:{...page('a').items[0].reference,internal_to_owner:true}}]},
+    {...page('a'),items:[{group:1,reference:{...page('a').items[0].reference,target:'a',internal_to_owner:'true'}}]}]) {
     global.fetch=async()=>response(data);
     await assert.rejects(cache.load({node:'a',cursor:0}),/Invalid/);
     assert.equal(cache.cache.size,0);
