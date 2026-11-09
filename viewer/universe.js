@@ -63,6 +63,9 @@ class Universe {
     const edgeIds = new Set();
     this.typeCounts = new Map();
     this.referenceStats = new Map(graph.nodes.map(n=>[n.id,{outgoing:0,incoming:0,within:0}]));
+    this.configurationStats = new Map(graph.nodes.map(n=>[n.id,{outgoing:0,incoming:0,within:0}]));
+    this.configurationReferences = [];
+    this.configurationTargets = new Set();
     this.directReferences = new Map(graph.nodes.map(n=>[n.id,[]]));
     this.referenceIndex = new Map(graph.nodes.map(n => [n.id, []]));
     for (const e of graph.edges) {
@@ -73,17 +76,25 @@ class Universe {
       if (edgeIds.has(e.id)) throw new Error('Duplicate reference id');
       edgeIds.add(e.id);
       const count = referenceCount(e), targetPath = this.paths.get(e.target);
-      if (this.isConfiguration(e)) this.configurationCount += count;
+      const configuration = this.isConfiguration(e);
+      if (configuration) {
+        this.configurationCount += count;
+        this.configurationReferences.push(e);
+        this.configurationTargets.add(e.target);
+      }
       this.typeCounts.set(e.type, (this.typeCounts.get(e.type) || 0) + count);
       for (const id of new Set([e.source,e.target])) this.directReferences.get(id).push(e);
       const sourcePath = this.paths.get(e.source);
       for (const id of sourcePath) {
         this.referenceIndex.get(id).push(e);
-        this.referenceStats.get(id)[targetPath.includes(id)?'within':'outgoing'] += count;
+        const direction=targetPath.includes(id)?'within':'outgoing';
+        this.referenceStats.get(id)[direction] += count;
+        if(configuration)this.configurationStats.get(id)[direction] += count;
       }
       for (const id of targetPath) {
         if (!sourcePath.includes(id)) {
           this.referenceIndex.get(id).push(e);this.referenceStats.get(id).incoming += count;
+          if(configuration)this.configurationStats.get(id).incoming += count;
         }
       }
     }
@@ -159,7 +170,7 @@ class Universe {
     this.spatial.finish();
   }
 
-  project(hiddenTypes = new Set(), boundary = true, camera = null, configuration = true) {
+  project(hiddenTypes = new Set(), boundary = true, camera = null) {
     const internal = new Map(), bundles = new Map(), edges = [];
     const cut = camera && this.spatial ? this.viewportCut(camera) : null;
     const expanded = cut ? cut.expanded : this.expanded;
@@ -168,9 +179,9 @@ class Universe {
       return shown.get(id);
     };
     let hidden = 0;
-    const excluded=e=>hiddenTypes.has(e.type) || !configuration&&this.isConfiguration(e) ||
+    const excluded=e=>hiddenTypes.has(e.type) || this.isConfiguration(e) ||
       !boundary&&(this.nodes.get(e.source).boundary||this.nodes.get(e.target).boundary);
-    const filterKey=JSON.stringify([boundary,[...hiddenTypes].sort(),configuration]);
+    const filterKey=JSON.stringify([boundary,[...hiddenTypes].sort()]);
     if (!this.filteredTotals.has(filterKey)) {
       this.filteredTotals.clear();
       this.filteredTotals.set(filterKey,this.graph.edges.reduce((sum,e)=>sum+(excluded(e)?referenceCount(e):0),0));
@@ -210,7 +221,14 @@ class Universe {
     const nodes = this.graph.nodes.filter(n => (boundary || !n.boundary) && (!admitted || admitted.has(n.id)) && representative(n.id) === n.id &&
       (n.id !== this.root || !this.isGroup(n.id) || endpoints.has(n.id) || internal.has(n.id)));
     const total=[...this.typeCounts.values()].reduce((a,b)=>a+b,0);
-    return { nodes, edges, internal, hidden, expanded, outside:total-hidden-represented };
+    const visible=new Set(nodes.map(n=>n.id)),configurationMarks=new Map();
+    for(const target of this.configurationTargets) {
+      const id=representative(target);
+      if(!visible.has(id))continue;
+      if(!configurationMarks.has(id))configurationMarks.set(id,new Set());
+      configurationMarks.get(id).add(target);
+    }
+    return { nodes, edges, internal, hidden, expanded, configurationMarks, outside:total-hidden-represented };
   }
 
   // Coordinates are world positions. Only the new group's contents are placed; outer stars do not move.

@@ -97,8 +97,8 @@ Tracing uses theme roles defined in CSS: cyan outgoing, amber incoming and viole
 direction words and native arrowheads provide alternatives to color. Node colors keep their existing meaning.
 A node trace names its focus and partitions represented references by canonical endpoints in its containment subtree:
 source inside/target outside is outgoing, the reverse is incoming, and both inside is within. These counts are disjoint
-and retain compact group weights. They describe the current projection after type, configuration, boundary and viewport
-filtering, labelled "In this view". Node inspection separately labels its all-recorded reference scope.
+and retain compact group weights. They describe the architecture projection after configuration exclusion, type,
+boundary and viewport filtering, labelled "In this view". Node inspection separately labels its all-recorded reference scope.
 
 Connection hover combines all shown families and both directions for the same unordered endpoint pair. A deterministic
 ID order fixes the displayed A/B identities, with full ownership paths and levels. Both directional totals and a bounded
@@ -110,13 +110,16 @@ the click; endpoint glyphs remain interactive. Leaving the trace restores normal
 The docked, keyboard-focusable readout retains the last summary after pointer exit while emphasis clears. Escape,
 clear, gestures and projection changes reset it. Its reserved height does not change when trace text changes.
 Canvas titles show names only. A nearby hover card provides kind, containment, coverage and direction counts without
-adding lines to those titles. Node cards distinguish all recorded "Uses (outgoing)", "Used by (incoming)" and within
-totals from the current projection; a filtered-out incoming reference is not reported as no recorded users. A zero
+adding lines to those titles. Node cards distinguish outgoing, incoming and within/self references recorded in the snapshot
+from the current projection. Each affected total exposes its numerical "Of which: project configuration" subset,
+included in that total rather than added to it. These weighted subtree totals and subsets do not change with map filters
+or configuration marks. The project root's totals are labelled project/subtree statistics. A filtered-out incoming
+reference is not reported as no recorded users. A zero
 incoming total says "No incoming references recorded in this snapshot", never that runtime use is impossible.
 Connection cards retain the same two-direction projected scope as connection inspection. Cards stay anchored during
 same-pair pointer movement and yield native pointer hits to the graph. They disappear on exit, Escape, gestures or
 projection changes. The persistent readout mirrors the node totals for keyboard reading; inspection supplies exact rows.
-Following an exact reference enables its type, configuration subset and boundary visibility if a current filter would hide it.
+Following an exact architecture reference enables its type and boundary visibility if a current filter would hide it.
 Following an internal reference opens its owner and reference list rather than inventing a visible self-loop.
 Optional click inspection keeps its marker through projection refreshes while that exact item remains visible.
 Pair details use the same represented groups and directions as the readout. Both totals and shortcuts precede separate
@@ -129,7 +132,8 @@ references and navigation remain reachable. Constellation controls track expansi
 
 Known boundary children can be revealed from recorded containment, including external endpoints of exact
 references. This does not fetch or imply analysis of their own dependencies. Missing coverage remains unknown.
-The project root appears as a separate star only when it is an actual reference endpoint, or when it has no children.
+The project root appears as a separate star only for a non-configuration reference endpoint or owner-local fact,
+or when it has no children. It is not added as a hub for its descendants' references.
 
 ### Centered overview and configuration
 
@@ -143,10 +147,37 @@ only to original references from the analyzed root, not every reference of those
 the viewer recognizes no language-specific ids, paths or levels. Invalid hints are refused before publishing a run or
 replacing a scene; absent hints keep the run usable and the galaxy option visibly falls back to orbits.
 
-Configuration starts hidden in galaxy and visible in other modes. Its toggle exposes the subset and count without
-opening a panel. Explicit choices remain per mode in scene/history state; they are not saved in position files.
-The ordinary type and boundary filters still apply. Filter accounting counts overlapping exclusions once.
-The project endpoint remains accessible through configuration, search and exact-reference navigation.
+Classified project configuration stays outside the architecture projection in every layout, including layout input and
+Fit. Canonical declarations remain unchanged, counted once and available for exact inspection. The map summary names
+configuration separately from other filtered references. Non-root dependencies of the same type remain ordinary wires;
+unclassified root references keep their known meaning.
+
+Config marks adds optional neutral outer outlines to existing visible representatives. Marks start off in every layout;
+explicit choices remain per mode in scene/history state, never in position files. Restored choices affect marks only.
+An outline means that representative contains explicitly listed configuration targets. Hover distinguishes an exact
+listed target from a collapsed owner's distinct listed-target count. Marks follow effective projection expansion,
+including external boundaries; they do not propagate to unlisted children or load distant targets. Type filters do not
+toggle marks, while boundary visibility and viewport membership determine which representatives can be marked.
+Outlines preserve availability borders, selection and direction colors, and add no renderer elements or hit targets.
+Toggling marks neither relayouts the map nor changes architecture edges, counts or pins.
+
+Listed-target counts deduplicate original target ids; declaration counts retain reference weights. Several declarations
+of one target therefore count as several configuration references but one listed target. The numerical directional
+configuration subset uses the same original endpoints and containment scope as its all-recorded total. Configuration
+means explicitly listed, not necessarily compiled or used at runtime. An unmarked node is not evidence of disablement
+or lack of use.
+
+The Project action beside the target selector explicitly opens source, analysed target, recorded metadata and paged
+configuration declarations in the existing Details panel. Whole-project statistics have a separate disclosure. Inspection
+works at any map scope without a project marker or a navigation/camera change. A star click replaces it; Escape,
+Clear selection, empty space and the Details close control close it. Null selection never opens Project details.
+Valid explicit context survives projection refresh; closing or replacing it cancels pages and prevents late responses
+or delayed click handlers from reopening inspection.
+
+Following a configuration declaration reveals its actual target and retains the exact record and provenance in Details,
+without a root wire, new owner or dependency-type filter change. Configuration rows identify their context-only scope;
+their source endpoint opens project context through existing navigation. Root search and scope bookmarks remain useful
+without making configuration wires visible.
 Faint dependency bundles remain visible; hover emphasizes them without requiring selection. Group details identify
 references of descendants and exact rows name their original ownership paths.
 
@@ -174,8 +205,8 @@ connection remains visible; reference facts and counts are retained throughout t
 Native viewport textures and straight summary lines reduce gesture rendering work. Direction arrows and bundle counts
 appear on tracing or inspection. Label collision work settles after input pauses; wheel events and viewport
 updates coalesce by animation frame. Renderer rescaling keeps deep zoom numerically useful. A change of renderer units
-updates positions, background dimensions and pixel-sized styles in one batch before painting, even during a gesture;
-collision work remains deferred. History and pins stay in world coordinates.
+updates positions, background dimensions and pixel-sized styles, including configuration outlines, in one batch before
+painting, even during a gesture; collision work remains deferred. History and pins stay in world coordinates.
 Self-reference loops scale with their star or container so zooming out does not hide them inside its shape.
 Fit map restores root navigation and uses canonical top-level world positions, so it also recovers the overview from an
 empty viewport. Reset layout requires confirmation before discarding the current mode's saved positions.

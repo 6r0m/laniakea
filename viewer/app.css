@@ -8,6 +8,7 @@
   --accent: #276dbe;
   --context: #748aa0;
   --external: #99702b;
+  --configuration: #586875;
   --selection: #bd6719;
   --trace-outgoing: #00677d;
   --trace-incoming: #8a4b00;
@@ -28,6 +29,7 @@
     --accent: #88baff;
     --context: #91a3b7;
     --external: #d8b775;
+    --configuration: #b6bec5;
     --selection: #f6c572;
     --trace-outgoing: #62d9ed;
     --trace-incoming: #ffc16b;
@@ -45,6 +47,10 @@ body { display: flex; flex-direction: column; background: var(--bg); color: var(
 header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 12px 20px;
   border-bottom: 1px solid var(--line); background: var(--panel); }
 h1 { margin: 0; font-size: 19px; font-weight: 650; letter-spacing: -0.04em; }
+.project-controls { display: flex; align-items: center; gap: 6px; max-width: 100%; }
+#inspect-project { color: var(--accent); background: none; border-color: transparent; padding: 0; text-decoration: underline;
+  text-underline-offset: 3px; }
+#inspect-project:hover { border-color: var(--accent); }
 label, .muted { color: var(--muted); }
 select, button, input { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line);
   border-radius: 5px; padding: 5px 9px; min-height: 32px; max-width: 100%; }
@@ -94,6 +100,7 @@ main { flex: 1; min-height: 280px; display: flex; position: relative; }
 .hover-row > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
   overflow: hidden; overflow-wrap: anywhere; }
 .hover-count { font-size: 16px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.configuration-subset { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 11px; padding-top: 0; }
 .trace-outgoing { color: var(--trace-outgoing); }
 .trace-incoming { color: var(--trace-incoming); }
 .trace-within { color: var(--trace-within); }

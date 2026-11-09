@@ -18,14 +18,16 @@ Editor/Development and reports the missing build context. `--target <name>` fixe
 the map describes current build rules, not a historical source snapshot. Extraction prints phase timings in seconds, then opens the viewer
 at `http://127.0.0.1:8737/`. Wheel into a constellation to reveal its children in place; wheel out to fold it.
 Drag empty space to fly between constellations. Hover a star or connection to trace its references without selecting
-it. A nearby hover card separates uses (outgoing) from used by (incoming); the docked readout remains available after hover.
+it. A nearby hover card separates recorded outgoing and incoming references, with a numerical configuration subset;
+the docked readout remains available after hover.
 Hover a connection for both directions; click to inspect their exact references. Rings are collapsed groups, dots are individual stars, and diamonds
 are external. Connections become counted bundles at a distance and reconnect to their exact endpoints as detail appears.
 Internal references remain counted inside collapsed groups. Inspection also links to source; following a reference reveals
 its destination while retaining the surrounding map.
 
-Choose **galaxy** in Layout for an Engine-centered overview with project constellations around it. **Configuration**
-shows or hides project-root declarations; it starts off in galaxy while plugin dependencies remain visible.
+Choose **galaxy** in Layout for an Engine-centered overview with project constellations around it. Click **Project**
+beside the target selector to inspect source and configuration declarations. **Config marks** optionally outlines
+explicitly listed targets; project configuration stays out of the architecture wires in every layout. Plugin dependencies remain visible.
 Select the other layout modes to return to existing arrangements.
 Runs without presentation hints use orbits until extracted again.
 

@@ -67,14 +67,14 @@ test('map titles contain only names while coverage remains available in inspecti
 test('node readout distinguishes no recorded users from references hidden by filters',t=>{
   const {run}=scene(t);
   run(`state.hidden.add('calls');refreshMap();preview(state.cy.getElementById('app.core.db'));`);
-  assert.match(run('tooltip.text'),/Used by.*2/);
+  assert.match(run('tooltip.text'),/Incoming references recorded: 2/);
   assert.match(run('tooltip.text'),/Incoming: 0/);
   assert.doesNotMatch(run('tooltip.text'),/No incoming references recorded/);
   run(`fixture.edges=fixture.edges.filter(e=>e.source==='app.core.db'&&e.target==='app.web.views');
     state.universe=new Universe(fixture);state.universe.place({},'auto');state.universe.reveal('app.core.db');
     refreshMap();preview(state.cy.getElementById('app.core.db'));`);
   assert.match(run('tooltip.text'),/No incoming references recorded/);
-  assert.match(run('tooltip.text'),/Uses.*7/);
+  assert.match(run('tooltip.text'),/Outgoing references recorded: 7/);
 });
 
 test('pair cards disambiguate equal endpoint names with their ownership paths',t=>{
@@ -143,8 +143,8 @@ test('trace classification respects excluded configuration and external referenc
     {source:1,target:3,type:'calls',count:9},{source:0,target:1,type:'config',count:7},
     {source:1,target:2,type:'calls',count:5}]},
     {overview:{anchor:'external',configuration_types:['config']},edge_types:[{id:'config'},{id:'calls'}]});
-  const trace=(boundary,configuration)=>ConnectionTrace.node(map,map.project(new Set(),boundary,null,configuration),'focus').counts;
-  assert.deepEqual(trace(true,false),{outgoing:9,incoming:0,within:5});
-  assert.deepEqual(trace(false,false),{outgoing:0,incoming:0,within:5});
-  assert.deepEqual(trace(false,true),{outgoing:0,incoming:7,within:5});
+  const trace=boundary=>ConnectionTrace.node(map,map.project(new Set(),boundary),'focus').counts;
+  assert.deepEqual(trace(true),{outgoing:9,incoming:0,within:5});
+  assert.deepEqual(trace(false),{outgoing:0,incoming:0,within:5});
+  assert.equal(map.referenceStats.get('focus').incoming,7,'all-recorded declarations stay available outside the architecture trace');
 });

@@ -14,7 +14,10 @@
   <a class="skip" href="#map">Skip to map</a>
   <header>
     <h1>Laniakea</h1>
-    <label>Project <select id="target"></select></label>
+    <div class="project-controls">
+      <button id="inspect-project" type="button" aria-label="Project details" title="Inspect project source and configuration">Project</button>
+      <select id="target" aria-label="Project"></select>
+    </div>
     <button id="up" type="button" title="One level up (Backspace)" disabled>Up</button>
     <nav id="crumbs" aria-label="Scope"></nav>
     <input id="find" name="find" type="search" placeholder="Find a node ( / )" aria-label="Find a node by name" autocomplete="off" spellcheck="false">
@@ -34,7 +37,7 @@
   <div class="scope-bar">
     <button id="toggle-filters" type="button" aria-controls="filters" aria-expanded="false">Browse &amp; filters</button>
     <span id="scope-summary" role="status"></span>
-    <button id="toggle-configuration" type="button" aria-pressed="false" hidden>Configuration</button>
+    <button id="toggle-configuration" type="button" aria-pressed="false" hidden>Config marks</button>
     <span id="layout-hint" role="status" hidden></span>
     <button id="fit" type="button">Fit map</button>
     <button id="reset-layout" type="button" title="Forget saved positions for this map and layout">Reset layout</button>
@@ -47,7 +50,7 @@
     <section id="map" tabindex="-1" aria-label="Dependency map">
       <div id="graph" tabindex="0" role="group" aria-label="Dependency graph" aria-describedby="map-help"></div>
       <p id="map-legend">Rings: groups / Dots: stars / Diamonds: external / Idle colors: types in Browse &amp; filters<br>
-        Trace: <span class="trace-outgoing">-&gt; Outgoing</span> / <span class="trace-incoming">&lt;- Incoming</span> / <span class="trace-within">Within/self</span></p>
+        Trace: <span class="trace-outgoing">-&gt; Outgoing</span> / <span class="trace-incoming">&lt;- Incoming</span> / <span class="trace-within">Within/self</span><span id="configuration-legend" hidden> / Outer outline: project-listed targets</span></p>
       <p id="map-help">Wheel to explore. Drag space to fly; drag stars or constellation names to arrange. Hover to trace. Double-click expands.</p>
       <div id="map-tooltip" role="status" aria-live="polite" aria-atomic="true" tabindex="0" aria-label="Connection trace">Hover a star or connection to trace references in this view.</div>
       <div id="hover-card" role="tooltip" aria-hidden="true" hidden></div>

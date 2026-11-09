@@ -122,10 +122,6 @@ function toggleGroup(id) {
 function flyToNode(id, inspect = true) {
   const map = state.universe;
   if (!map.nodes.has(id)) return;
-  if (id===map.root && map.configurationCount) {
-    setConfiguration(true);
-    for (const type of map.configurationTypes) state.hidden.delete(type);
-  }
   rememberView();
   const entry = scopeFor(id);
   if (entry) history.pushState(null, '', hashFor(state.target.id, entry.file));
@@ -133,7 +129,8 @@ function flyToNode(id, inspect = true) {
   map.reveal(id);
   setSceneScope(id);
   refreshMap(); frameNode(id);
-  if (inspect) selectNode(id);
+  if (inspect && id===map.root) renderDetails({...map.nodes.get(id),projectContext:true});
+  else if (inspect) selectNode(id);
   else renderDetails(null);
 }
 
@@ -142,14 +139,15 @@ function followReference(edge) {
   rememberView();
   const entry = scopeFor(edge.target);
   if (entry) history.pushState(null, '', hashFor(state.target.id, entry.file));
-  state.hidden.delete(edge.type);
-  if (map.isConfiguration(edge)) setConfiguration(true);
-  state.pendingReference=edge;
+  const configuration=map.isConfiguration(edge);
+  if(!configuration)state.hidden.delete(edge.type);
+  state.pendingReference=configuration?{...edge,configurationInspection:true}:edge;
   if (map.nodes.get(edge.source).boundary || map.nodes.get(edge.target).boundary) state.boundary = true;
   map.reveal(edge.source); map.reveal(edge.target);
   setSceneScope(edge.target);
   refreshMap(); frameNode(edge.target);
-  renderDetails(edge.internal_to_owner?map.nodes.get(edge.source):{...edge,refs:[edge]});
+  renderDetails(configuration?{...edge,refs:[edge],configurationInspection:true}:
+    edge.internal_to_owner?map.nodes.get(edge.source):{...edge,refs:[edge]});
   state.pendingReference=null;
 }
 

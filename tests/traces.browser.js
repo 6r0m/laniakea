@@ -81,7 +81,7 @@ async page => {
     check(await page.evaluate(()=>!state.trace&&state.cy.elements('.focus,.hovered').length===0&&
       $('hover-card').hidden&&!$('map-tooltip').textContent.includes('A -> B')),'Escape retained stale emphasis or counts');
     await move(await point('c','c'));
-    check(await page.locator('#hover-card').innerText().then(text=>/Uses \(outgoing\).*1 ref.*Used by \(incoming\).*0 refs/s.test(text)&&
+    check(await page.locator('#hover-card').innerText().then(text=>/Outgoing references recorded.*1 ref.*Incoming references recorded.*0 refs/s.test(text)&&
       text.includes('No incoming references recorded in this snapshot.')),'Zero incoming references must be explicit on the star card');
     await move(await point('c','d',.25));
     check(await page.evaluate(()=>state.trace?.key===JSON.stringify(['pair','c','d'])),'Unrelated crossing pair reused old endpoints');

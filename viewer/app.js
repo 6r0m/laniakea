@@ -52,7 +52,7 @@ async function start() {
   state.targets = await getJson('/data/targets.json');
   if (!state.targets.length) {
     $('graph').append(el('p', 'No extracted project yet. Run: python laniakea.py up <path to .uproject>', { class: 'empty' }));
-    for (const id of ['target', 'layout', 'find']) $(id).disabled = true;
+    for (const id of ['target', 'layout', 'find', 'inspect-project']) $(id).disabled = true;
     document.querySelector('.scope-bar').hidden = true;
     $('coverage').textContent = 'No analysis loaded';
     return;
@@ -64,9 +64,10 @@ async function start() {
   $('layout').value = [...$('layout').options].some(option => option.value === saved) ? saved : 'auto';
   $('layout').onchange = () => { remember('layout', $('layout').value); layout(); };
   for (const name of ['filters', 'details']) {
-    $(`toggle-${name}`).onclick = () => togglePanel(name);
+    $(`toggle-${name}`).onclick = () => name==='details'&&!$('details').hidden ? renderDetails(null) : togglePanel(name);
   }
   $('fit').onclick = fitOverview;
+  $('inspect-project').onclick = () => renderDetails({...state.universe.nodes.get(state.universe.root),projectContext:true});
   $('reset-layout').onclick = resetPositions;
   $('toggle-configuration').onclick = () => { setConfiguration(!configurationVisible()); applyFilters(); };
   $('clear').onclick = () => { unfocus(true); renderDetails(null); };
@@ -345,7 +346,7 @@ function renderFilters() {
 }
 
 function configurationVisible() {
-  return state.configuration?.[$('layout').value] ?? $('layout').value !== 'galaxy';
+  return state.configuration?.[$('layout').value] ?? false;
 }
 
 function setConfiguration(visible) {
@@ -356,9 +357,10 @@ function setConfiguration(visible) {
 function renderConfiguration() {
   const count=state.universe.configurationCount,button=$('toggle-configuration');
   button.hidden=!count;
-  button.textContent=`Configuration ${configurationVisible()?'on':'off'} (${count || 0})`;
+  button.textContent=`Config marks ${configurationVisible()?'on':'off'} (${state.universe.configurationTargets.size} targets)`;
   button.setAttribute('aria-pressed',String(configurationVisible()));
-  button.title=`${configurationVisible()?'Hide':'Show'} project-root configuration declarations; plugin dependencies keep their type filters`;
+  button.title=`${configurationVisible()?'Hide':'Show'} outlines for explicitly listed targets; configuration references stay in Project details`;
+  $('configuration-legend').hidden=!count||!configurationVisible();
   $('layout-hint').hidden=$('layout').value!=='galaxy'||Boolean(state.universe.overview);
   $('layout-hint').textContent='No center hint in this run; using orbits. Extract again to get profile presentation hints.';
 }
@@ -443,13 +445,21 @@ function inspectPair(source,target) {
 }
 
 function renderDetails(item) {
+  clearTimeout(state.inspectTimer);
   const isNode = item && item.level !== undefined;
   const requested = item;
+  const projectContext=requested?.projectContext && requested.id===state.universe.root;
+  const configurationInspection=requested?.configurationInspection && state.universe.isConfiguration(requested) &&
+    state.universe.configurationReferences.some(ref=>
+      (requested.referenceGroup ? ref.group===requested.referenceGroup : ref.id===requested.id) &&
+      ref.source===requested.source && ref.target===requested.target && ref.type===requested.type);
   const pair=requested?.pairInspection&&ConnectionTrace.pair(state.shard,requested.source,requested.target);
   const signature=pair&&ConnectionTrace.signature(pair);
   item = requested?.pairInspection ? pair&&signature===requested.signature ? {...pair,signature,pairInspection:true} : null :
     requested && (isNode ? state.shard.nodes : requested.referenceGroup ? [] : state.shard.edges)
     .find(current => current.id === requested.id) || null;
+  if(projectContext)item={...state.universe.nodes.get(state.universe.root),projectContext:true};
+  else if(configurationInspection)item=requested;
   let connection = item;
   if (!item && requested && !isNode && !requested.pairInspection) {
     for (const projected of state.shard.edges) {
@@ -463,9 +473,10 @@ function renderDetails(item) {
       }
     }
   }
-  const rendered = item && (item.pairInspection ? state.cy.edges().filter(edge=>item.roles.has(edge.data('referenceId'))) :
+  const contextual=projectContext||configurationInspection;
+  const rendered = item && (contextual ? state.cy.collection() : item.pairInspection ? state.cy.edges().filter(edge=>item.roles.has(edge.data('referenceId'))) :
     state.cy.getElementById(isNode ? item.id : state.universe.renderPrefix + connection.id));
-  if (item && (!rendered.length || !rendered.visible())) item = null;
+  if (item && !contextual && (!rendered.length || !rendered.visible())) item = null;
   state.selection = item;
   if (state.cy) {
     state.cy.elements().unselect();
@@ -475,7 +486,7 @@ function renderDetails(item) {
   }
   const panel = $('details');
   const key = state.universe.paged && item ? JSON.stringify([item.pairInspection?item.key:item.id,item.signature||null,item.referenceGroup||null,
-    [...state.hidden].sort(),state.boundary,configurationVisible(),item.refs?.map(r=>r.group)]) : null;
+    Boolean(projectContext),Boolean(configurationInspection),[...state.hidden].sort(),state.boundary,item.refs?.map(r=>r.group)]) : null;
   if (key && key===state.detailsKey) {
     const control = panel.querySelector('[data-action="toggle-group"]');
     if (control) updateGroupControl(control, item.id);
@@ -494,6 +505,7 @@ function renderDetails(item) {
     return;
   }
   togglePanel('details', true);
+  if(projectContext) { renderProjectDetails(panel,item);return; }
   if(item.pairInspection) { renderPairDetails(panel,item);return; }
   const list = el('dl');
   if (item.level !== undefined) {
@@ -526,6 +538,7 @@ function renderDetails(item) {
     return;
   }
   panel.append(el('h2', typeLabel(item.type, item.refs)));
+  if(configurationInspection)panel.append(el('p','Project configuration declaration; shown as context, not an architecture wire.',{class:'muted'}));
   const endpoints = el('p', null, {class:'endpoints'});
   for (const id of [item.source,item.target]) {
     const button = el('button', label(id), {type:'button'});
@@ -538,6 +551,36 @@ function renderDetails(item) {
   if (state.universe.paged && !item.referenceGroup) {
     appendReferencePage(panel,{groups:item.refs.map(r=>r.group)},referenceTotal(item.refs));
   } else appendReferences(panel, item.refs || [item]);
+}
+
+function renderProjectDetails(panel,node) {
+  const map=state.universe,fields=el('dl');
+  panel.append(el('h2',node.label),el('p','Project context',{class:'muted'}));
+  if(node.source){const link=sourceLink(node.source);if(link)panel.append(link);}
+  if(state.manifest.target){const {name,platform,configuration}=state.manifest.target;attributes(fields,{name,platform,configuration});}
+  const statistics=el('details',null,{class:'node-metadata'});
+  statistics.append(el('summary','Project/subtree statistics'),
+    el('p','All recorded references, including descendants.',{class:'muted'}));
+  panel.append(fields,statistics);
+  const totals=map.referenceStats.get(node.id);
+  for(const [heading,direction] of [['Outgoing','outgoing'],['Incoming','incoming'],['Within / self','within']]){
+    statistics.append(el('p',`${heading} references recorded: ${totals[direction]}`));
+    appendConfigurationSubset(statistics,node.id,direction);
+  }
+  if(node.attrs && Object.keys(node.attrs).length){
+    const metadata=el('details',null,{class:'node-metadata'}),list=el('dl');
+    attributes(list,node.attrs);metadata.append(el('summary','Metadata'),list);panel.append(metadata);
+  }
+  panel.append(el('h3',`Project configuration (${map.configurationCount} references / ${map.configurationTargets.size} listed targets)`),
+    el('p',configurationMeaning(),{class:'muted'}));
+  if(!map.configurationCount)panel.append(el('p','No project configuration declarations classified in this snapshot.',{class:'muted'}));
+  else if(map.paged)appendReferencePage(panel,{groups:map.configurationReferences.map(ref=>ref.group)},map.configurationCount);
+  else appendReferences(panel,map.configurationReferences);
+}
+
+function appendConfigurationSubset(panel,id,direction) {
+  const count=state.universe.configurationStats.get(id)[direction];
+  if(count)panel.append(el('p',`Of which: project configuration: ${count}. ${configurationMeaning()}`,{class:'muted'}));
 }
 
 function renderPairDetails(panel,trace) {
@@ -580,8 +623,8 @@ function referenceRow(edge) {
   row.append(button,el('small',`${typeLabel(edge.type)} / ${edge.status}`+
     ` / ${origin?origin.name+' '+origin.version:edge.origin}`+
     (edge.internal_to_owner?' / within owner':'')+
-    (state.hidden.has(edge.type)||!configurationVisible()&&state.universe.isConfiguration(edge)||
-      !state.boundary&&(source.boundary||target.boundary)?' / hidden by filters':'')));
+    (state.universe.isConfiguration(edge)?' / project configuration (context only)':
+      state.hidden.has(edge.type)||!state.boundary&&(source.boundary||target.boundary)?' / hidden by filters':'')));
   const ownerPath=id=>state.universe.paths.get(id).map(label).join(' / ');
   row.append(el('small',`${ownerPath(edge.source)} -> ${ownerPath(edge.target)}`));
   if(edge.attrs){const metadata=el('dl');attributes(metadata,edge.attrs);row.append(metadata);}
@@ -666,7 +709,8 @@ function renderConnections(panel, node) {
   if(map.paged){
     const stats=map.referenceStats.get(node.id);
     for(const [heading,direction] of [['Outgoing','outgoing'],['Incoming','incoming'],['Within','within']]){
-      const count=stats[direction];panel.append(el('h3',`${heading} (${count})`));
+      const count=stats[direction];panel.append(el('h3',`${heading} references recorded (${count})`));
+      appendConfigurationSubset(panel,node.id,direction);
       if(count)appendReferencePage(panel,{node:node.id,direction},count);
       else panel.append(el('p',node.boundary?'No further references were analysed.':'No recorded references.',{class:'muted'}));
     }
@@ -679,7 +723,8 @@ function renderConnections(panel, node) {
     ['Within', e => map.contains(node.id,e.source) && map.contains(node.id,e.target)],
   ]) {
     const edges = references.filter(match);
-    panel.append(el('h3', `${heading} (${edges.length})`));
+    panel.append(el('h3', `${heading} references recorded (${referenceTotal(edges)})`));
+    appendConfigurationSubset(panel,node.id,heading.toLowerCase());
     if (edges.length) appendReferences(panel, edges);
     else panel.append(el('p', node.boundary ? 'No further references were analysed.' : 'No recorded references.', {class:'muted'}));
   }

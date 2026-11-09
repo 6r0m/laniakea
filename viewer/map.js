@@ -51,6 +51,8 @@ function style() {
       'border-color': css('--external') } },
     { selector: 'node.not-in-target', style: { 'background-opacity': 0.15, 'border-style': 'dashed' } },
     { selector: 'node.not-analysed', style: { 'border-style': 'dotted' } },
+    { selector: 'node.configured', style: { 'outline-color':css('--configuration'),
+      'outline-width':2,'outline-offset':4,'outline-opacity':0.85 } },
     { selector: 'node.focus, node.match', style: {'z-index':10} },
     { selector: 'node.hovered, node:selected', style: {'z-index':20} },
     { selector: 'node.expanded', style: { shape: 'roundrectangle', 'background-opacity': 0.025,
@@ -145,7 +147,8 @@ function viewportCamera(padding = 220) {
   if(!cy.width() || !cy.height()) return null;
   const force=[];
   const selected=state.pendingReference || (state.selection?.referenceGroup ? state.selection : null);
-  if(selected)for(const id of selected.source?[selected.source,selected.target]:[selected.id]) if(state.universe.nodes.has(id))force.push(id);
+  if(selected)for(const id of selected.configurationInspection?[selected.target]:selected.source?[selected.source,selected.target]:[selected.id])
+    if(state.universe.nodes.has(id))force.push(id);
   return {x1:(-pan.x-padding)/zoom,y1:(-pan.y-padding)/zoom,
     x2:(cy.width()-pan.x+padding)/zoom,y2:(cy.height()-pan.y+padding)/zoom,zoom,force};
 }
@@ -169,12 +172,13 @@ function refreshMap() {
   const universe = state.universe, cy = state.cy;
   clearTrace();
   state.viewportCut=viewportCamera();
-  const view = universe.project(state.hidden, state.boundary,state.viewportCut,configurationVisible());
+  const view = universe.project(state.hidden, state.boundary,state.viewportCut);
   const members = new Set(view.nodes.filter(n => !n.boundary).map(n => n.id));
   const drill = Object.fromEntries(state.index.nodes.map(n => [n.id, n.file]));
   state.shard = { ...state.scopeShard, ...view, members: [...members], drill };
   const nodes = view.nodes.map(n => {
     const item = mapNode(n, members, drill);
+    if(configurationVisible()&&view.configurationMarks.has(n.id))item.classes+=' configured';
     const expanded = view.expanded.has(n.id) && n.id !== universe.root && universe.isGroup(n.id);
     const {position,...size}=nodeGeometry(n.id,expanded);
     item.pannable=expanded;
@@ -291,9 +295,13 @@ function traceTypes(refs) {
 function traceSummary(trace) {
   if(trace.kind==='node') {
     const node=state.universe.nodes.get(trace.source),totals=state.universe.referenceStats.get(node.id);
-    return {title:node.label,description:nodeDescription(node),path:traceName(node.id),scope:'All recorded references in this snapshot',
-      rows:[['Uses (outgoing)',totals.outgoing,'outgoing'],['Used by (incoming)',totals.incoming,'incoming'],['Within / self',totals.within,'within']],
+    return {title:node.label,description:nodeDescription(node),path:traceName(node.id),
+      scope:node.id===state.universe.root?'Project/subtree statistics: all recorded references':'All recorded references in this snapshot',
+      rows:[['Outgoing references recorded',totals.outgoing,'outgoing'],['Incoming references recorded',totals.incoming,'incoming'],
+        ['Within / self references recorded',totals.within,'within']].map(row=>[...row,state.universe.configurationStats.get(node.id)[row[2]]]),
       notes:[!totals.incoming&&'No incoming references recorded in this snapshot.',analysisHint(node),
+        configurationMarkLabel(node.id),
+        Object.values(state.universe.configurationStats.get(node.id)).some(Boolean)&&configurationMeaning(),
         node.boundary&&'External boundary; further dependencies were not analysed.',
         `In this view: ${trace.counts.outgoing} outgoing / ${trace.counts.incoming} incoming / ${trace.counts.within} within.`,
         'Click for exact references.'].filter(Boolean)};
@@ -306,12 +314,26 @@ function traceSummary(trace) {
     notes:[traceTypes(trace.refs),'Click for exact references.']};
 }
 
+function configurationMeaning() {
+  return 'Configuration means explicitly listed, not necessarily compiled or used at runtime.';
+}
+
+function configurationMarkLabel(id) {
+  const targets=state.shard.configurationMarks?.get(id);
+  if(!targets)return '';
+  return targets.size===1&&targets.has(id)?'Listed by project configuration':`${targets.size} listed targets inside`;
+}
+
 function showHoverCard(trace,point) {
   if(!state.cy.container())return;
   const card=$('hover-card'),summary=traceSummary(trace),rows=el('div',null,{class:'hover-rows'});
-  for(const [name,count,role] of summary.rows) {
+  for(const [name,count,role,configuration] of summary.rows) {
     const row=el('div',null,{class:'hover-row trace-'+role});
     row.append(el('span',name),el('strong',`${count} ${count===1?'ref':'refs'}`,{class:'hover-count'}));rows.append(row);
+    if(configuration){
+      const subset=el('div',null,{class:'hover-row configuration-subset'});
+      subset.append(el('span','Of which: project configuration'),el('span',configuration));rows.append(subset);
+    }
   }
   card.replaceChildren(el('strong',summary.title,{class:'hover-name'}),el('small',summary.description,{class:'hover-context'}));
   if(summary.path)card.append(el('small',summary.path,{class:'hover-context hover-path'}));
@@ -330,13 +352,12 @@ function showHoverCard(trace,point) {
 function showTraceReadout(trace,point) {
   const counts=trace.counts;
   if(trace.kind==='node') {
-    const node=state.universe.nodes.get(trace.source),hint=analysisHint(node);
-    const totals=state.universe.referenceStats.get(node.id);
+    const summary=traceSummary(trace);
     showTooltip(`In this view / Focus: ${traceName(trace.source)}`,
       `Outgoing: ${counts.outgoing} / Incoming: ${counts.incoming} / Within: ${counts.within}`+
-      ` / All recorded: Uses ${totals.outgoing} / Used by ${totals.incoming} / Within ${totals.within}`+
-      (!totals.incoming?' / No incoming references recorded in this snapshot.':'')+
-      (node.boundary?' / Further external references not analysed':'')+(hint?' / '+hint:''));
+      ' / All recorded: '+summary.rows.map(([name,count,,configuration])=>`${name}: ${count}`+
+        (configuration?` (Of which: project configuration: ${configuration})`:'')).join(' / ')+
+      ' / '+summary.notes.join(' / '));
   }
   else if(trace.source===trace.target)showTooltip(`In this view / Self: ${traceName(trace.source)}`,
     `Within/self: ${counts.within} refs (${traceTypes(trace.groups.within)})`);
@@ -395,7 +416,8 @@ function readableLabels(geometryOnly = false) {
   cy.batch(() => {
     if (changed) {
       cy.nodes().style({ 'font-size': 13 / zoom, 'text-max-width': 150 / zoom,
-        'text-background-padding': 3 / zoom, 'border-width': border });
+        'text-background-padding': 3 / zoom, 'border-width': border,
+        'outline-width':n=>n.hasClass('configured')?2/zoom:0,'outline-offset':4/zoom });
       const diameter = n => n.hasClass('group') ?
         Math.max(27, Math.min(100, 2 * state.universe.radii.get(n.id()) * worldZoom() * 0.3)) : n.hasClass('member') ? 15 : 11;
       leaves.style({ width: n => diameter(n) / zoom, height: n => diameter(n) / zoom,
@@ -604,7 +626,9 @@ function updateScopeSummary() {
   const exact = view.edges.reduce((sum, e) => sum + referenceTotal(e.refs), 0);
   const internal = [...view.internal.values()].reduce((sum, refs) => sum + referenceTotal(refs), 0);
   $('scope-summary').textContent = `${view.nodes.length} stars & constellations / ${exact} references / ` +
-    `${internal} within owners/groups${view.outside ? ` / ${view.outside} beyond view` : ''}${view.hidden ? ` / ${view.hidden} filtered` : ''}`;
+    `${internal} within owners/groups${view.outside ? ` / ${view.outside} beyond view` : ''}`+
+    (state.universe.configurationCount?` / ${state.universe.configurationCount} project configuration`:'')+
+    (view.hidden>state.universe.configurationCount?` / ${view.hidden-state.universe.configurationCount} filtered`:'');
   renderConfiguration();
   $('map-empty').hidden = view.nodes.length > 0;
   $('map-empty').textContent = 'No stars in this area. Use Fit map to return to the overview.';
@@ -671,7 +695,7 @@ function fitMap() {
   if (!state.cy) return;
   const map=state.universe,top=[...map.childIds(map.root),...map.childIds(null).filter(id=>id!==map.root)];
   if(!top.length || map.directReferences.get(map.root).some(e=>!state.hidden.has(e.type)&&
-    (configurationVisible()||!map.isConfiguration(e))))top.push(map.root);
+    !map.isConfiguration(e)))top.push(map.root);
   const points=top.filter(id=>state.boundary||!map.nodes.get(id).boundary).map(id=>map.positions.get(id));
   if(!points.length)points.push(map.positions.get(map.root));
   frame({x1:Math.min(...points.map(p=>p.x)),y1:Math.min(...points.map(p=>p.y)),

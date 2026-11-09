@@ -42,14 +42,57 @@ test('configuration filtering hides only original root declarations and accounts
   ];
   const manifest={overview:{anchor:'stdlib',configuration_types:['imports']},edge_types:[{id:'imports'}]};
   const map=new Universe(graph,manifest);
-  const view=map.project(new Set(),true,null,false);
+  const view=map.project(new Set(),true);
   assert.equal(view.hidden,1);
   assert.equal(view.edges.flatMap(e=>e.refs).length,1);
   assert.equal(view.edges[0].refs[0].id,'dependency');
   assert.ok(!view.nodes.some(n=>n.id==='app'));
-  assert.equal(map.project().hidden,0);
-  assert.equal(map.project(new Set(['imports']),true,null,false).hidden,2);
+  assert.equal(map.project().hidden,1,'architecture projection excludes configuration by default');
+  assert.equal(map.project(new Set(['imports']),true).hidden,2);
   assert.equal(map.configurationCount,1);
+});
+
+test('configuration subsets retain weighted directions independently of distinct listed targets and filters',()=>{
+  const nodes=fixture().nodes,at=id=>nodes.findIndex(n=>n.id===id);
+  for(const declarations of [1,3]) {
+    const map=new Universe({schema:'laniakea.map/1',nodes,references:[
+      {source:at('app'),target:at('app.core.db'),type:'imports',count:declarations},
+      {source:at('app.web.views'),target:at('app.core.db'),type:'imports',count:8-declarations},
+      {source:at('app'),target:at('stdlib.sqlite3'),type:'imports',count:1},
+    ]},{overview:{anchor:'stdlib',configuration_types:['imports']},edge_types:[{id:'imports'}]});
+    assert.deepEqual(map.referenceStats.get('app.core.db'),{outgoing:0,incoming:8,within:0});
+    assert.deepEqual(map.configurationStats?.get('app.core.db'),{outgoing:0,incoming:declarations,within:0});
+    assert.deepEqual(map.configurationStats.get('app'),{outgoing:1,incoming:0,within:declarations});
+    assert.deepEqual(map.configurationStats.get('stdlib'),{outgoing:0,incoming:1,within:0});
+    assert.equal(map.referenceStats.get('stdlib').incoming,1,'configuration-only totals retain their full numerical subset');
+    assert.equal(map.configurationTargets.size,2);
+    const before=JSON.stringify([...map.configurationStats]);
+    for(const boundary of [true,false])for(const hidden of [new Set(),new Set(['imports'])])map.project(hidden,boundary);
+    assert.equal(JSON.stringify([...map.configurationStats]),before);
+    assert.equal(map.project().edges[0].count,8-declarations,'non-root declarations remain dependencies');
+  }
+});
+
+test('configuration marks follow effective visible representatives without marking their unlisted siblings',()=>{
+  const graph=fixture();graph.edges=[
+    {id:'listed',source:'app',target:'app.core.db',type:'imports',status:'declared',origin:'synthetic'},
+    {id:'external',source:'app',target:'stdlib.sqlite3',type:'imports',status:'declared',origin:'synthetic'},
+  ];
+  const map=new Universe(graph,{overview:{anchor:'stdlib',configuration_types:['imports']},edge_types:[{id:'imports'}]});
+  const view=map.project();
+  assert.equal(view.configurationMarks?.get('app.core')?.size,1);
+  assert.equal(view.configurationMarks.get('stdlib').has('stdlib.sqlite3'),true);
+  map.place({},'auto');map.reveal('app.core.db');
+  const open=map.project();assert.equal(open.configurationMarks.get('app.core.db').size,1);
+  assert.equal(open.configurationMarks.has('app.core.models'),false);
+  assert.equal(open.configurationMarks.has('app.core'),false);
+  const folded=map.project(new Set(),true,{x1:-100000,y1:-100000,x2:100000,y2:100000,zoom:.001});
+  assert.equal(folded.expanded.has('app.core'),false);
+  assert.equal(map.expanded.has('app.core'),true);
+  assert.equal(folded.configurationMarks.get('app.core').size,1,'marks use effective expansion, not distant requested detail');
+  const far=map.project(new Set(),true,{x1:100000,y1:100000,x2:100010,y2:100010,zoom:100});
+  assert.equal(far.configurationMarks.size,0,'annotations cannot pull distant targets into the viewport');
+  assert.equal(map.project(new Set(),false).configurationMarks.has('stdlib'),false);
 });
 
 test('overview hints refuse foreign anchors and undeclared configuration types before use',()=>{

@@ -44,6 +44,8 @@ nothing installed, configured or committed for it.
   inspection; `map.js` owns canvas rendering and hover; `scene.js` owns camera gestures and
   navigation; `positions.js` owns loading and ordered saves of released pins; `references.js` owns bounded reference-page
   retention and cancellation. See [viewport and memory lifetime](graph-model.md#viewport-and-memory-lifetime).
+  Project configuration uses existing inspection and projected-node annotations, as defined by
+  [configuration context](graph-model.md#centered-overview-and-configuration).
 - **Layout store** (`laniakea/layouts.py`): validated user positions under each target's `layouts/` directory in the
   ignored workspace, separate from immutable runs. Updates merge moved pins; resetting affects one scope and mode.
 - **Sample, fixtures, tests** (`sample/`, `fixtures/`, `tests/`): a synthetic project with no engine code, its recorded

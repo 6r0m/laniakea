@@ -53,6 +53,19 @@ async (page) => {
   page.on('request',observe);page.on('pageerror',error);
   try {
     const initialMode=await page.locator('#layout').inputValue();
+    for(const mode of ['auto','galaxy','breadthfirst','cose','grid']) {
+      await page.selectOption('#layout',mode);await page.waitForFunction(()=>!state.gestureActive);
+      check(await page.evaluate(()=>!configurationVisible()&&!state.cy.getElementById(state.universe.root).length),
+        `Configuration default restored root wires in ${mode}`);
+      const before=await page.evaluate(()=>({edges:state.cy.edges().map(e=>e.id()).sort().join(),
+        positions:JSON.stringify([...state.universe.positions])}));
+      await page.locator('#toggle-configuration').click();
+      check(await page.evaluate(before=>state.cy.nodes('.configured').length>0&&
+        !state.cy.getElementById(state.universe.root).length&&state.cy.edges().map(e=>e.id()).sort().join()===before.edges&&
+        JSON.stringify([...state.universe.positions])===before.positions,before),`Marks changed architecture or positions in ${mode}`);
+      await page.locator('#toggle-configuration').click();
+    }
+    await page.selectOption('#layout',initialMode);
     await page.evaluate(()=>flyToNode('plugin:SampleDisabled',false));
     await wheel('plugin:SampleDisabled',true,-120);
     await page.waitForFunction(()=>!state.gestureActive&&!state.viewportFrame);
@@ -68,6 +81,7 @@ async (page) => {
     check(await page.evaluate(()=>!$('map-tooltip').textContent.includes('Outside analysed target')),
       'Returning to the analysed root retained an unrelated coverage hint');
     await page.selectOption('#layout','galaxy');await frames();
+    await page.waitForFunction(()=>!state.gestureActive&&state.visibleLabels);
     check(await page.evaluate(()=>!configurationVisible()&&state.universe.positions.get('engine').x===0&&
       state.universe.positions.get('engine').y===0&&!state.cy.getElementById(state.universe.root).length),
       'Galaxy must center the declared boundary and hide only root configuration by default');
@@ -76,15 +90,46 @@ async (page) => {
     check(await page.evaluate(()=>state.visibleLabels.has('folder:Sample')&&state.visibleLabels.has('module:SampleProject')),
       'Important constellation/source names disappeared from the overview');
     const configuration=page.locator('#toggle-configuration');
+    const architecture=await page.evaluate(()=>({edges:state.cy.edges().map(e=>e.id()).sort().join(),
+      pins:JSON.stringify(state.positionCache.layouts),positions:JSON.stringify([...state.universe.positions])}));
     await configuration.focus();await page.keyboard.press('Enter');await frames();
     check(await configuration.getAttribute('aria-pressed')==='true'&&await page.evaluate(()=>
-      state.cy.getElementById(state.universe.root).length===1),'Keyboard configuration toggle lost the project endpoint');
+      !state.cy.getElementById(state.universe.root).length&&state.cy.nodes('.configured').length>0),
+      'Keyboard configuration marks must outline targets without restoring the root endpoint');
+    check(await page.evaluate(before=>state.cy.edges().map(e=>e.id()).sort().join()===before.edges&&
+      JSON.stringify(state.positionCache.layouts)===before.pins&&JSON.stringify([...state.universe.positions])===before.positions,
+      architecture),'Annotations changed architecture edges or positions');
     await page.keyboard.press('Enter');await frames();
     check(await accounted(),'Configuration subset filtering lost or double-counted references');
+    const projectDetails=page.getByRole('button',{name:'Project details',exact:true});
+    const contextBefore=await page.evaluate(()=>({file:state.file,zoom:worldZoom(),
+      x:(state.cy.width()/2-state.cy.pan('x'))/worldZoom(),y:(state.cy.height()/2-state.cy.pan('y'))/worldZoom()}));
+    await projectDetails.click();await frames();
+    check(await page.evaluate(before=>state.selection?.projectContext&&!$('details').hidden&&state.file===before.file&&
+      Math.abs(worldZoom()-before.zoom)<1e-6&&Math.abs((state.cy.width()/2-state.cy.pan('x'))/worldZoom()-before.x)<1e-6&&
+      Math.abs((state.cy.height()/2-state.cy.pan('y'))/worldZoom()-before.y)<1e-6,contextBefore),
+      'Explicit Project inspection changed map scope/camera or required a root marker');
+    await page.waitForFunction(()=>!state.referencePages?.pending.size);
+    check(await page.locator('#details').innerText().then(text=>/Project configuration.*listed targets/s.test(text)),
+      'Project context lost exact declarations and distinct target counts');
+    await page.keyboard.press('Escape');await page.evaluate(()=>refreshMap());
+    check(await page.locator('#details').isHidden(),'Escape must close context without reopening Project details');
+    await projectDetails.click();await page.getByRole('button',{name:'Clear selection',exact:true}).click();
+    check(await page.locator('#details').isHidden(),'Clear must close Project details');
     await page.evaluate(()=>flyToNode('plugin:SampleCore'));
+    await page.waitForFunction(()=>!state.gestureActive);
+    const coreHover=await point('plugin:SampleCore');await page.mouse.move(coreHover.x,coreHover.y);await frames();
+    check(await page.locator('#hover-card').innerText().then(text=>/Incoming references recorded.*Of which: project configuration.*1/s.test(text)&&
+      /explicitly listed, not necessarily compiled/.test(text)&&!text.includes('Used by')),
+      'Hover must disclose the numerical configuration subset without implying usage');
+    check(await page.locator('#map-tooltip').innerText().then(text=>/Incoming references recorded.*Of which: project configuration: 1/.test(text)),
+      'Accessible readout lost the numerical subset');
     await page.getByRole('button',{name:'SampleProject (project) -> SampleCore (plugin)',exact:true}).click();
-    check(await page.evaluate(()=>configurationVisible()&&state.selection?.source===state.universe.root&&
-      state.cy.getElementById(state.universe.root).length===1),'Following a hidden root declaration did not enable its configuration subset');
+    check(await page.evaluate(()=>!configurationVisible()&&state.selection?.configurationInspection&&
+      state.selection.source===state.universe.root&&!state.cy.getElementById(state.universe.root).length),
+      'Following configuration must preserve the exact record without restoring root wires');
+    await projectDetails.focus();await page.keyboard.press('Enter');await frames();
+    check(await page.evaluate(()=>state.selection?.projectContext),'Nested-scope Project action lost keyboard inspection');
     await page.evaluate(()=>{renderDetails(null);state.universe.expanded=new Set([state.universe.root]);setSceneScope(state.universe.root);});
     await page.selectOption('#layout',initialMode);await frames();
     await page.evaluate(()=>{
@@ -117,7 +162,7 @@ async (page) => {
       await page.evaluate(()=>{state.target=bannerProbe;delete globalThis.bannerProbe;renderBanner();});await frames();
     }
     await page.evaluate(()=>{
-      const node=state.universe.nodes.get(state.universe.root);
+      const node=state.universe.nodes.get('module:SampleProject');
       globalThis.metadataProbe={id:node.id,attrs:node.attrs};
       node.attrs={...node.attrs,synthetic_notes:Array.from({length:120},(_,i)=>`Sample metadata item ${i}`)};
       flyToNode(node.id);
@@ -341,11 +386,15 @@ async (page) => {
     try {
       const p=await fresh.newPage();await p.goto(`${base}/`);
       await p.waitForFunction(()=>typeof state!=='undefined'&&state.cy&&state.positionCache);
+      await p.selectOption('#layout',initialMode);
       const restored=await p.evaluate(()=>({engine:{...state.universe.positions.get('engine')},
         deep:{...state.universe.positions.get('module:SampleCore')},error:$('error').hidden}));
       check(restored.error,'Fresh bare-address startup failed');
       check(restored.engine.x===stored.engine.x&&restored.engine.y===stored.engine.y,'A fresh browser did not restore the outer pin');
       check(restored.deep.x===deepStored.x&&restored.deep.y===deepStored.y,'A fresh browser did not restore the deep pin');
+      await p.route('**/data/targets.json',route=>route.fulfill({json:[]}));
+      await p.reload();await p.waitForFunction(()=>$('inspect-project').disabled);
+      check(await p.locator('#inspect-project').isDisabled(),'Empty startup left Project inspection active without a project');
     } finally {await fresh.close();}
     const savedBeforeReset=await page.evaluate(()=>({mode:$('layout').value,modeLabel:$('layout').selectedOptions[0].textContent,project:state.target.project,
       pins:JSON.stringify(state.positionCache.layouts),positions:JSON.stringify([...state.universe.positions]),

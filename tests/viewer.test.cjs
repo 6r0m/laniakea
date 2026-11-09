@@ -4,6 +4,79 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const {viewer,inspectionViewer,treeElements}=require('./viewer-support.cjs');
 
+test('project inspection is explicit and survives refresh without reopening after clear',t=>{
+  const {run}=inspectionViewer();treeElements(run);t.after(()=>run('state.cy.destroy()'));
+  run(`state.universe.paged=true;globalThis.queries=[];
+    globalThis.appendReferencePage=(panel,query,total)=>queries.push({query,total});
+    const root=state.universe.nodes.get(state.universe.root);
+    renderDetails({...root,projectContext:true});`);
+  assert.equal(run('state.selection?.projectContext'),true,'project context must not require a rendered root marker');
+  assert.equal(run("$('details').hidden"),false);
+  run('refreshMap()');assert.equal(run('state.selection?.projectContext'),true);
+  run("selectNode('app.core')");assert.equal(run('state.selection.id'),'app.core');
+  run("onKey({key:'Escape',target:{closest:()=>null}});refreshMap()");
+  assert.equal(run('state.selection'),null);assert.equal(run("$('details').hidden"),true);
+});
+
+test('configuration toggles only native marks and never wires, positions or all-recorded totals',t=>{
+  const {run}=inspectionViewer(true);treeElements(run);t.after(()=>run('state.cy.destroy()'));
+  run(`fixture.edges=[{id:'configured',source:'app',target:'app.core.db',type:'imports',status:'declared',origin:'synthetic'},
+      {id:'usage',source:'app.web.views',target:'app.core.db',type:'imports',status:'declared',origin:'synthetic'}];
+    state.universe=new Universe(fixture,{overview:{anchor:'stdlib',configuration_types:['imports']},edge_types:[{id:'imports'}]});
+    state.universe.place({},'auto');state.configuration={};$('layout').value='auto';refreshMap();
+    globalThis.before=JSON.stringify([...state.universe.positions]);
+    globalThis.edges=state.cy.edges().map(e=>e.id()).join();`);
+  assert.equal(run('configurationVisible()'),false,'all layout modes start with marks off');
+  run('setConfiguration(true);refreshMap()');
+  assert.equal(run('state.cy.getElementById("app").length'),0);
+  assert.equal(run('state.cy.getElementById("app.core").hasClass("configured")'),true);
+  assert.equal(run('state.cy.edges().map(e=>e.id()).join()'),run('edges'));
+  assert.equal(run('JSON.stringify([...state.universe.positions])'),run('before'));
+  const summary=run("traceSummary(ConnectionTrace.node(state.universe,state.shard,'app.core'))");
+  assert.match(summary.rows.find(row=>row[2]==='incoming')[0],/Incoming references recorded/);
+  assert.equal(summary.rows.find(row=>row[2]==='incoming')[1],2);
+  assert.equal(summary.rows.find(row=>row[2]==='incoming')[3],1);
+  assert.match(summary.notes.join(' '),/explicitly listed.*not necessarily compiled/i);
+});
+
+test('following configuration retains exact provenance without enabling wires or changing dependency filters',t=>{
+  const {run}=inspectionViewer();treeElements(run);t.after(()=>run('state.cy.destroy()'));
+  run(`fixture.edges=[{id:'configured',source:'app',target:'app.core.db',type:'imports',status:'declared',origin:'synthetic',attrs:{line:42}}];
+    state.universe=new Universe(fixture,{overview:{anchor:'stdlib',configuration_types:['imports']},edge_types:[{id:'imports'}]});
+    state.universe.place({},'auto');state.indexLookup=new Map(fixture.nodes.map(n=>[n.id,{id:n.id,file:n.id+'.json'}]));
+    state.hidden.add('imports');globalThis.frameNode=()=>{};globalThis.appendReferences=()=>{};
+    followReference(state.universe.graph.edges[0]);`);
+  assert.equal(run('state.hidden.has("imports")'),true);
+  assert.equal(run('state.cy.edges().length'),0);
+  assert.equal(run('state.selection?.configurationInspection'),true);
+  assert.equal(run('state.selection?.attrs.line'),42);
+  run('refreshMap()');assert.equal(run('state.selection?.configurationInspection'),true);
+  run('renderDetails(null);refreshMap()');assert.equal(run('state.selection'),null);
+});
+
+test('a late project declaration page cannot reopen closed inspection or replace a new star',async t=>{
+  const {run}=inspectionViewer();treeElements(run);t.after(()=>run('state.cy.destroy()'));
+  run(`const nodes=fixture.nodes,at=id=>nodes.findIndex(n=>n.id===id);
+    state.universe=new Universe({schema:'laniakea.map/1',nodes,references:[
+      {source:at('app'),target:at('app.core.db'),type:'imports',count:1}]},
+      {overview:{anchor:'stdlib',configuration_types:['imports']},edge_types:[{id:'imports'}]});
+    state.universe.place({},'auto');refreshMap();
+    globalThis.requests=[];globalThis.cancelled=0;
+    state.referencePages={cancel(){cancelled++;},load:()=>new Promise(resolve=>requests.push(resolve))};
+    renderDetails({...state.universe.nodes.get('app'),projectContext:true});
+    globalThis.oldEpoch=state.referenceEpoch;
+    renderDetails(null);refreshMap();
+    requests[0]({total:1,items:[],next_cursor:null});`);
+  await new Promise(setImmediate);
+  assert.equal(run('state.selection'),null);assert.equal(run("$('details').hidden"),true);
+  assert.ok(run('state.referenceEpoch>oldEpoch&&cancelled>=2'));
+  run(`renderDetails({...state.universe.nodes.get('app'),projectContext:true});
+    selectNode('app.core');requests[1]({total:1,items:[],next_cursor:null});`);
+  await new Promise(setImmediate);
+  assert.equal(run('state.selection.id'),'app.core');
+  assert.equal(run("$('details').children[0].textContent"),'core');
+});
+
 test('zoom context explains unavailable internals and clears the hint on returning to an analysed scope',()=>{
   const {run}=viewer();
   run(`state.universe.nodes.get('app.core').status='not-in-target';
@@ -472,12 +545,14 @@ test('wheel scale changes keep stars, fonts and expanded backgrounds in the same
     globalThis.viewportCamera=()=>null;globalThis.declutterLabels=()=>globalThis.collisions++;
     globalThis.collisions=0;globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=()=>{};
     globalThis.setTimeout=callback=>{globalThis.settle=callback;return 1;};globalThis.clearTimeout=()=>{};
-    refreshMap();globalThis.pins=JSON.stringify([...state.universe.positions]);
+    refreshMap();state.cy.getElementById('app.core.db').addClass('configured');
+    state.labelGeometry=null;readableLabels();globalThis.pins=JSON.stringify([...state.universe.positions]);
     globalThis.paints=[];const renderer=state.cy.renderer(),notify=renderer.notify;
     renderer.notify=function(...args){
       const star=state.cy.getElementById('app.core.db'),group=state.cy.getElementById('app.core'),z=state.cy.zoom();
       paints.push({font:parseFloat(star.style('font-size'))*z,glyph:star.width()*z,
-        background:group.width()*z,padding:parseFloat(group.style('padding'))*z});
+        background:group.width()*z,padding:parseFloat(group.style('padding'))*z,
+        outline:parseFloat(star.style('outline-width'))*z,offset:parseFloat(star.style('outline-offset'))*z});
       return notify.apply(this,args);
     };`);
   for(const [from,to] of [[2.04,1.735],[4.04,3.4],[8.04,6.8],[1024.04,900],[1.96,2.3],[3.96,4.6]]) {
@@ -490,6 +565,8 @@ test('wheel scale changes keep stars, fonts and expanded backgrounds in the same
       const span=run("state.universe.bounds.get('app.core').x2-state.universe.bounds.get('app.core').x1");
       assert.ok(Math.abs(paint.background-span*to)<0.001,'background retained its old renderer scale');
       assert.ok(Math.abs(paint.padding-26)<0.001,'background padding retained its old renderer scale');
+      assert.ok(Math.abs(paint.outline-2)<0.001&&Math.abs(paint.offset-4)<0.001,
+        'configuration outline retained its old renderer scale');
     }
     assert.equal(run('collisions'),0,'wheel frames must defer label collision work');
     run('settle()');assert.equal(run('collisions'),1,'labels settle once after the gesture');
