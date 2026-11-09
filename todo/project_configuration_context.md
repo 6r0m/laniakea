@@ -52,8 +52,13 @@ No open technical gate prevents this investigation. The recommendation below req
   This is a proposal, not an approved rendering choice.
 - **A2 [ACTIVE]** Preserve existing all-recorded hover totals and explicitly disclose included project declarations;
   do not silently redefine them as code-only usage counts.
-- **A3 [ACTIVE]** Use the existing Details panel for project context and configuration inspection when no graph item
+- **A3 [SUPERSEDED by A4]** Use the existing Details panel for project context and configuration inspection when no graph item
   is selected. Reuse the existing Configuration control for annotation visibility.
+- **A4 [ACTIVE]** Open Project details only through an explicit project breadcrumb/header action, using the existing
+  Details panel. No selection is not a request to inspect the project. Keep the existing close behavior and reuse the
+  Configuration control only for annotation visibility.
+- **A5 [ACTIVE]** Keep all-recorded totals unchanged, use recorded-reference labels, and show the numerical project
+  configuration subset for each affected direction. Keep weighted declaration counts separate from distinct marked targets.
 
 ## Non-goals
 
@@ -95,6 +100,12 @@ No open technical gate prevents this investigation. The recommendation below req
    visibility, hit behavior or performance.
 10. Baseline: the documented four JavaScript test files pass 101 tests; documentation checks pass 2 tests.
     Diagnostics are under ignored `workspace/tmp/project-context/`. The working tree was clean before this investigation.
+11. `renderDetails(null)` closes Details, and Escape, Clear selection and empty-space clicks invoke it. A3's implicit
+    project fallback would change that contract; this is a plan risk, not a defect in the current close behavior.
+12. `referenceStats` weights original references and partitions each node's subtree into outgoing, incoming and within.
+    Configuration classification is available, but the hover card and docked readout do not expose its numerical subset.
+    The subset must follow the same containment and weighting rules, rather than treating every declaration as incoming
+    at every level. A declaration to a project descendant is within for the project and incoming for its target.
 
 ### Inferences and unverified areas
 
@@ -124,7 +135,7 @@ The data is useful; its default rendering and the meaning of the root card are t
 
 ## Decision
 
-Recommend A1-A3, subject to review under D1.
+Recommend A1, A2, A4 and A5, subject to operator approval. A4 supersedes A3; A5 tightens A2's count disclosure.
 
 ### Premise / KISS gate
 
@@ -152,14 +163,29 @@ and their source remain available in Project details. Non-configuration root fac
 4. **Preserve the existing visual grammar.** Use native outlines independently of the border/status, selection and
    trace colors. No enclosing region, renamed ownership, background reparenting, extra edges or moving coordinates.
    Keep names-only titles under D3, with a small legend and hover explanation for the outline.
-5. **Project details.** Through A3, opening Details without a selected item shows project context: project source,
-   current analysed target, a paged list of exact configuration declarations, and other recorded root metadata.
+5. **Explicit Project details.** Through A4, clicking the project-name breadcrumb/header action opens project context:
+   project source, current analysed target, a paged list of exact configuration declarations, and other recorded root metadata.
+   Make that action keyboard accessible at root and nested scopes, independently of a rendered project star. Preserve
+   project switching and existing navigation; merely inspecting Project must not move the camera or change the map scope.
+   Clicking a star replaces that inspection. Escape, Clear selection, an empty-space click and `renderDetails(null)` close
+   inspection; never fall back to Project details because selection is absent. Hover, redraw and late page responses must
+   not reopen a closed panel. An explicitly opened, still-valid inspection may survive projection refreshes.
    Existing disable metadata can be displayed as recorded text, with no inferred node links or colored disabled states.
    Label any whole-project totals as project/subtree statistics, never as direct Uses of a separate root star.
 6. **Count scopes remain explicit.** Annotation toggles do not change the architecture edges or their reference counts.
    Configuration remains accounted for separately from ordinary hidden-type/boundary facts in summary copy. Reuse the
-   existing excluded-reference accounting rather than adding canonical duplicates. Under A2, an incoming configuration
-   declaration remains part of all-recorded totals; its hover note explicitly identifies that included subset.
+   existing excluded-reference accounting rather than adding canonical duplicates. Under A2/A5, declarations remain in
+   all-recorded totals. In the hover card, accessible docked readout and relevant inspection summaries, use neutral labels
+   such as `Outgoing references recorded`, `Incoming references recorded` and `Within / self references recorded`.
+   Beneath an affected total, show `Of which: project configuration` with its numerical count, including a configuration-only
+   total. For example, 8 incoming references with 1 project declaration remains 8 incoming, of which 1 is configuration.
+   Explain: `Configuration means explicitly listed, not necessarily compiled or used at runtime.` Do not present a vague
+   note or a raw `Used by` total as sufficient disclosure. Keep zero-incoming wording limited to recorded evidence.
+   Derive each directional subset from `isConfiguration` and the same original endpoints, subtree membership and weights
+   as its total. The subset is included, not additive. A non-root declaration of the same type stays an ordinary dependency.
+   These all-recorded totals/subsets do not change with dependency filters, boundary visibility or annotation toggles;
+   separately label current-view counts. Marks count distinct original targets: 3 declaration references to one target
+   mean a configuration subset of 3 and one listed target, not three marked targets.
    Dependency-type filters do not toggle these separate annotations; boundary visibility and the spatial projection
    still determine which representatives can be marked.
 7. **Exact navigation remains useful.** Following a configuration record reveals the actual target and retains the exact
@@ -186,8 +212,11 @@ and their source remain available in Project details. Non-configuration root fac
 
 1. Canonical nodes/edges, group ids, provenance and exact payloads stay unchanged; configuration is not discarded.
 2. Only original root references classified by the profile receive this treatment. Non-root descriptor dependencies survive.
-3. All-recorded counters stay truthful; the configuration subset is identified without being added twice.
+3. All-recorded counters stay truthful; numerical directional configuration subsets never exceed or add to their totals.
+   Recorded-reference labels and distinct listed-target counts cannot imply compiled or runtime usage.
 4. Project context and exact configuration inspection work without a rendered root marker; invalid/stale records still clear.
+   Project inspection requires an explicit action. Existing close paths cancel pending pages and close without a fallback;
+   stale asynchronous work cannot reopen the panel or replace a newer project/star inspection.
 5. Configuration marks neither prove effective enablement nor imply that unmarked nodes are unused or disabled.
 6. Outline state is bounded by the current projection; no graph-wide hover scan, per-reference DOM or new renderer elements.
 7. Annotation toggles do not relayout, move/save pins, affect graph hit targets, or break native selection/dragging.
@@ -199,13 +228,17 @@ and their source remain available in Project details. Non-configuration root fac
 
 - [ ] Add the regression and acceptance cases below before production changes; capture valid red evidence.
 - [ ] Extend Universe's existing configuration derivation with the minimum reusable declaration/representative lookup.
+      Derive weighted directional configuration subsets alongside existing reference totals and distinct target membership.
       Keep canonical facts and projection accounting authoritative; avoid a parallel graph or repeated hover scans.
 - [ ] Apply architecture-only configuration projection consistently in refresh, layout input and Fit; replace mode-dependent
       defaults with annotation state. Preserve genuine non-configuration root facts and absent-hint behavior.
 - [ ] Add native outline classes and a compact legend/hover explanation. Recompute marks only with the current projection.
       Extend existing pixel-size synchronization for the outline; do not add a second zoom callback or scheduler.
 - [ ] Extend the existing Details/selection path for project context and exact configuration records without a canvas root.
-      Reuse existing group-based paging, cancellation, retry and provenance rows.
+      Add the explicit accessible project breadcrumb/header action; retain null-selection and all existing close semantics.
+      Reuse existing group-based paging, cancellation, retry and provenance rows, including stale-response protection.
+- [ ] Update hover, accessible readout and relevant inspection summaries with neutral recorded-reference labels and numerical
+      configuration subsets. Keep all-recorded totals, current-view counts and distinct listed-target counts separate.
 - [ ] Update root search, breadcrumbs, bookmarks, exact follow, Back/Forward and reload so none resurrect configuration wires.
 - [ ] Verify synthetic/real routes, pointer behavior, bounded renderer state and byte-identical saved layouts.
 - [ ] Migrate accepted contracts into the stable owners below; review privacy, ASCII, scope and final diff, then remove this todo.
@@ -223,7 +256,9 @@ an external target, a non-root declaration of the same type, an explicit disable
 | Mark exact targets and collapsed representatives | Permanent guard: Universe/viewer tests | No annotation exists; mixed owner/external cases cannot report declared membership separately |
 | Multiple declarations of one original target | Permanent guard: compact/synthetic groups | Distinct listed-target counts cannot be derived from weighted reference totals alone |
 | Toggle affects marks only | Permanent guard: viewer tests plus browser | Renderer edge set/counts change rather than just annotation state |
-| Root context is inspectable without a graph node | Permanent guard: viewer tests | renderDetails rejects the unrendered context |
+| Explicit Project inspection at root and nested scopes without a graph node | Permanent guard: viewer/browser tests | No explicit context action exists; renderDetails rejects the unrendered context |
+| Clear closes inspection, with no project fallback | Permanent guard: viewer/browser tests | Current close behavior passes; protects it against the proposed context extension |
+| Numerical configuration subset in recorded counts | Permanent guard: Universe/viewer tests; browser checks visible/accessibility copy | Totals exist but no numerical subset is exposed |
 | Exact declaration follow preserves record and target | Permanent guard: viewer/browser tests | Existing route enables configuration and restores the source star/wire |
 | Root statistics have project scope | Regression guard for direct/subtree count source; reviewer checks wording | Current Uses card presents descendant statistics as an ordinary root actor |
 | Marks do not imply enablement or whole-owner membership | Reviewer-checked meaning plus mixed-fixture annotation data | Full membership/effective enablement cannot be supported by recorded declarations |
@@ -231,12 +266,24 @@ an external target, a non-root declaration of the same type, an explicit disable
 Preserve the existing root-internal-fact, generic root-reference, count partition, filtered/all-recorded, hover, paging,
 privacy and saved-position regressions. Do not replace them with assertions that simply hide every root.
 
+Exercise Project -> star -> Escape, Project -> Clear, Project -> empty space and direct `renderDetails(null)`.
+Assert the panel stays closed across redraw/hover and delayed reference-page completion; a project switch must invalidate
+old requests. Separately verify a still-valid, explicitly opened inspection survives projection refresh without reopening
+a previously closed panel. Inspecting Project alone must preserve camera/scope and require no root marker.
+
+Use synthetic incoming cases: 8 references including 1 root configuration declaration; configuration-only 1 of 1;
+and 3 declaration references to one target alongside 5 ordinary references. Expect totals/subsets of 8/1, 1/1 and 8/3,
+with one distinct listed target in the last case. Include a non-root declaration of the same type among ordinary facts.
+Check outgoing/within classification at ancestor scopes, weighted groups, filters, boundary visibility and marks on/off.
+Verify every configuration subset stays included in its unchanged all-recorded total and all surfaces explain its meaning.
+
 ### Green evidence
 
 - `node --test tests/viewer.test.cjs tests/universe.test.cjs tests/references.test.cjs tests/traces.test.cjs`.
 - `python -m unittest discover -s tests -p test_documentation.py`; syntax checks for changed viewer scripts.
 - Extend [served-sample acceptance](../tests/viewer.browser.js) for every layout, toggle, root search, project Details,
-  paged declaration follow, hidden boundaries, annotation movement on zoom/fold, history and bare-address reload.
+  explicit open/replace/close behavior, paged declaration follow, hidden boundaries, annotation movement on zoom/fold,
+  history and bare-address reload. Assert numerical subsets and neutral labels in the hover card and accessible readout.
 - Run [connection hover acceptance](../tests/traces.browser.js) unchanged except deliberate new annotation assertions.
 - With drive-browser, inspect overview, mixed folder, plugin, module and external boundary in light/dark and narrow views.
   Verify neutral outlines differ from target status, selection and trace emphasis, and exact source/target provenance remains clear.
@@ -251,7 +298,8 @@ privacy and saved-position regressions. Do not replace them with assertions that
 ## Documentation plan
 
 - **Authoritative stable owner:** update [graph-model.md](../docs/architecture/graph-model.md): root/context distinction,
-  configuration presentation, mark predicate, count scope, context inspection and exact navigation.
+  configuration presentation, mark predicate, numerical subset versus distinct-target counts, explicit inspection lifecycle
+  and exact navigation.
 - **Other affected statements:** update [README quick usage](../README.md) and only affected contracts in
   [structure.md](../docs/architecture/structure.md). Profile meaning stays owned by the existing Unreal-profile document.
 - **Router/TOC:** no new owner/document. Keep `todo/README.md` lifecycle-only; add no task routing.
@@ -269,6 +317,10 @@ above; no new analysis run or schema migration. Rollback restores only this pres
   investigation only, and this file alone grants no implementation authority.
 - An ordinary overview contains architecture stars and actual dependency/reference edges without a root-configuration hub.
 - Configuration can be understood through optional marks and exact Project details without fabricated containment or enablement.
+- The explicit Project action opens context; star inspection replaces it; Escape, Clear and empty-space clicks close it
+  without fallback or stale-response reopening. Inspection alone does not change camera or map scope.
+- Recorded-reference totals stay unchanged and expose numerical directional configuration subsets; distinct marked-target
+  counts remain separate. Copy never equates a configuration declaration with compiled or runtime usage.
 - Exact configuration navigation remains actionable without a root wire, including paged and filtered routes.
 - Source facts, reference accounting, generic-root cases, performance safeguards and saved positions remain verified.
 - Stable docs describe the final accepted behavior, with no temporary dependencies or private evidence in tracked files.
@@ -283,3 +335,16 @@ above; no new analysis run or schema migration. Rollback restores only this pres
 - **Verification:** source/consumer inspection, a synthetic direct-versus-subtree and mixed-group diagnostic, installed style support,
   and the baseline checks recorded above. No production, test or stable-document changes were made.
 - **Authority:** D1-D3 recorded; A1-A3 remain proposals. Live visual and implementation acceptance are still outstanding.
+
+### 2026-11-09 - Review corrections
+
+- **Trigger:** operator request to evaluate the review and correct valid issues against current code and accepted behavior.
+- **Finding 1:** valid. A3 could introduce an implicit inspector fallback contrary to the existing close contract.
+  A4 supersedes it with an explicit Project action and preserves closing, replacement and asynchronous cancellation.
+  No current close-behavior bug was demonstrated.
+- **Finding 2:** valid. A2's vague subset note would not distinguish configuration declarations from ordinary usage clearly.
+  A5 requires neutral recorded-reference labels and numerical weighted subsets, separately from distinct listed targets.
+- **Scope:** only this todo is corrected. Reviewer approval does not authorize implementation; no production behavior,
+  graph facts, saved positions or stable documentation is changed. Existing baseline tests do not validate the proposed UI.
+- **Acceptance outstanding:** implementation regressions, real-browser interaction/performance and saved-layout preservation
+  remain the implementation gate; the reviewer supplied no incorrect architectural point requiring refutation.
