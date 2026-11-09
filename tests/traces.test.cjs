@@ -56,6 +56,35 @@ test('node hover leaves renderer element count and world positions unchanged',t=
   run('state.cy.destroy()');
 });
 
+test('map titles contain only names while coverage remains available in inspection',t=>{
+  const {run}=scene(t);
+  run(`fixture.nodes.find(n=>n.id==='app.core.db').status='not-in-target';refreshMap();`);
+  assert.equal(run("state.cy.getElementById('app.core.db').data('caption')"),'db');
+  assert.equal(run("state.cy.getElementById('app.core').data('caption')"),'core');
+  assert.match(run("nodeDescription(state.universe.nodes.get('app.core.db'))"),/outside target/);
+});
+
+test('node readout distinguishes no recorded users from references hidden by filters',t=>{
+  const {run}=scene(t);
+  run(`state.hidden.add('calls');refreshMap();preview(state.cy.getElementById('app.core.db'));`);
+  assert.match(run('tooltip.text'),/Used by.*2/);
+  assert.match(run('tooltip.text'),/Incoming: 0/);
+  assert.doesNotMatch(run('tooltip.text'),/No incoming references recorded/);
+  run(`fixture.edges=fixture.edges.filter(e=>e.source==='app.core.db'&&e.target==='app.web.views');
+    state.universe=new Universe(fixture);state.universe.place({},'auto');state.universe.reveal('app.core.db');
+    refreshMap();preview(state.cy.getElementById('app.core.db'));`);
+  assert.match(run('tooltip.text'),/No incoming references recorded/);
+  assert.match(run('tooltip.text'),/Uses.*7/);
+});
+
+test('pair cards disambiguate equal endpoint names with their ownership paths',t=>{
+  const {run}=scene(t);
+  run(`state.universe.nodes.get('app.web.views').label='db';
+    globalThis.summary=traceSummary(ConnectionTrace.pair(state.shard,'app.core.db','app.web.views'));`);
+  assert.match(run('summary.rows[0][0]'),/core.*db.*web.*db/);
+  assert.match(run('summary.rows[1][0]'),/web.*db.*core.*db/);
+});
+
 test('pair inspection shows both directions and invalidates changed represented groups',t=>{
   const {run}=scene(t);treeElements(run);
   run(`globalThis.rows=[];globalThis.appendReferences=(panel,refs)=>rows.push(refs.map(r=>r.id));

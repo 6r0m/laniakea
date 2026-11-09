@@ -81,6 +81,19 @@ main { flex: 1; min-height: 280px; display: flex; position: relative; }
   font-size: 12px; overflow: auto; font-variant-numeric: tabular-nums; }
 #map-tooltip strong, #map-tooltip span { display: block; white-space: nowrap; }
 #map-tooltip span { color: var(--muted); }
+#hover-card { position: absolute; z-index: 4; pointer-events: none; width: 328px; max-width: calc(100% - 24px);
+  max-height: calc(100% - var(--legend-height) - var(--trace-height) - 16px); overflow: hidden;
+  padding: 12px 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel);
+  color: var(--fg); font-size: 12px; line-height: 1.45; box-shadow: 0 6px 18px #0003; }
+#hover-card .hover-name { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden; font-size: 15px; overflow-wrap: anywhere; }
+#hover-card .hover-context { color: var(--muted); display: block; margin-top: 3px; font-size: 12px; overflow-wrap: anywhere; }
+#hover-card .hover-path { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.hover-rows { margin: 10px 0; }
+.hover-row { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: baseline; gap: 12px; padding: 3px 0; }
+.hover-row > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden; overflow-wrap: anywhere; }
+.hover-count { font-size: 16px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .trace-outgoing { color: var(--trace-outgoing); }
 .trace-incoming { color: var(--trace-incoming); }
 .trace-within { color: var(--trace-within); }

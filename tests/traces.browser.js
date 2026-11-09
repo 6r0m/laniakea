@@ -41,7 +41,7 @@ async page => {
       await page.waitForFunction(()=>!state.gestureActive&&!state.viewportFrame);
       await page.mouse.move(p.x,p.y);await frames();
     };
-    let stable;
+    let stable,cardPosition;
     for(const fraction of [.2,.3,.4,.6,.7,.8]) {
       await move(await point('a','b',fraction));
       const trace=await page.evaluate(()=>({text:$('map-tooltip').textContent,key:state.trace?.key,arrows:
@@ -52,6 +52,11 @@ async page => {
       if(stable)check(stable===trace.text,'Pair readout changed along its native path');else stable=trace.text;
       check(trace.arrows.some(a=>a.role==='out')&&trace.arrows.some(a=>a.role==='in'),'Both directional arrows are missing');
       check(trace.arrows.every(a=>a.opacity==='1'),'Active direction contrast is composited away');
+      const card=await page.locator('#hover-card').boundingBox();
+      check(card&&await page.locator('#hover-card').innerText().then(text=>/Sender -> Receiver.*7 refs.*Receiver -> Sender.*2 refs/s.test(text)),
+        'Nearby pair card must show both named directions');
+      if(cardPosition)check(card.x===cardPosition.x&&card.y===cardPosition.y,'The card moved while following the same pair');
+      else cardPosition=card;
     }
     const pairPoint=await point('a','b',.3);await move(pairPoint);
     // Focused captions can grow across a previously hovered connection.
@@ -74,7 +79,10 @@ async page => {
     });
     await page.keyboard.press('Escape');await frames();
     check(await page.evaluate(()=>!state.trace&&state.cy.elements('.focus,.hovered').length===0&&
-      !$('map-tooltip').textContent.includes('A -> B')),'Escape retained stale emphasis or counts');
+      $('hover-card').hidden&&!$('map-tooltip').textContent.includes('A -> B')),'Escape retained stale emphasis or counts');
+    await move(await point('c','c'));
+    check(await page.locator('#hover-card').innerText().then(text=>/Uses \(outgoing\).*1 ref.*Used by \(incoming\).*0 refs/s.test(text)&&
+      text.includes('No incoming references recorded in this snapshot.')),'Zero incoming references must be explicit on the star card');
     await move(await point('c','d',.25));
     check(await page.evaluate(()=>state.trace?.key===JSON.stringify(['pair','c','d'])),'Unrelated crossing pair reused old endpoints');
     await move(await point('b','e',.5));
@@ -91,6 +99,7 @@ async page => {
     check(await page.evaluate(()=>state.trace?.kind==='node'&&state.trace.counts.within===1),
       'Node hover omitted its within references');
     await page.mouse.move(10,10);await frames();
+    check(await page.locator('#hover-card').isHidden(),'Leaving the trace kept the visual card');
     check(await page.locator('#map-tooltip').innerText().then(text=>text.startsWith('Last traced: ')),
       'Leaving the canvas discarded the readable summary');
     await move(await point('a','b',.3));
@@ -109,13 +118,18 @@ async page => {
       check(values.every(v=>v>=4.5),'Trace palette has insufficient theme contrast');contrasts.push({theme,values});
     }
     await page.setViewportSize({width:390,height:844});await frames();
+    await page.evaluate(()=>{fitMap();});await move(await point('c','c'));
+    const boundedCard=await page.locator('#hover-card').boundingBox(),graph=await page.locator('#graph').boundingBox();
+    check(boundedCard&&boundedCard.x>=graph.x&&boundedCard.y>=graph.y&&
+      boundedCard.x+boundedCard.width<=graph.x+graph.width&&boundedCard.y+boundedCard.height<=graph.y+graph.height,
+      'Narrow hover card escapes the map');
     await page.locator('#map-tooltip').focus();await page.keyboard.press('ArrowRight');
     check(await page.evaluate(()=>document.activeElement===$('map-tooltip')&&document.documentElement.scrollWidth<=innerWidth),
       'Narrow readout is not keyboard accessible or overflows the page');
     await page.setViewportSize({width:1440,height:1000});await frames();
     await move(await point('a','b',.3));await page.mouse.wheel(0,55);
     await page.waitForFunction(()=>!state.gestureActive&&!state.wheelFrame&&!state.viewportFrame);
-    check(await page.evaluate(()=>!state.trace&&state.cy.edges('.trace-outgoing,.trace-incoming,.trace-within').length===0),
+    check(await page.evaluate(()=>!state.trace&&$('hover-card').hidden&&state.cy.edges('.trace-outgoing,.trace-incoming,.trace-within').length===0),
       'Gesture retained a trace');
     check(await page.evaluate(()=>JSON.stringify(state.positionCache.layouts)===traceProof.pins&&
       JSON.stringify([...state.universe.positions])===traceProof.positions&&state.cy.elements().length<=traceProof.elements),

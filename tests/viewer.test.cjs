@@ -4,6 +4,34 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const {viewer,inspectionViewer,treeElements}=require('./viewer-support.cjs');
 
+test('zoom context explains unavailable internals and clears the hint on returning to an analysed scope',()=>{
+  const {run}=viewer();
+  run(`state.universe.nodes.get('app.core').status='not-in-target';
+    state.scopeShard={scope:'app.core'};clearTrace();`);
+  assert.match(run("$('map-tooltip').textContent"),/core: Outside.*target/);
+  assert.match(run("$('map-tooltip').textContent"),/internals.*not analysed/i);
+  assert.doesNotMatch(run("$('map-tooltip').textContent"),/disabled/i,'absence from a target does not prove disabled configuration');
+  run(`state.scopeShard={scope:'app'};clearTrace();`);
+  assert.doesNotMatch(run("$('map-tooltip').textContent"),/Outside.*target/);
+  run(`state.scopeShard={scope:'app.core'};state.universe.nodes.get('app.core').status='not-analysed';clearTrace();`);
+  assert.match(run("$('map-tooltip').textContent"),/Not analysed/);
+  assert.doesNotMatch(run("$('map-tooltip').textContent"),/Outside.*target/);
+});
+
+test('unavailable nodes expose coverage in hover readout and details while their canvas names stay clean',t=>{
+  const {run}=inspectionViewer(true);treeElements(run);t.after(()=>run('state.cy.destroy()'));
+  run(`const node=state.universe.nodes.get('app.core.db');node.status='not-in-target';
+    state.universe.reveal(node.id);refreshMap();
+    globalThis.showTooltip=(title,text)=>{globalThis.tip=text;};
+    globalThis.renderConnections=()=>{};
+    showTraceReadout(ConnectionTrace.node(state.universe,state.shard,node.id));
+    renderDetails(node);`);
+  assert.match(run("nodeDescription(state.universe.nodes.get('app.core.db'))"),/outside.*target/i);
+  assert.equal(run("state.cy.getElementById('app.core.db').data('caption')"),'db');
+  assert.match(run('tip'),/internals.*not analysed/i);
+  assert.equal(run("$('details').children.some(n=>/internals.*not analysed/i.test(n.textContent))"),true);
+});
+
 test('centered positions use the named boundary rather than guessing from names or weights',()=>{
   const {run}=viewer();
   run(`globalThis.top=['one','two','stdlib','another-boundary'].map(id=>({id:()=>id,hasClass:()=>id==='one'||id==='two'}));
@@ -875,21 +903,21 @@ test('opening a scope retains a failed local move so it can be retried', async (
   assert.equal(reopened.errors.size, 1);
 });
 
-test('map captions and grouping follow canonical kinds and direct child counts', () => {
+test('map names stay clean while grouping follows canonical kinds and direct child counts', () => {
   const { run } = viewer();
   run("state.index={nodes:[{id:'group',child_count:3},{id:'leaf',child_count:0}]};");
   const group=run("mapNode({id:'group',label:'Sample',level:'package'},new Set(['group']),{group:'group.json'})");
   const leaf=run("mapNode({id:'leaf',label:'Sample',level:'module'},new Set(['leaf']),{leaf:'leaf.json'})");
-  assert.equal(group.data.caption, 'Sample\npackage / 3 inside');
+  assert.equal(group.data.caption, 'Sample');
   assert.ok(group.classes.split(' ').includes('group'));
-  assert.equal(leaf.data.caption, 'Sample\nmodule');
+  assert.equal(leaf.data.caption, 'Sample');
   assert.ok(!leaf.classes.split(' ').includes('group'));
   assert.equal(leaf.data.id, 'leaf', 'presentation must retain saved-position identity');
   assert.equal(run("nodeDescription({id:'external',level:'library',boundary:true})"),'library / external');
   const neighbour=run("mapNode({id:'leaf',label:'Neighbour',level:'module'},new Set(),{},true)");
   assert.equal(neighbour.data.caption,'Neighbour');
   const container=run("mapNode({id:'group',label:'Sample',level:'package'},new Set(),{},true)");
-  assert.equal(container.data.caption,'Sample\npackage / 3 inside');
+  assert.equal(container.data.caption,'Sample');
 });
 
 test('renderer movement cannot mutate the saved arrangement before a released drag', () => {

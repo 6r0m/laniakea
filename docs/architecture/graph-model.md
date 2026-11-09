@@ -57,6 +57,9 @@ the target and the configuration. Edge type ids and labels come from the manifes
 
 The manifest lists what was analysed, what was not (other targets, deeper hops, levels not built), and node and edge
 counts. The viewer shows the list beside every view, so missing analysis never reads as absence.
+Zooming into an outside-target or unanalysed scope leaves a named coverage hint in the docked readout.
+Node hover and inspection also explain that only recorded structure is available. These statuses do not prove that
+configuration disabled the node; the viewer does not infer that cause from target absence.
 
 ## Continuous map
 
@@ -106,6 +109,13 @@ During pair tracing, endpoint captions yield native pointer hits to connections 
 the click; endpoint glyphs remain interactive. Leaving the trace restores normal caption interaction.
 The docked, keyboard-focusable readout retains the last summary after pointer exit while emphasis clears. Escape,
 clear, gestures and projection changes reset it. Its reserved height does not change when trace text changes.
+Canvas titles show names only. A nearby hover card provides kind, containment, coverage and direction counts without
+adding lines to those titles. Node cards distinguish all recorded "Uses (outgoing)", "Used by (incoming)" and within
+totals from the current projection; a filtered-out incoming reference is not reported as no recorded users. A zero
+incoming total says "No incoming references recorded in this snapshot", never that runtime use is impossible.
+Connection cards retain the same two-direction projected scope as connection inspection. Cards stay anchored during
+same-pair pointer movement and yield native pointer hits to the graph. They disappear on exit, Escape, gestures or
+projection changes. The persistent readout mirrors the node totals for keyboard reading; inspection supplies exact rows.
 Following an exact reference enables its type, configuration subset and boundary visibility if a current filter would hide it.
 Following an internal reference opens its owner and reference list rather than inventing a visible self-loop.
 Optional click inspection keeps its marker through projection refreshes while that exact item remains visible.
@@ -152,8 +162,8 @@ Spatial and visual container bounds include all descendants, including manually 
 Containment remains in Universe. Expanded backgrounds are independent renderer shapes, avoiding native compound-node
 style propagation and preserving their world geometry when children leave the viewport. Dragging a background pans;
 dragging its visible label moves the constellation. Ordinary stars and their visible labels remain draggable.
-Backgrounds occupy the native bottom layer so they cannot intercept stars during hover transitions. Labels reserve space
-for readable names before adding secondary metadata. A bounded name/ellipsis fallback precedes hiding a label;
+Backgrounds occupy the native bottom layer so they cannot intercept stars during hover transitions. Canvas labels reserve
+space for names; secondary metadata belongs to hover and inspection. A bounded name/ellipsis fallback precedes hiding a label;
 the full name remains available through hover, search, inspection and the accessible list. Actual renderer metrics
 govern collision and hit boxes; traced or inspected names take priority. Glyph obstacles share one spatial index per
 settled scene. Batched caption updates reuse up to four measured variants per native node; font and glyph geometry

@@ -498,6 +498,7 @@ function renderDetails(item) {
   const list = el('dl');
   if (item.level !== undefined) {
     panel.append(el('h2', item.label), el('p', nodeDescription(item), {class:'muted'}));
+    const hint=analysisHint(item);if(hint)panel.append(el('p',hint,{class:'muted'}));
     attributes(list, {status:item.status, parent:item.parent ? label(item.parent) : 'root'});
     if (item.boundary) panel.append(el('p', 'Only recorded references are shown. Further external dependencies were not analysed.', {class:'muted'}));
     if (item.source) {

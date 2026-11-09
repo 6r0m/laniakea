@@ -53,6 +53,20 @@ async (page) => {
   page.on('request',observe);page.on('pageerror',error);
   try {
     const initialMode=await page.locator('#layout').inputValue();
+    await page.evaluate(()=>flyToNode('plugin:SampleDisabled',false));
+    await wheel('plugin:SampleDisabled',true,-120);
+    await page.waitForFunction(()=>!state.gestureActive&&!state.viewportFrame);
+    check(await page.evaluate(()=>state.cy.getElementById('module:SampleDisabled').length===1&&
+      /SampleDisabled: Outside.*target.*internals.*not analysed/i.test($('map-tooltip').textContent)),
+      'Wheel expansion must explain why recorded structure stops at an outside-target module');
+    const unavailable=await point('module:SampleDisabled');
+    await page.mouse.move(unavailable.x,unavailable.y);await page.mouse.wheel(0,-120);
+    await page.waitForFunction(()=>!state.gestureActive&&!state.wheelFrame&&!state.zoomFrame&&!state.viewportFrame);
+    check(await page.evaluate(()=>/Outside.*target/.test($('map-tooltip').textContent)),
+      'Further wheel zoom discarded the coverage hint');
+    await page.evaluate(()=>{state.universe.expanded=new Set([state.universe.root]);setSceneScope(state.universe.root);refreshMap();fitMap();});
+    check(await page.evaluate(()=>!$('map-tooltip').textContent.includes('Outside analysed target')),
+      'Returning to the analysed root retained an unrelated coverage hint');
     await page.selectOption('#layout','galaxy');await frames();
     check(await page.evaluate(()=>!configurationVisible()&&state.universe.positions.get('engine').x===0&&
       state.universe.positions.get('engine').y===0&&!state.cy.getElementById(state.universe.root).length),
@@ -417,7 +431,8 @@ async (page) => {
       groupDragSaved:true,deepPinSaved:true,labelDragSaved:true,freshBrowserRestored:true,
       narrowViewport:true,keyboardPaging:true,stickyPager:true,boundedReferenceRows:true,
       compactStaleWarning:true,metadataDisclosure:true,liveGroupControl:true,overviewAddress:true,resetRefusal:true,
-      interiorConnectionTracing:true,centeredGalaxy:true,configurationSubset:true,primaryNames:true,galaxyPinIsolated:true,openSteps,errors};
+      interiorConnectionTracing:true,centeredGalaxy:true,configurationSubset:true,primaryNames:true,galaxyPinIsolated:true,
+      outsideTargetHint:true,openSteps,errors};
   } finally {
     page.off('request',observe);page.off('pageerror',error);
     await page.evaluate(async original=>{

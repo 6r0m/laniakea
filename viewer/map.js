@@ -9,20 +9,28 @@ function nodeMetadata(id) {
   return n && { ...n, child_count: state.universe.childIds(id).length };
 }
 
+function analysisStatus(node) {
+  return node?.status==='not-in-target'?'Outside analysed target':node?.status==='not-analysed'?'Not analysed':'';
+}
+
+function analysisHint(node) {
+  const status=analysisStatus(node);
+  return status?`${node.label}: ${status}. Internals were not analysed; only recorded structure is shown.`:'';
+}
+
 function nodeDescription(node) {
   const entry = nodeMetadata(node.id), parts = [node.level];
   if (node.parent === null && !node.boundary) parts.push('root');
   else if (entry && entry.child_count) parts.push(`${entry.child_count} inside`);
   if (node.boundary) parts.push('external');
+  const status=analysisStatus(node);if(status)parts.push(node.status==='not-in-target'?'outside target':status.toLowerCase());
   return parts.join(' / ');
 }
 
-function mapNode(node, members, drill, compact = false) {
+function mapNode(node, members, drill) {
   const entry = nodeMetadata(node.id), group = entry && entry.child_count > 0 &&
     !(node.parent === null && !node.boundary);
-  const description = node.boundary && group ? nodeDescription(node).replace(' / external', '\nexternal') : nodeDescription(node);
-  const caption = compact && !members.has(node.id) && !group ? node.label : `${node.label}\n${description}`;
-  return { group: 'nodes', data: { id: node.id, label: node.label, caption },
+  return { group: 'nodes', data: { id: node.id, label: node.label, caption:node.label },
     classes: [members.has(node.id) && 'member', group && 'group', Object.hasOwn(drill,node.id) && 'openable',
       node.boundary && 'boundary', node.status].filter(Boolean).join(' ') };
 }
@@ -171,12 +179,9 @@ function refreshMap() {
     const {position,...size}=nodeGeometry(n.id,expanded);
     item.pannable=expanded;
     if (expanded) {
-      item.classes += ' expanded'; item.data.caption = `${n.label}\n${n.level}`;
+      item.classes += ' expanded';
       Object.assign(item.data,size);
       item.data.layer=universe.paths.get(n.id).length+1;
-    } else {
-      const internal = view.internal.get(n.id);
-      if (internal && internal.length) item.data.caption += `\n${referenceTotal(internal)} refs within`;
     }
     item.position=position;
     return item;
@@ -267,7 +272,7 @@ function preview(element, pointer = state.pointer) {
     }
   });
   readableLabels();
-  showTraceReadout(state.trace);
+  showTraceReadout(state.trace,pointer);
 }
 
 function traceName(id) {
@@ -283,16 +288,62 @@ function traceTypes(refs) {
     (rows.length>3?`, +${rows.length-3} types`:'');
 }
 
-function showTraceReadout(trace) {
+function traceSummary(trace) {
+  if(trace.kind==='node') {
+    const node=state.universe.nodes.get(trace.source),totals=state.universe.referenceStats.get(node.id);
+    return {title:node.label,description:nodeDescription(node),path:traceName(node.id),scope:'All recorded references in this snapshot',
+      rows:[['Uses (outgoing)',totals.outgoing,'outgoing'],['Used by (incoming)',totals.incoming,'incoming'],['Within / self',totals.within,'within']],
+      notes:[!totals.incoming&&'No incoming references recorded in this snapshot.',analysisHint(node),
+        node.boundary&&'External boundary; further dependencies were not analysed.',
+        `In this view: ${trace.counts.outgoing} outgoing / ${trace.counts.incoming} incoming / ${trace.counts.within} within.`,
+        'Click for exact references.'].filter(Boolean)};
+  }
+  const self=trace.source===trace.target,duplicate=!self&&label(trace.source)===label(trace.target);
+  const a=duplicate?traceName(trace.source):label(trace.source),b=duplicate?traceName(trace.target):label(trace.target);
+  return {title:self?a:'Connection',description:self?'Within / self':'Both directions',scope:'In this view / all shown reference types',
+    rows:self?[['Within / self',trace.counts.within,'within']]:
+      [[`${a} -> ${b}`,trace.counts.outgoing,'outgoing'],[`${b} -> ${a}`,trace.counts.incoming,'incoming']],
+    notes:[traceTypes(trace.refs),'Click for exact references.']};
+}
+
+function showHoverCard(trace,point) {
+  if(!state.cy.container())return;
+  const card=$('hover-card'),summary=traceSummary(trace),rows=el('div',null,{class:'hover-rows'});
+  for(const [name,count,role] of summary.rows) {
+    const row=el('div',null,{class:'hover-row trace-'+role});
+    row.append(el('span',name),el('strong',`${count} ${count===1?'ref':'refs'}`,{class:'hover-count'}));rows.append(row);
+  }
+  card.replaceChildren(el('strong',summary.title,{class:'hover-name'}),el('small',summary.description,{class:'hover-context'}));
+  if(summary.path)card.append(el('small',summary.path,{class:'hover-context hover-path'}));
+  card.append(el('small',summary.scope,{class:'hover-context'}),rows,
+    ...summary.notes.map(note=>el('small',note,{class:'hover-context'})));
+  const cy=state.cy,node=cy.getElementById(trace.source),anchor=trace.kind==='node'&&!node.hasClass('expanded')?
+    node.renderedPosition():point||node.renderedPosition();
+  const graph=$('graph').getBoundingClientRect(),map=$('map').getBoundingClientRect();
+  card.hidden=false;
+  const box=card.getBoundingClientRect(),gap=18;
+  let x=anchor.x+gap;if(x+box.width>graph.width-12)x=anchor.x-box.width-gap;
+  card.style.left=graph.left-map.left+Math.max(12,Math.min(graph.width-box.width-12,x))+'px';
+  card.style.top=graph.top-map.top+Math.max(8,Math.min(graph.height-box.height-8,anchor.y-12))+'px';
+}
+
+function showTraceReadout(trace,point) {
   const counts=trace.counts;
-  if(trace.kind==='node')showTooltip(`In this view / Focus: ${traceName(trace.source)}`,
-    `Outgoing: ${counts.outgoing} / Incoming: ${counts.incoming} / Within: ${counts.within}`+
-    (state.universe.nodes.get(trace.source).boundary?' / Further external references not analysed':''));
+  if(trace.kind==='node') {
+    const node=state.universe.nodes.get(trace.source),hint=analysisHint(node);
+    const totals=state.universe.referenceStats.get(node.id);
+    showTooltip(`In this view / Focus: ${traceName(trace.source)}`,
+      `Outgoing: ${counts.outgoing} / Incoming: ${counts.incoming} / Within: ${counts.within}`+
+      ` / All recorded: Uses ${totals.outgoing} / Used by ${totals.incoming} / Within ${totals.within}`+
+      (!totals.incoming?' / No incoming references recorded in this snapshot.':'')+
+      (node.boundary?' / Further external references not analysed':'')+(hint?' / '+hint:''));
+  }
   else if(trace.source===trace.target)showTooltip(`In this view / Self: ${traceName(trace.source)}`,
     `Within/self: ${counts.within} refs (${traceTypes(trace.groups.within)})`);
   else showTooltip(`In this view / A: ${traceName(trace.source)} / B: ${traceName(trace.target)}`,
     `A -> B: ${counts.outgoing} refs${counts.outgoing?' ('+traceTypes(trace.groups.outgoing)+')':''} / `+
     `B -> A: ${counts.incoming} refs${counts.incoming?' ('+traceTypes(trace.groups.incoming)+')':''}`);
+  showHoverCard(trace,point);
 }
 
 function showTooltip(title, text) {
@@ -303,14 +354,17 @@ function showTooltip(title, text) {
 }
 
 function clearTrace() {
+  $('hover-card').hidden=true;
   if(state.cy)state.cy.elements('.faded,.focus,.hovered,.trace-endpoint,.trace-outgoing,.trace-incoming,.trace-within,.trace-both,.trace-reciprocal')
     .removeClass('faded focus hovered trace-endpoint trace-outgoing trace-incoming trace-within trace-both trace-reciprocal');
   state.trace=null;
   $('map-tooltip').hidden=false;
-  $('map-tooltip').textContent='Hover a star or connection to trace references in this view.';
+  $('map-tooltip').textContent=analysisHint(state.universe?.nodes.get(state.scopeShard?.scope))||
+    'Hover a star or connection to trace references in this view.';
 }
 
 function unfocus(clearReadout = false) {
+  $('hover-card').hidden=true;
   if (state.cy) {
     const marked=state.cy.elements('.faded,.focus,.hovered,.trace-endpoint,.trace-outgoing,.trace-incoming,.trace-within,.trace-both,.trace-reciprocal');
     if(marked.length){marked.removeClass('faded focus hovered trace-endpoint trace-outgoing trace-incoming trace-within trace-both trace-reciprocal');readableLabels();}
