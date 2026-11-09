@@ -76,14 +76,45 @@ class _Builder:
         if node_id in self.nodes:
             return node_id
         entry = exported["Modules"].get(name, {})
-        parent = ENGINE_ID
-        descriptor = descriptors.owning_plugin(entry["Directory"], self.engine_root) if entry.get("Directory") else None
+        directory = entry.get('Directory')
+        inside_engine = directory and _relative(directory, self.engine_root) is not None
+        parent = ENGINE_ID if inside_engine else self.external_boundary()
+        descriptor = descriptors.owning_plugin(directory, self.engine_root) if inside_engine else None
         if descriptor:
             parent = self.boundary_plugin(descriptor.stem, source=self.location(descriptor))
+        elif inside_engine:
+            parent = self.engine_third_party(directory, include_vendor=False) or parent
         self.node(node_id, "module", name, parent, boundary=True,
                   source=self.location(entry["Rules"]) if entry.get("Rules") else None,
-                  attrs={"type": entry["Type"]} if entry.get("Type") else None)
+                  attrs={**({"type": entry["Type"]} if entry.get("Type") else {}),
+                         'ownership': 'UBT module directory under Engine' if inside_engine else
+                                      'UBT module directory outside project and Engine; supplier unclassified'})
         return node_id
+
+    def external_boundary(self):
+        identity = 'external:cpp'
+        self.node(identity, 'project', 'Other external dependencies', None, boundary=True,
+                  attrs={'analysis': 'Referenced declarations only; implementation internals were not indexed',
+                         'ownership': 'Outside project and Engine; provider not classified'})
+        return identity
+
+    def engine_third_party(self, path, include_vendor=True):
+        relative = _relative(path, self.engine_root)
+        if relative is None:
+            return None
+        parts = Path(relative).parts
+        if len(parts) < 4 or tuple(p.lower() for p in parts[:3]) != ('engine', 'source', 'thirdparty'):
+            return None
+        parent = ENGINE_ID
+        for count in range(3, 5 if include_vendor else 4):
+            folder = Path(*parts[:count])
+            identity = 'engine-folder:' + '/'.join(parts[2:count])
+            self.node(identity, 'folder', parts[count-1], parent, boundary=True,
+                      source=self.location(self.engine_root / folder),
+                      attrs={'ownership': 'Recorded header/module directory under Engine/Source/ThirdParty',
+                             'analysis': 'Referenced declarations only; implementation internals were not indexed'})
+            parent = identity
+        return parent
 
     def boundary_plugin(self, name, source=None):
         node_id = f"plugin:{name}"

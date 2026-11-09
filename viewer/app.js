@@ -413,8 +413,9 @@ function elsewhere(query, index) {
 }
 
 function sourceLink(location) {
-  const root = state.target.roots[location.root];
-  if (!root) return null;
+  const roots=state.target.roots||{};
+  const root = Object.hasOwn(roots,location.root) && roots[location.root];
+  if (typeof root!=='string'||!root) return null;
   const path = `${root.replace(/\\/g, '/').replace(/\/$/, '')}/${location.path}`;
   return el('a', `${location.path}:${location.line || 1}`, { href: `vscode://file/${encodeURI(path)}:${location.line || 1}` });
 }
@@ -517,7 +518,7 @@ function renderDetails(item) {
       const link = sourceLink(item.source);
       if (link) { const dd = el('dd'); dd.append(link); list.append(el('dt', 'source'), dd); }
     }
-    const entries = Object.entries(item.attrs || {}), isAnalysis = ([name]) => name === 'analysis' || name.endsWith('_analysis');
+    const entries = Object.entries(item.attrs || {}), isAnalysis = ([name]) => name === 'analysis' || name === 'ownership' || name.endsWith('_analysis');
     attributes(list, Object.fromEntries(entries.filter(isAnalysis)));
     panel.append(list);
     if (state.universe.isGroup(item.id) && item.id !== state.universe.root) {
@@ -627,7 +628,23 @@ function referenceRow(edge) {
       state.hidden.has(edge.type)||!state.boundary&&(source.boundary||target.boundary)?' / hidden by filters':'')));
   const ownerPath=id=>state.universe.paths.get(id).map(label).join(' / ');
   row.append(el('small',`${ownerPath(edge.source)} -> ${ownerPath(edge.target)}`));
-  if(edge.attrs){const metadata=el('dl');attributes(metadata,edge.attrs);row.append(metadata);}
+  const declaration=edge.attrs?.target_declaration;
+  if(declaration) {
+    const detail=el('div',null,{class:'target-declaration'}),location=declaration.location;
+    detail.append(el('small',`Target declaration: ${edge.attrs.symbol||target.label}`));
+    const link=location&&sourceLink(location);
+    if(link)detail.append(link);
+    else detail.append(el('small',location?`${location.path}:${location.line||1} (source root is unavailable)`:
+      'Target declaration location was not recorded in this snapshot.'));
+    row.append(detail);
+  } else if(target.boundary&&!state.universe.isConfiguration(edge)) {
+    row.append(el('small','Target declaration location was not recorded in this snapshot.'));
+  }
+  if(edge.attrs){
+    const metadata=el('dl');
+    attributes(metadata,Object.fromEntries(Object.entries(edge.attrs).filter(([name])=>name!=='target_declaration'&&(!declaration||name!=='symbol'))));
+    row.append(metadata);
+  }
   if(source.source){const link=sourceLink(source.source);if(link)row.append(link);}
   return row;
 }

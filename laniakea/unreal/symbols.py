@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .. import LaniakeaError
 from . import graph
+from .external import SourceLocations
 from .commands import remap
 
 EDGE_TYPES = [
@@ -22,17 +23,19 @@ def node_id(usr):
     return "symbol:" + hashlib.sha256(usr.encode("utf-8")).hexdigest()
 
 
-def merge(built, batches, project, copy, engine, exported, generated_owners=None):
+def merge(built, batches, project, copy, engine, exported, generated_owners=None, *, locations=None):
     builder = graph._Builder(project, engine)
     builder.nodes = {n["id"]: n for n in built["nodes"]}
     builder.edges = {e["id"]: e for e in built["edges"]}
     project_root = Path(project).parent
+    locations = locations or SourceLocations(project_root, engine)
     module_directories = {}
     for name, entry in exported["Modules"].items():
         module_directories.setdefault(graph._norm(entry["Directory"]), name)
     all_directories = {**module_directories, **{graph._norm(path): name for path, name in (generated_owners or {}).items()}}
     facts, references, relations = {}, [], []
     for batch in batches:
+        locations.register(batch.get('providers', []))
         if any(d["severity"] >= 3 for d in batch["diagnostics"]):
             raise LaniakeaError("a translation unit with compiler errors cannot publish symbol facts")
         for symbol in batch["symbols"]:
@@ -49,6 +52,9 @@ def merge(built, batches, project, copy, engine, exported, generated_owners=None
                 facts[symbol["usr"]] = symbol
         references.extend(batch["references"])
         relations.extend(batch["relations"])
+    for node in list(builder.nodes.values()):
+        if node['level']=='module' and node['boundary']:
+            locations.module(builder, node['label'], exported)
 
     @lru_cache(maxsize=None)
     def original(file):
@@ -90,6 +96,7 @@ def merge(built, batches, project, copy, engine, exported, generated_owners=None
 
     unknown = {"source": 0, "target": 0}
 
+    @lru_cache(maxsize=None)
     def endpoint(usr, file=None):
         if usr in ids:
             return ids[usr]
@@ -106,24 +113,47 @@ def merge(built, batches, project, copy, engine, exported, generated_owners=None
             module = owner(symbol.get("file") or file)
         if not module:
             if symbol.get("file") and graph._relative(original(symbol["file"]), engine) is not None:
-                return graph.ENGINE_ID
+                return builder.engine_third_party(original(symbol['file'])) or graph.ENGINE_ID
             if usr and symbol.get("file") and graph._relative(original(symbol["file"]), project_root) is None:
-                builder.node("external:cpp", "project", "External C++ headers", None, boundary=True,
-                             attrs={"analysis": "referenced declarations only"})
-                return "external:cpp"
+                return locations.endpoint(builder, original(symbol['file']))
             return None
         identity = "module:" + module
         if identity not in builder.nodes:
-            builder.boundary_module(module, exported)
+            locations.module(builder, module, exported)
         return identity
 
+    @lru_cache(maxsize=None)
+    def declaration(usr):
+        symbol = facts.get(usr, {})
+        result = {'id': node_id(usr)}
+        location = locations.location(original(symbol.get('file')), symbol.get('line', 1))
+        if location is not None:
+            result['location'] = location
+            result['column'] = symbol.get('column', 1)
+        return result
+
+    seen_relations = set()
     for relation in relations:
+        key = (relation['type'], relation['source'], relation['target'])
+        if key in seen_relations:
+            continue
+        seen_relations.add(key)
         source, target = endpoint(relation["source"]), endpoint(relation["target"])
         if source is None or target is None or builder.nodes[source]["boundary"]:
             continue
-        builder.edge(relation["type"], source, target, "resolved", "compiler")
+        original_source, original_target = facts.get(relation['source'], {}), facts.get(relation['target'], {})
+        identity = f"{relation['type']}:{source}->{target}"
+        if relation['source'] not in ids or relation['target'] not in ids:
+            identity += ':' + hashlib.sha256(repr(key).encode()).hexdigest()[:24]
+        attrs = {'symbol': '::'.join(filter(None, (original_target.get('scope'), original_target.get('signature')))),
+                 'target_declaration': declaration(relation['target'])}
+        location = locations.location(original(original_source.get('file')), original_source.get('line', 1))
+        if location is not None:
+            attrs['location'] = location
+        builder.edges[identity] = {'id': identity, 'type': relation['type'], 'source': source, 'target': target,
+                                   'status': 'resolved', 'origin': 'compiler', 'attrs': attrs}
         if source == target and (relation["source"] not in ids or relation["target"] not in ids):
-            builder.edges[f"{relation['type']}:{source}->{target}"]["internal_to_owner"] = True
+            builder.edges[identity]["internal_to_owner"] = True
     seen = set()
     for reference in references:
         if not reference["role"] & 4:
@@ -154,11 +184,15 @@ def merge(built, batches, project, copy, engine, exported, generated_owners=None
                                    "status": "resolved", "origin": "compiler",
                                    "attrs": {"location": location, "column": reference["column"],
                                              "symbol": "::".join(filter(None, (symbol.get("scope"), symbol.get("signature")))),
+                                             'target_declaration': declaration(reference['target']),
                                              "dispatch": "virtual target declaration" if reference["role"] & 64 else "static",
                                              "implicit": reference["implicit"]}}
         if source == target and (reference["source"] not in ids or reference["target"] not in ids
                                  or (kind == "uses.type" and symbol.get("level") == "class")):
             builder.edges[identity]["internal_to_owner"] = True
+    if 'external:cpp' in builder.nodes and not any(n['parent']=='external:cpp' for n in builder.nodes.values()) and \
+            not any('external:cpp' in (e['source'],e['target']) for e in builder.edges.values()):
+        del builder.nodes['external:cpp']
     result = {"schema": built["schema"], "nodes": list(builder.nodes.values()), "edges": list(builder.edges.values())}
     _dependency_reviews(result, exported)
     return result, unknown

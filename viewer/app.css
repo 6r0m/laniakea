@@ -139,6 +139,7 @@ dd { margin: 0; overflow-wrap: anywhere; }
   min-height: 24px; text-align: left; overflow-wrap: anywhere; text-decoration: underline; text-underline-offset: 3px; }
 .connections small { display: block; color: var(--muted); }
 .connections a { display: inline-block; max-width: 100%; margin-top: 4px; font-size: 12px; }
+.target-declaration { margin: 8px 0; }
 .reference-pager { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0;
   position: sticky; top: 0; z-index: 1; padding: 6px 0; background: var(--panel); }
 .node-metadata { margin-top: 14px; font-size: 12px; }

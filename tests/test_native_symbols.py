@@ -175,6 +175,22 @@ class NativeSymbols(unittest.TestCase):
         self.assertEqual((calls[0]['source'],calls[0]['target']),(node['id'],node['id']))
         self.assertFalse(calls[0].get('internal_to_owner',False))
 
+    def test_external_bases_and_call_target_keep_native_declaration_coordinates(self):
+        sdk = self.root / 'sdk'; sdk.mkdir()
+        header = sdk / 'SampleSDK.h'
+        header.write_text('struct SampleFirstBase {};\nstruct SampleSecondBase {};\nint SampleExternalCall();\n')
+        self.source.write_text('#include "'+header.as_posix()+'"\n'
+                               'struct SampleExternalDerived:SampleFirstBase,SampleSecondBase {};\n'
+                               'int SampleExternalCaller(){return SampleExternalCall();}\n')
+        built = self.normalize([self.index()])
+        bases = [e for e in built['edges'] if e['type']=='inherits']
+        self.assertEqual(len(bases),2)
+        self.assertEqual({e['attrs']['target_declaration']['location']['line'] for e in bases},{1,2})
+        call = next(e for e in built['edges'] if e['type']=='calls')
+        self.assertEqual(call['attrs']['location']['line'],3)
+        self.assertEqual(call['attrs']['target_declaration']['location']['line'],3)
+        self.assertTrue(call['attrs']['target_declaration']['location']['path'].endswith('SampleSDK.h'))
+
     def test_class_own_type_references_are_internal_without_hiding_function_self_references(self):
         self.source.write_text(
             '#define SAMPLE_CATEGORY(Name) struct Name { using Self=Name; Name* next; };\n'

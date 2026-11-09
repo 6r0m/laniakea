@@ -39,7 +39,7 @@ def target_index(workspace):
             "id": target["id"],
             "project": Path(target["project_file"]).stem,
             "run": run.name,
-            "roots": target.get("roots", {}),
+            "roots": {**target.get("roots", {}), **read_json(run / 'manifest.json').get('roots', {})},
             "stale": bool(changed),
             "changed": changed[:20],
             "changed_count": len(changed),

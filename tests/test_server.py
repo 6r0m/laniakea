@@ -18,6 +18,18 @@ from support import copy_sample, fake_engine, recorded_ubt
 
 
 class Server(unittest.TestCase):
+    def test_advertised_source_roots_belong_to_the_selected_immutable_run(self):
+        from laniakea.server import target_index
+        workspace = self.server.workspace_for_tests
+        target = workspace.load('sample'); run = workspace.latest('sample')
+        manifest = read_json(run / 'manifest.json')
+        updated = {**manifest,'roots':{'sample-sdk':str(workspace.root / 'SyntheticSDK')}}
+        with patch('laniakea.server.read_json',return_value=updated), \
+             patch('laniakea.server.pipeline.freshness',return_value=(run,[])):
+            advertised = target_index(workspace)[0]
+        self.assertEqual(advertised['roots']['sample-sdk'],updated['roots']['sample-sdk'])
+        self.assertEqual(advertised['roots']['project'],target['roots']['project'])
+
     def test_layout_post_acknowledges_without_echoing_the_growing_cache(self):
         status, body = self.post('/layout/sample/entry.json', {
             'layout': 'ack_probe', 'positions': {'module:SampleProject': {'x': 1, 'y': 2}}})

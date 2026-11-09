@@ -146,7 +146,9 @@ function viewportCamera(padding = 220) {
   const cy=state.cy,zoom=worldZoom(),pan=cy.pan();
   if(!cy.width() || !cy.height()) return null;
   const force=[];
-  const selected=state.pendingReference || (state.selection?.referenceGroup ? state.selection : null);
+  const inspection=state.selection;
+  const exact=inspection?.referenceGroup || inspection?.refs?.length===1&&inspection.id===inspection.refs[0].id;
+  const selected=state.pendingReference || (exact ? inspection : null);
   if(selected)for(const id of selected.configurationInspection?[selected.target]:selected.source?[selected.source,selected.target]:[selected.id])
     if(state.universe.nodes.has(id))force.push(id);
   return {x1:(-pan.x-padding)/zoom,y1:(-pan.y-padding)/zoom,
@@ -300,6 +302,10 @@ function traceSummary(trace) {
       rows:[['Outgoing references recorded',totals.outgoing,'outgoing'],['Incoming references recorded',totals.incoming,'incoming'],
         ['Within / self references recorded',totals.within,'within']].map(row=>[...row,state.universe.configurationStats.get(node.id)[row[2]]]),
       notes:[!totals.incoming&&'No incoming references recorded in this snapshot.',analysisHint(node),
+        node.boundary&&node.attrs?.ownership,
+        node.boundary&&node.attrs?.analysis,
+        node.boundary&&!node.source&&!node.attrs?.ownership&&'Provider ownership was not recorded in this snapshot.',
+        trace.refs.length&&`Shown types: ${traceTypes(trace.refs)}.`,
         configurationMarkLabel(node.id),
         Object.values(state.universe.configurationStats.get(node.id)).some(Boolean)&&configurationMeaning(),
         node.boundary&&'External boundary; further dependencies were not analysed.',

@@ -128,6 +128,7 @@ def extract(target, run_dir, previous_manifest=None, tools_dir=None):
         manifest["edge_types"] = [*graph.EDGE_TYPES, *symbols.EDGE_TYPES]
         manifest["sources"].append({"id": "compiler", "name": "LLVM libclang native semantic index", "version": tools.VERSION})
         manifest["inputs"].update(compiler_result["external_inputs"])
+        manifest['roots'] = compiler_result.get('roots', {})
         coverage["analysed"].append(f"authored C++ classes, functions and statically resolved references: {compiler_result['units']} native units")
         coverage["not_analysed"].extend(["Engine class/function internals and runtime/indirect dispatch",
                                          "generated-only declarations without an authored source owner"])

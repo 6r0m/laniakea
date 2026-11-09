@@ -24,6 +24,7 @@ Hover a connection for both directions; click to inspect their exact references.
 are external. Connections become counted bundles at a distance and reconnect to their exact endpoints as detail appears.
 Internal references remain counted inside collapsed groups. Inspection also links to source; following a reference reveals
 its destination while retaining the surrounding map.
+External-provider hover explains recorded ownership; exact rows can link the target declaration as well as your source.
 
 Choose **galaxy** in Layout for an Engine-centered overview with project constellations around it. Click **Project**
 beside the target selector to inspect source and configuration declarations. **Config marks** optionally outlines
@@ -57,7 +58,9 @@ for that extraction only; installation does not enable it implicitly. Symbol ana
 sources in the last usable build's target/configuration. It prepares compiler inputs in an isolated workspace copy and
 reports timing and compiler diagnostics. Missing tools, missing successful-build context or a compiler failure retain the
 previous published map; omit `--symbols` for module exploration. Engine symbols remain
-module/plugin boundaries. Calls are statically resolved; other callable references remain visible as function references.
+module/plugin boundaries. Referenced Engine ThirdParty libraries keep their owner context; compiler and SDK providers
+are identified from recorded build roots. Unknown suppliers stay explicit. Calls are statically resolved; other callable
+references remain visible as function references.
 The optional compiler argument enables preprocessing-validated reuse on subsequent extractions. Cold symbol analysis can
 be expensive; `serve` opens a published run without extracting again, checking input freshness at startup.
 

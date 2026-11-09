@@ -4,6 +4,38 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const {viewer,inspectionViewer,treeElements}=require('./viewer-support.cjs');
 
+test('canonical exact inspection retains both remote endpoints after pending navigation clears',t=>{
+  const {run}=viewer();t.after(()=>run('state.cy.destroy()'));
+  run(`state.cy=cytoscape({headless:true});state.universe.place({},'auto');
+    const exact=state.universe.graph.edges[0];state.selection={...exact,refs:[exact]};
+    state.pendingReference=null;globalThis.camera=viewportCamera();`);
+  assert.deepEqual(Array.from(run('camera.force')).sort(),Array.from(run('[state.selection.source,state.selection.target]')).sort());
+});
+
+test('external hover explains recorded provider ownership and the shown reference types',t=>{
+  const {run}=inspectionViewer();treeElements(run);t.after(()=>run('state.cy.destroy()'));
+  run(`state.universe.nodes.get('stdlib').attrs={ownership:'UBT selected SDK root',analysis:'Referenced declarations only'};
+    globalThis.summary=traceSummary(ConnectionTrace.node(state.universe,state.shard,'stdlib'));`);
+  assert.match(run('summary.notes.join(" ")'),/UBT selected SDK root/);
+  assert.match(run('summary.notes.join(" ")'),/Referenced declarations only/);
+  assert.match(run('summary.notes.join(" ")'),/Shown types:/);
+});
+
+test('exact external rows link the declaring header and explain missing or unregistered provenance',t=>{
+  const {run}=inspectionViewer();treeElements(run);t.after(()=>run('state.cy.destroy()'));
+  run(`state.target.roots={'sample-sdk':'C:/SampleSDK'};
+    globalThis.edge={id:'exact',source:'app.core.db',target:'stdlib.sqlite3',type:'calls',status:'resolved',origin:'compiler',
+      attrs:{symbol:'SampleApi()',target_declaration:{id:'sample-decl',location:{root:'sample-sdk',path:'include/Api.h',line:7}}}};
+    globalThis.walk=n=>[n,...(n.children||[]).flatMap(walk)];
+    globalThis.row=referenceRow(edge);`);
+  assert.equal(run("walk(row).filter(n=>n.tag==='a'&&n.attrs.href==='vscode://file/C:/SampleSDK/include/Api.h:7').length"),1);
+  assert.equal(run("walk(row).some(n=>n.textContent==='Target declaration: SampleApi()')"),true);
+  run(`state.target.roots={};row=referenceRow(edge);`);
+  assert.equal(run("walk(row).some(n=>String(n.textContent).includes('source root is unavailable'))"),true);
+  run(`delete edge.attrs.target_declaration;row=referenceRow(edge);`);
+  assert.equal(run("walk(row).some(n=>String(n.textContent).includes('not recorded in this snapshot'))"),true);
+});
+
 test('project inspection is explicit and survives refresh without reopening after clear',t=>{
   const {run}=inspectionViewer();treeElements(run);t.after(()=>run('state.cy.destroy()'));
   run(`state.universe.paged=true;globalThis.queries=[];

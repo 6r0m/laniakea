@@ -53,6 +53,11 @@ from leaves; it does not invent an extra owner to make them look uniform.
 Each edge names, in `origin`, the manifest source that produced it, and the manifest records that source's version,
 the target and the configuration. Edge type ids and labels come from the manifest's `edge_types`.
 
+An exact reference can retain its original target declaration identity and location even when the displayed target
+is an abstracted module or provider. The schema owns that metadata's shape. Referring-source coordinates and target
+declaration coordinates describe different locations. Distinct declarations behind one visible connection stay
+distinguishable in canonical data and exact pages; repeated observations of the same relationship remain deduplicated.
+
 ## Coverage
 
 The manifest lists what was analysed, what was not (other targets, deeper hops, levels not built), and node and edge
@@ -129,6 +134,13 @@ Exact-reference navigation retains its original identity. Hiding an inspected it
 of highlighting a different ancestor. Hover and wheel exploration do not require an inspected item.
 Node inspection keeps identity, source and analysis state visible; secondary metadata has a separate disclosure so
 references and navigation remain reachable. Constellation controls track expansion without resetting the reference reader.
+
+External-provider hover includes recorded ownership/coverage and a bounded breakdown of the currently shown reference
+types. Inspection lists the original consumers and labels target declarations separately from their referring locations.
+Source links resolve through the run's advertised roots; unavailable roots are displayed without a link. A run without
+declaration provenance explains that it was not recorded. The viewer does not infer provider ownership from names.
+Providers use ordinary containment and boundary styling: one provider can have several consumers without becoming
+their child. Only referenced structure is revealed; external implementation analysis is not implied.
 
 Known boundary children can be revealed from recorded containment, including external endpoints of exact
 references. This does not fetch or imply analysis of their own dependencies. Missing coverage remains unknown.

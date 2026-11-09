@@ -135,7 +135,64 @@ async page => {
       JSON.stringify([...state.universe.positions])===traceProof.positions&&state.cy.elements().length<=traceProof.elements),
       'Trace changed positions or accumulated renderer elements');
     check(requests.length===0,'Trace requested pages or wrote layouts');check(errors.length===0,'Browser errors: '+errors.join('; '));
+    await page.evaluate(()=>{
+      const node=(id,label,level,parent,boundary=false,attrs={})=>({id,label,level,parent,boundary,status:'in-target',attrs});
+      const nodes=[node('root','Sample','project',null),node('component','Sample component','module','root'),
+        node('derived','SampleDerived','class','component'),node('caller','SampleCaller','function','component'),
+        node('suppliers','Toolchains & SDKs','project',null,true),
+        node('sdk','Sample SDK','folder','suppliers',true,{ownership:'Recorded SDK root in build context',analysis:'Referenced declarations only'})];
+      const edge=(id,source,type,symbol,path,line)=>({id,source,target:'sdk',type,status:'resolved',origin:'synthetic',
+        attrs:{symbol,location:{root:'project',path:'Source/Sample.cpp',line:20},
+          target_declaration:{id:'declaration-'+id,location:{root:'sample-sdk',path,line}}}});
+      const edges=[edge('base-a','derived','inherits','SampleBaseA','include/Bases.h',1),
+        edge('base-b','derived','inherits','SampleBaseB','include/Bases.h',2),
+        edge('api','caller','calls','SampleApi()','include/Api.h',4)];
+      state.manifest={...state.manifest,edge_types:[{id:'inherits',label:'inherits'},{id:'calls',label:'calls'}]};
+      state.target.roots={...state.target.roots,'sample-sdk':'C:/SyntheticSDK'};
+      state.universe=new Universe({schema:'laniakea.graph/1',nodes,edges});
+      state.index={nodes:nodes.filter(n=>!n.boundary).map(n=>({...n,child_count:nodes.filter(c=>c.parent===n.id).length,
+        file:n.id==='root'?'entry.json':n.id+'.json'}))};state.indexLookup=null;
+      state.scopeShard={scope:'root',title:'Sample',parents:[]};state.selection=null;state.hidden.clear();
+      renderGraph();
+      for(const [id,[x,y]] of Object.entries({root:[0,0],component:[-260,0],derived:[-280,-40],caller:[-240,40],suppliers:[260,0],sdk:[260,0]}))
+        state.universe.positions.set(id,{x,y});
+      state.universe.indexPositions();refreshMap();fitMap();
+    });
+    await page.evaluate(()=>flyToNode('suppliers',false));
+    for(let i=0;i<12&&!await page.evaluate(()=>state.universe.expanded.has('suppliers'));i++){
+      const p=await point('suppliers','suppliers');await page.mouse.move(p.x,p.y);await page.mouse.wheel(0,-120);await frames();
+    }
+    await page.waitForFunction(()=>!state.gestureActive&&!state.viewportFrame);
+    check(await page.evaluate(()=>state.universe.expanded.has('suppliers')&&state.cy.getElementById('sdk').length===1),
+      'Wheel did not reveal the external provider within its recorded constellation');
+    await move(await point('sdk','sdk'));
+    check(await page.locator('#hover-card').innerText().then(text=>text.includes('Recorded SDK root in build context')&&
+      text.includes('Shown types:')&&text.includes('inherits')&&text.includes('calls')),
+      'External hover lost ownership evidence or typed reference explanation');
+    const provider=await point('sdk','sdk');await page.mouse.click(provider.x,provider.y);await frames();
+    check(await page.locator('#details .target-declaration a').count()===3,
+      'Exact external relationships did not expose declaring-header links');
+    const links=await page.locator('#details .target-declaration a').evaluateAll(items=>items.map(n=>n.getAttribute('href')));
+    check(links.includes('vscode://file/C:/SyntheticSDK/include/Bases.h:1')&&
+      links.includes('vscode://file/C:/SyntheticSDK/include/Bases.h:2')&&links.includes('vscode://file/C:/SyntheticSDK/include/Api.h:4'),
+      'Distinct external declarations collapsed to the same header location');
+    check(await page.evaluate(()=>state.cy.getElementById('sdk').length===1),
+      'Several consumers created duplicate provider identities');
+    await page.getByRole('button',{name:'SampleDerived (class) -> Sample SDK (folder)',exact:true}).first().click();
+    check(await page.evaluate(()=>state.selection?.attrs.target_declaration.id==='declaration-base-a'),
+      'Following an exact external relationship lost its original declaration');
+    await page.evaluate(()=>{delete state.target.roots['sample-sdk'];state.detailsKey=null;renderDetails(state.selection);});
+    check(await page.locator('#details').innerText().then(text=>text.includes('source root is unavailable'))&&
+      await page.locator('#details .target-declaration a').count()===0,'Unavailable roots must remain explicit and unlinked');
+    await page.evaluate(()=>{
+      delete state.selection.attrs.target_declaration;state.detailsKey=null;renderDetails(state.selection);
+    });
+    check(await page.locator('#details').innerText().then(text=>text.includes('not recorded in this snapshot')),
+      'Older external rows lost their missing-provenance explanation');
+    check(await page.evaluate(()=>JSON.stringify(state.positionCache.layouts)===traceProof.pins)&&requests.length===0&&errors.length===0,
+      'External inspection wrote pins, fetched extra facts or produced runtime errors');
     return {nativeReciprocalPath:true,bothDirectionInspection:true,oneWay:true,recursion:true,filterRefresh:true,
-      noHoverRequests:true,noDecorations:true,keyboardReadout:true,contrasts,errors};
+      noHoverRequests:true,noDecorations:true,keyboardReadout:true,externalOwnership:true,externalZoom:true,
+      exactDeclarationLinks:true,sharedProvider:true,missingProvenance:true,contrasts,errors};
   }finally{page.off('request',observe);page.off('pageerror',onError);await page.reload();}
 }

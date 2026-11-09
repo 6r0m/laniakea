@@ -12,6 +12,7 @@ How `laniakea/unreal/` reads a project, and the engine behaviour it is built aro
 - What UBT writes into the project
 - Compiler-facing preparation
 - Native symbol analysis
+- External dependency ownership
 - From export to graph
 
 ## Inputs
@@ -145,7 +146,7 @@ Call edges require both LLVM's actual call role and a matching native evaluated 
 `sizeof`, `noexcept`, requirements and type declarations remain references. Unsupported type/default-argument or initializer
 contexts also remain references rather than acquiring an inferred call. Virtual-call targets name the statically selected
 declaration; runtime dispatch is not analysed. Engine classes/functions collapse to their owning module/plugin; external
-toolchain declarations form a separate boundary. Cross-module calls without a direct build dependency carry a review note
+toolchain declarations form provider boundaries. Cross-module calls without a direct build dependency carry a review note
 with transitive and public-exposure paths; this is not reported as a violation.
 
 Native header-tool manifests map generated declarations back to their module, checked against JsonExport ownership.
@@ -176,6 +177,33 @@ This retains exact source coordinates after comment-only edits. Volatile date/ti
 Windows commands use response files; no expanded source dump is retained. Cached facts stay target-local in the workspace.
 Scope normalization still runs against the current module graph. Cache misses fall back to native analysis; preparation
 and write I/O failures are reported in worker metrics. Compiler errors never produce reusable facts.
+
+## External dependency ownership
+
+The profile owns provider attribution in [external.py](../../laniakea/unreal/external.py); the viewer consumes ordinary
+containment and reference metadata. Exported module directories and owning plugin descriptors take precedence. A
+module physically under Engine stays under its Engine/plugin owner. Referenced directories under
+`Engine/Source/ThirdParty` retain that folder context, including a vendor folder for a header without a known module.
+Engine folder identities occupy a separate namespace from project plugin folders. A foreign exported module does not
+become Engine-owned merely because it has no plugin descriptor.
+
+UBT compiler actions can identify compiler and Windows SDK roots in their recorded root table. The explicitly selected
+LLVM resource directory identifies compiler-supplied headers. Referenced providers appear under Toolchains & SDKs,
+shared by all consumers. Attribution follows those roots, not include spelling, a namespace or a header basename.
+Missing provider evidence retains an explicitly unclassified external boundary. Provider directory nodes are not build
+modules and do not create missing-module-dependency review notes for ordinary compiler facilities.
+
+Normalization preserves each original target declaration's identity and recorded source coordinates before abstracting
+its endpoint. Semantic relations deduplicate repeated observations by their original identities, so two external bases
+do not merge merely because their displayed owner is the same. Calls and other references retain their project call-site
+coordinates separately. Declaring locations can be inline definitions; the native compiler owns the recorded location.
+This records only declarations reached by project analysis, not an index of external implementations or their dependencies.
+
+Additional source-root aliases belong to the immutable run and remain in the ignored workspace. Serving advertises them
+with that run so exact declaration links do not depend on a later toolchain selection. Unknown or absent roots remain
+explicit and unlinked; older runs are not reclassified in the viewer. Input/tool validation, successful-build selection,
+module-only isolation and publication refusal remain the native extraction contract above. Provider lookup and declaration
+metadata reuse are scoped to one normalization, not a second persistent ownership database.
 
 ## From export to graph
 

@@ -91,6 +91,17 @@ class MapIndex(unittest.TestCase):
             with self.subTest(groups=groups),self.assertRaises(ValueError):
                 index.references({'groups':groups})
 
+    def test_distinct_external_declaration_identities_survive_one_compact_group(self):
+        base = {'source':'app.core.db','target':'stdlib','type':'inherits','status':'resolved','origin':'compiler'}
+        self.graph['edges'] = [{**base,'id':'base-'+str(n),'attrs':{'symbol':'SampleBase'+str(n),
+            'target_declaration':{'id':'native-'+str(n),'location':{'root':'sample-sdk','path':'include/Base.h','line':n+1}}}}
+            for n in range(2)]
+        index = self.build(); topology = index.topology()
+        self.assertEqual(len(topology['references']),1)
+        self.assertEqual(topology['references'][0]['count'],2)
+        page = index.references({'groups':[1]}); schema.validate(page,'referencePage')
+        self.assertEqual([item['reference'] for item in page['items']],self.graph['edges'])
+
     def test_content_bound_cache_reuses_a_complete_index_and_failure_keeps_it(self):
         workspace = Workspace(self.root / 'workspace')
         run = workspace.target_dir('sample') / 'runs/one'

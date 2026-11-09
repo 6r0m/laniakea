@@ -14,6 +14,7 @@ from time import perf_counter
 from .. import LaniakeaError
 from ..workspace import read_json, write_json
 from . import commands, graph, project_copy, symbols, tools, ubt
+from .external import SourceLocations, action_providers
 
 
 def _worker(library, command, copy, output):
@@ -103,6 +104,7 @@ def extract(target, run_dir, built, exported, chosen, tools_dir):
     timings["copy_fidelity"] = perf_counter() - start
     start = perf_counter()
     actions = ubt.build_actions(target["engine_root"], copy, chosen["name"], chosen["configuration"], out, workspace)
+    locations = SourceLocations(project.parent, target['engine_root'], action_providers(actions, installed['resources']))
     database = commands.from_actions(actions, copy.parent, installed["resources"])
     write_json(out / "compile_commands.json", database)
     write_json(out / "provenance.json", {"copy_input_digest": digest, "copied_inputs": files,
@@ -124,7 +126,7 @@ def extract(target, run_dir, built, exported, chosen, tools_dir):
             yield batch
     generated = generated_owners(copy, project, chosen["name"], exported)
     result, unknown = symbols.merge(built, recorded_batches(), project, copy.parent,
-                                    target["engine_root"], exported, generated)
+                                    target["engine_root"], exported, generated, locations=locations)
     timings["normalize_symbols"] = perf_counter() - start
     nodes = {node["id"]: node for node in result["nodes"]}
     counts = {}
@@ -157,7 +159,8 @@ def extract(target, run_dir, built, exported, chosen, tools_dir):
                 "declarations reached by native target compilation" if attrs["compiler_units"] else
                 "declarations reached through other compiled modules" if values else
                 "not analysed: no native unit or authored declaration observed")
-    return result, {"enabled": True, "timings": timings, "unknown": unknown, "units": len(jobs), "external_inputs": external}
+    return result, {"enabled": True, "timings": timings, "unknown": unknown, "units": len(jobs), "external_inputs": external,
+                    'roots': locations.roots}
 
 
 def generated_owners(copy, original, target, exported):
