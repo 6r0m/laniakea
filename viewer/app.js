@@ -445,6 +445,10 @@ function inspectPair(source,target) {
   if(pair)renderDetails({...pair,signature:ConnectionTrace.signature(pair),pairInspection:true});
 }
 
+function inspectOverlap(trace) {
+  renderDetails({...trace,signature:ConnectionTrace.signature(trace),overlapInspection:true});
+}
+
 function renderDetails(item) {
   clearTimeout(state.inspectTimer);
   const isNode = item && item.level !== undefined;
@@ -454,15 +458,18 @@ function renderDetails(item) {
     state.universe.configurationReferences.some(ref=>
       (requested.referenceGroup ? ref.group===requested.referenceGroup : ref.id===requested.id) &&
       ref.source===requested.source && ref.target===requested.target && ref.type===requested.type);
-  const pair=requested?.pairInspection&&ConnectionTrace.pair(state.shard,requested.source,requested.target);
+  const traceInspection=requested?.pairInspection||requested?.overlapInspection;
+  const pair=requested?.overlapInspection?ConnectionTrace.overlap(state.shard,requested.pairs):
+    requested?.pairInspection&&ConnectionTrace.pair(state.shard,requested.source,requested.target);
   const signature=pair&&ConnectionTrace.signature(pair);
-  item = requested?.pairInspection ? pair&&signature===requested.signature ? {...pair,signature,pairInspection:true} : null :
+  item = traceInspection ? pair&&signature===requested.signature&&pair.kind===requested.kind ?
+    {...pair,signature,...(requested.overlapInspection?{overlapInspection:true}:{pairInspection:true})} : null :
     requested && (isNode ? state.shard.nodes : requested.referenceGroup ? [] : state.shard.edges)
     .find(current => current.id === requested.id) || null;
   if(projectContext)item={...state.universe.nodes.get(state.universe.root),projectContext:true};
   else if(configurationInspection)item=requested;
   let connection = item;
-  if (!item && requested && !isNode && !requested.pairInspection) {
+  if (!item && requested && !isNode && !traceInspection) {
     for (const projected of state.shard.edges) {
       const exact = projected.refs?.find(reference => reference.id === requested.id);
       if (!requested.referenceGroup && exact && projected.source === exact.source && projected.target === exact.target) {
@@ -475,18 +482,18 @@ function renderDetails(item) {
     }
   }
   const contextual=projectContext||configurationInspection;
-  const rendered = item && (contextual ? state.cy.collection() : item.pairInspection ? state.cy.edges().filter(edge=>item.roles.has(edge.data('referenceId'))) :
+  const rendered = item && (contextual ? state.cy.collection() : traceInspection ? state.cy.edges().filter(edge=>item.roles.has(edge.data('referenceId'))) :
     state.cy.getElementById(isNode ? item.id : state.universe.renderPrefix + connection.id));
   if (item && !contextual && (!rendered.length || !rendered.visible())) item = null;
   state.selection = item;
   if (state.cy) {
     state.cy.elements().unselect();
     state.cy.edges('.pair-inspected').removeClass('pair-inspected');
-    if (item) { rendered.select();if(item.pairInspection)rendered.addClass('pair-inspected'); }
+    if (item) { rendered.select();if(traceInspection)rendered.addClass('pair-inspected'); }
     readableLabels();
   }
   const panel = $('details');
-  const key = state.universe.paged && item ? JSON.stringify([item.pairInspection?item.key:item.id,item.signature||null,item.referenceGroup||null,
+  const key = state.universe.paged && item ? JSON.stringify([traceInspection?item.key:item.id,item.signature||null,item.referenceGroup||null,
     Boolean(projectContext),Boolean(configurationInspection),[...state.hidden].sort(),state.boundary,item.refs?.map(r=>r.group)]) : null;
   if (key && key===state.detailsKey) {
     const control = panel.querySelector('[data-action="toggle-group"]');
@@ -507,6 +514,7 @@ function renderDetails(item) {
   }
   togglePanel('details', true);
   if(projectContext) { renderProjectDetails(panel,item);return; }
+  if(item.overlapInspection) { renderOverlapDetails(panel,item);return; }
   if(item.pairInspection) { renderPairDetails(panel,item);return; }
   const list = el('dl');
   if (item.level !== undefined) {
@@ -605,6 +613,33 @@ function renderPairDetails(panel,trace) {
     else if(state.universe.paged)appendReferencePage(panel,{groups:refs.map(ref=>ref.group)},count);
     else appendReferences(panel,refs);
   }
+}
+
+function renderOverlapDetails(panel,trace) {
+  panel.append(el('h2',`${trace.pairs.length} overlapping connections`),
+    el('p',`${ConnectionTrace.total(trace.refs)} distinct references in this view. The crossing is visual, not an architectural junction.`,{class:'muted'}));
+  const list=el('ul',null,{class:'connections'}),more=el('button','More connections',{type:'button'});
+  let offset=0;
+  const append=()=>{
+    let first;
+    for(const pair of trace.pairs.slice(offset,offset+50)){
+      const row=el('li'),a=traceName(pair.source),b=traceName(pair.target);
+      const button=el('button',pair.source===pair.target?a+' (within / self)':a+' <-> '+b,{type:'button'});
+      if(!first)first=button;
+      const emphasize=()=>{
+        const id=pair.roles.keys().next().value,edge=state.cy.getElementById(state.universe.renderPrefix+id);
+        if(edge.length)preview(edge,null,pair);
+      };
+      button.onmouseenter=emphasize;button.onfocus=emphasize;
+      button.onclick=()=>inspectPair(pair.source,pair.target);
+      row.append(button,...traceSummary(pair).rows.map(([name,count,role])=>el('small',`${name}: ${count} refs`,{class:'trace-'+role})),
+        el('small',traceTypes(pair.refs)));
+      list.append(row);
+    }
+    offset+=50;more.hidden=offset>=trace.pairs.length;
+    if(document.activeElement===more&&first)first.focus();
+  };
+  more.onclick=append;panel.append(list,more);append();
 }
 
 function updateGroupControl(button, id) {

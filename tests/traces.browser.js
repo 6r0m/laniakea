@@ -41,22 +41,31 @@ async page => {
       await page.waitForFunction(()=>!state.gestureActive&&!state.viewportFrame);
       await page.mouse.move(p.x,p.y);await frames();
     };
-    let stable,cardPosition;
+    let stable,cardPosition,lastFocus;
     for(const fraction of [.2,.3,.4,.6,.7,.8]) {
       await move(await point('a','b',fraction));
       const trace=await page.evaluate(()=>({text:$('map-tooltip').textContent,key:state.trace?.key,arrows:
         state.cy.edges('.trace-outgoing,.trace-incoming').map(e=>({role:e.hasClass('trace-outgoing')?'out':'in',
           color:e.style('target-arrow-color'),stroke:e.style('line-color'),opacity:e.style('opacity')}))}));
       check(trace.key===JSON.stringify(['pair','a','b']),'Shared native path lost its pointer trace');
-      check(/A -> B: 7 refs.*B -> A: 2 refs/.test(trace.text),'Reciprocal mixed-type counts are incomplete');
-      if(stable)check(stable===trace.text,'Pair readout changed along its native path');else stable=trace.text;
+      const focus=await page.evaluate(()=>state.trace.focus);
+      const expected=fraction<.5?'a':'b';
+      check(focus.id===expected&&focus.counts.incoming===(expected==='a'?2:7)&&focus.counts.outgoing===(expected==='a'?7:2),
+        'Proximity must reverse directional totals relative to the titled endpoint');
+      if(lastFocus===focus.id)check(stable===trace.text,'Readout changed without a focus change');
       check(trace.arrows.some(a=>a.role==='out')&&trace.arrows.some(a=>a.role==='in'),'Both directional arrows are missing');
       check(trace.arrows.every(a=>a.opacity==='1'),'Active direction contrast is composited away');
       const card=await page.locator('#hover-card').boundingBox();
-      check(card&&await page.locator('#hover-card').innerText().then(text=>/Sender -> Receiver.*7 refs.*Receiver -> Sender.*2 refs/s.test(text)),
-        'Nearby pair card must show both named directions');
-      if(cardPosition)check(card.x===cardPosition.x&&card.y===cardPosition.y,'The card moved while following the same pair');
-      else cardPosition=card;
+      check(card&&await page.locator('#hover-card .hover-name').innerText()===(expected==='a'?'Sender':'Receiver')&&
+        await page.locator('#hover-card .hover-direction').count()===2,'Card must name its focus and use two direction columns');
+      check(await page.evaluate(()=>state.cy.nodes('.trace-anchor').length===1&&
+        state.cy.nodes('.trace-anchor')[0].id()===state.trace.focus.id),'The titled endpoint must have a visible focus marker');
+      if(cardPosition&&lastFocus===focus.id)check(card.x===cardPosition.x&&card.y===cardPosition.y,'Card moved without a focus change');
+      cardPosition=card;lastFocus=focus.id;stable=trace.text;
+    }
+    for(const fraction of [.49,.51,.48,.52]){
+      await move(await point('a','b',fraction));
+      check(await page.evaluate(()=>state.trace.focus.id==='b'),'Midpoint jitter must not flip the viewpoint');
     }
     const pairPoint=await point('a','b',.3);await move(pairPoint);
     // Focused captions can grow across a previously hovered connection.
@@ -78,8 +87,47 @@ async page => {
       state.cy.getElementById('a').removeStyle('text-margin-x text-margin-y text-halign text-valign label');readableLabels();
     });
     await page.keyboard.press('Escape');await frames();
-    check(await page.evaluate(()=>!state.trace&&state.cy.elements('.focus,.hovered').length===0&&
-      $('hover-card').hidden&&!$('map-tooltip').textContent.includes('A -> B')),'Escape retained stale emphasis or counts');
+    check(await page.evaluate(()=>!state.trace&&state.cy.elements('.focus,.hovered,.trace-anchor').length===0&&
+      $('hover-card').hidden&&!$('map-tooltip').textContent.includes('Focus:')),'Escape retained stale emphasis or counts');
+    await move(await point('a','b',.5));
+    check(await page.evaluate(()=>state.trace?.kind==='overlap'&&state.trace.pairs.length===2&&
+      ConnectionTrace.total(state.trace.refs)===10),'Crossing must expose both pairs without counting reciprocal families twice');
+    check(await page.evaluate(()=>state.trace.focus.others===1&&ConnectionTrace.total(state.trace.focus.refs)===1)&&
+      await page.locator('#hover-card').innerText().then(text=>text.includes('1 other overlapping connection')&&
+      !text.includes('type refs')),'Other crossing pairs must be disclosed outside the focus totals');
+    const crossing=await point('a','b',.5);await page.mouse.click(crossing.x,crossing.y);await frames();
+    check(await page.evaluate(()=>state.selection?.overlapInspection)&&
+      await page.locator('#details .connections button').count()===2,'Click must expose the overlapping candidate list');
+    check(await page.evaluate(()=>getComputedStyle($('details').querySelector('.trace-outgoing')).color!==
+      getComputedStyle($('details').querySelector('.trace-incoming')).color),'Candidate direction colors are indistinguishable');
+    const candidate=page.locator('#details .connections button').first();await candidate.focus();await frames();
+    check(await page.evaluate(()=>state.trace?.kind==='pair'),'Keyboard focus must emphasize one candidate');
+    await candidate.click();await frames();
+    check(await page.evaluate(()=>state.selection?.pairInspection&&state.selection.refs.length===9),
+      'Choosing an overlap candidate must reuse both-direction exact inspection');
+    await page.keyboard.press('Escape');
+    await page.evaluate(()=>{
+      state.universe.positions.set('c',{x:-250,y:0});state.universe.positions.set('d',{x:250,y:0});
+      state.universe.indexPositions();refreshMap();
+    });
+    let overlapKey,overlapBox,overlapFocus;
+    for(const fraction of [.3,.4,.6,.7]){
+      await move(await point('a','b',fraction));
+      const key=await page.evaluate(()=>state.trace?.key),box=await page.locator('#hover-card').boundingBox();
+      check(await page.evaluate(()=>state.trace?.kind==='overlap'&&state.trace.pairs.length===2),
+        'Coincident different endpoint pairs must remain discoverable');
+      const focus=await page.evaluate(()=>state.trace.focus.id);
+      if(overlapKey)check(key===overlapKey,'Native hit changes must not discard other candidates');
+      if(overlapFocus===focus)check(box.x===overlapBox.x&&box.y===overlapBox.y,'Card moved without changing focus');
+      overlapKey=key;overlapBox=box;overlapFocus=focus;
+    }
+    const overlapPoint=await point('a','b',.4);await page.mouse.click(overlapPoint.x,overlapPoint.y);await frames();
+    await page.evaluate(()=>{state.hidden.add('calls');applyFilters();});await frames();
+    check(await page.evaluate(()=>!state.selection&&!state.trace),'Filtering an overlap must close stale candidate details');
+    await page.evaluate(()=>{
+      state.hidden.clear();state.universe.positions.set('c',{x:0,y:-220});state.universe.positions.set('d',{x:0,y:220});
+      state.universe.indexPositions();refreshMap();
+    });
     await move(await point('c','c'));
     check(await page.locator('#hover-card').innerText().then(text=>/Outgoing references recorded.*1 ref.*Incoming references recorded.*0 refs/s.test(text)&&
       text.includes('No incoming references recorded in this snapshot.')),'Zero incoming references must be explicit on the star card');
@@ -95,6 +143,8 @@ async page => {
     await move(loop);
     check(await page.evaluate(()=>state.trace?.counts.within===1&&$('map-tooltip').textContent.includes('Within/self')),
       'Real recursion did not retain its within/self readout');
+    check(await page.locator('#hover-card .hover-within').innerText()==='Within/self: 1'&&
+      await page.locator('#hover-card .hover-none').count()===2,'Recursion must stay separate from incoming/outgoing');
     await move(await point('a','a'));
     check(await page.evaluate(()=>state.trace?.kind==='node'&&state.trace.counts.within===1),
       'Node hover omitted its within references');
@@ -179,20 +229,57 @@ async page => {
     check(await page.evaluate(()=>state.cy.getElementById('sdk').length===1),
       'Several consumers created duplicate provider identities');
     await page.getByRole('button',{name:'SampleDerived (class) -> Sample SDK (folder)',exact:true}).first().click();
+    await page.waitForFunction(()=>!state.gestureActive&&!state.viewportFrame&&!state.zoomFrame&&!state.wheelFrame);
     check(await page.evaluate(()=>state.selection?.attrs.target_declaration.id==='declaration-base-a'),
       'Following an exact external relationship lost its original declaration');
     await page.evaluate(()=>{delete state.target.roots['sample-sdk'];state.detailsKey=null;renderDetails(state.selection);});
+    await frames();
     check(await page.locator('#details').innerText().then(text=>text.includes('source root is unavailable'))&&
       await page.locator('#details .target-declaration a').count()===0,'Unavailable roots must remain explicit and unlinked');
     await page.evaluate(()=>{
       delete state.selection.attrs.target_declaration;state.detailsKey=null;renderDetails(state.selection);
     });
+    await frames();
     check(await page.locator('#details').innerText().then(text=>text.includes('not recorded in this snapshot')),
       'Older external rows lost their missing-provenance explanation');
     check(await page.evaluate(()=>JSON.stringify(state.positionCache.layouts)===traceProof.pins)&&requests.length===0&&errors.length===0,
       'External inspection wrote pins, fetched extra facts or produced runtime errors');
+    await page.keyboard.press('Escape');await page.setViewportSize({width:390,height:844});
+    await page.evaluate(()=>{
+      const node=(id,label,level,parent,boundary=false)=>({id,label,level,parent,boundary,status:'in-target'});
+      const nodes=[node('root','Sample','project',null),node('one','First subsystem with a long ownership path','folder','root'),
+        node('two','Second subsystem with a long ownership path','folder','root'),
+        node('first','VeryLongSharedDeclarationName','function','one'),node('second','VeryLongSharedDeclarationName','function','two'),
+        node('sdk','Sample SDK','project',null,true)];
+      const edges=[{id:'first-sdk',source:'first',target:'sdk',type:'calls',count:3},
+        {id:'second-sdk',source:'second',target:'sdk',type:'calls',count:5}].map(e=>({...e,status:'resolved',origin:'synthetic'}));
+      state.universe=new Universe({schema:'laniakea.graph/1',nodes,edges});
+      state.index={nodes:nodes.map(n=>({...n,child_count:nodes.filter(c=>c.parent===n.id).length,file:n.id+'.json'}))};state.indexLookup=null;
+      state.scopeShard={scope:'root',title:'Sample',parents:[]};state.selection=null;state.hidden.clear();renderGraph();
+      state.universe.expanded=new Set(['root','one','two']);
+      state.universe.radii.set('one',100);state.universe.radii.set('two',100);
+      for(const [id,[x,y]] of Object.entries({one:[-100,-10],two:[-100,10],first:[-100,-10],second:[-100,10],sdk:[100,0]}))
+        state.universe.positions.set(id,{x,y});
+      state.universe.indexPositions();refreshMap();fitMap();
+    });
+    await move(await point('first','sdk',.8));
+    check(await page.evaluate(()=>state.trace?.kind==='overlap'&&state.trace.focus.id==='sdk'&&
+      state.trace.focus.counts.incoming===8&&state.trace.focus.counts.outgoing===0),
+      'Shared endpoint must summarize every incoming peer without inventing outgoing references');
+    check(await page.locator('#hover-card .hover-direction').count()===2&&
+      await page.locator('#hover-card .hover-none').innerText()==='None','Compact empty direction is missing');
+    check(await page.evaluate(()=>{
+      const card=$('hover-card').getBoundingClientRect(),peers=[...$('hover-card').querySelectorAll('.hover-peer')];
+      return peers.length===2&&peers.every(row=>row.querySelector('span').getBoundingClientRect().height<=36&&
+        row.querySelector('strong').getBoundingClientRect().bottom<=card.bottom)&&document.documentElement.scrollWidth<=innerWidth;
+    }),'Long peer paths clipped counts or overflowed the narrow card');
+    check(await page.locator('#map-tooltip').innerText().then(text=>text.includes('First subsystem')&&text.includes('Second subsystem')),
+      'The readable summary must retain disambiguated full ownership paths');
+    check(requests.length===0&&errors.length===0&&await page.evaluate(()=>JSON.stringify(state.positionCache.layouts)===traceProof.pins),
+      'Viewpoint hover wrote positions, fetched facts or produced errors');
     return {nativeReciprocalPath:true,bothDirectionInspection:true,oneWay:true,recursion:true,filterRefresh:true,
       noHoverRequests:true,noDecorations:true,keyboardReadout:true,externalOwnership:true,externalZoom:true,
-      exactDeclarationLinks:true,sharedProvider:true,missingProvenance:true,contrasts,errors};
+      exactDeclarationLinks:true,sharedProvider:true,missingProvenance:true,crossingCandidates:true,proximityFocus:true,midpointStable:true,
+      coincidentPairs:true,stableOverlapCard:true,keyboardCandidate:true,compactSharedEndpoint:true,longPeersNarrow:true,contrasts,errors};
   }finally{page.off('request',observe);page.off('pageerror',onError);await page.reload();}
 }

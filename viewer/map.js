@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Rendering and camera operations use the folded projection; graph facts live in Universe.
 'use strict';
+const TRACE_CLASSES='hovered trace-endpoint trace-anchor trace-outgoing trace-incoming trace-within trace-other trace-both trace-reciprocal';
+const TRACE_SELECTOR=TRACE_CLASSES.split(' ').map(name=>'.'+name).join(',');
 
 function nodeMetadata(id) {
   const entry = state.indexLookup ? state.indexLookup.get(id) : state.index && state.index.nodes.find(n => n.id === id);
@@ -19,10 +21,11 @@ function analysisHint(node) {
 }
 
 function nodeDescription(node) {
-  const entry = nodeMetadata(node.id), parts = [node.level];
+  const externalGroup=node.boundary&&node.level==='project';
+  const entry = nodeMetadata(node.id), parts = [externalGroup?'external dependency group':node.level];
   if (node.parent === null && !node.boundary) parts.push('root');
   else if (entry && entry.child_count) parts.push(`${entry.child_count} inside`);
-  if (node.boundary) parts.push('external');
+  if (node.boundary&&!externalGroup) parts.push('external');
   const status=analysisStatus(node);if(status)parts.push(node.status==='not-in-target'?'outside target':status.toLowerCase());
   return parts.join(' / ');
 }
@@ -77,6 +80,9 @@ function style() {
       'line-color':css('--trace-'+role),'target-arrow-color':css('--trace-'+role),
       'target-arrow-shape':'triangle',opacity:1,width:2.5,label:''}})),
     {selector:'edge.trace-both, edge.trace-reciprocal',style:{'line-color':css('--context')}},
+    {selector:'edge.trace-other',style:{'line-color':css('--context'),'target-arrow-color':css('--context'),opacity:0.45,width:1.5}},
+    {selector:'node.trace-anchor',style:{'border-color':css('--fg'),'underlay-color':css('--fg'),
+      'underlay-opacity':0.16,'font-weight':600}},
     {selector:'edge.pair-inspected',style:{label:''}},
     { selector: 'node:selected', style: { 'border-color': css('--selection'), 'border-width': 3 } },
   ];
@@ -85,7 +91,7 @@ function style() {
 function renderGraph() {
   clearTimeout(state.inspectTimer);
   clearTimeout(state.gestureTimer);state.gestureActive=false;
-  for (const key of ['zoomFrame', 'wheelFrame','viewportFrame']) {
+  for (const key of ['zoomFrame', 'wheelFrame','viewportFrame','hoverFrame']) {
     if (state[key]) cancelAnimationFrame(state[key]);
     state[key] = null;
   }
@@ -98,6 +104,13 @@ function renderGraph() {
   const cy = state.cy;
   state.mapSize = {width:cy.width(),height:cy.height()};
   cy.on('tap', 'node', event => {
+    if(event.target.hasClass('expanded')){
+      const box=state.labelBoxes?.get(event.target.id()),p=event.renderedPosition;
+      if(p&&(!box||p.x<box.x1||p.x>box.x2||p.y<box.y1||p.y>box.y2)){
+        const trace=connectionAt(p);
+        if(trace){if(trace.kind==='overlap')inspectOverlap(trace);else inspectPair(trace.source,trace.target);return;}
+      }
+    }
     clearTimeout(state.inspectTimer);
     const id = event.target.id();
     // Opening a panel on the first tap can move or cover the target before a double-tap completes.
@@ -108,13 +121,22 @@ function renderGraph() {
   });
   cy.on('tap', 'edge', event => {
     const edge=state.shard.edges.find(e=>e.id===event.target.data('referenceId'));
-    if(edge)inspectPair(edge.source,edge.target);
+    const trace=edge&&connectionAt(event.renderedPosition,edge);
+    if(trace?.kind==='overlap')inspectOverlap(trace);
+    else if(edge)inspectPair(edge.source,edge.target);
   });
-  cy.on('tap', event => { if (event.target === cy) { unfocus(); renderDetails(null); } });
+  cy.on('tap', event => { if (event.target === cy) {
+    const trace=connectionAt(event.renderedPosition);
+    if(trace?.kind==='overlap')inspectOverlap(trace);
+    else if(trace)inspectPair(trace.source,trace.target);
+    else {unfocus();renderDetails(null);}
+  } });
   cy.on('dbltap', 'node', event => { clearTimeout(state.inspectTimer); toggleGroup(event.target.id()); });
-  cy.on('mouseover', 'node, edge', event => preview(event.target,event.renderedPosition));
-  cy.on('mousemove','node, edge',event=>preview(event.target,event.renderedPosition));
-  cy.on('mouseout', 'node, edge', event => { if (event.target.hasClass('hovered')) unfocus(); });
+  cy.on('mouseover mousemove',event=>schedulePreview(event.target,event.renderedPosition));
+  cy.on('mouseout','node, edge',event=>{
+    if(state.hoverTarget?.element===event.target||event.target.hasClass('hovered'))schedulePreview(cy,event.renderedPosition);
+  });
+  $('graph').onmouseleave=()=>{cancelAnimationFrame(state.hoverFrame);state.hoverFrame=null;unfocus();};
   cy.on('zoom', () => {
     if (state.framing) return;
     const level = worldZoom(), direction = Math.sign(level - (state.lastZoom || level));
@@ -240,29 +262,85 @@ function focus(elements) {
   });
 }
 
-function preview(element, pointer = state.pointer) {
-  if (state.drag || state.gestureActive) return;
-  if(element.isNode() && element.hasClass('expanded')) {
+function schedulePreview(element,pointer) {
+  state.hoverTarget={cy:state.cy,element,pointer};
+  if(state.hoverFrame)return;
+  state.hoverFrame=requestAnimationFrame(()=>{
+    state.hoverFrame=null;
+    const target=state.hoverTarget;
+    if(target?.cy===state.cy)preview(target.element,target.pointer);
+  });
+}
+
+function segmentDistance(p,a,b) {
+  const dx=b.x-a.x,dy=b.y-a.y,length=dx*dx+dy*dy;
+  const t=length?Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/length)):0;
+  return Math.hypot(p.x-a.x-t*dx,p.y-a.y-t*dy);
+}
+
+function connectionAt(pointer,fallback=null) {
+  if(!pointer||!Number.isFinite(pointer.x)||!Number.isFinite(pointer.y))
+    return fallback&&ConnectionTrace.pair(state.shard,fallback.source,fallback.target);
+  const cy=state.cy,pan=cy.pan(),key=[cy.zoom(),pan.x,pan.y].join();
+  let cache=state.connectionHits;
+  if(!cache||cache.cy!==cy||cache.view!==state.shard||cache.key!==key){
+    const records=[],mid=(a,b)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
+    const curve=(points,a,c,b,depth=0)=>{
+      if(depth>=10||segmentDistance(c,a,b)<=1){points.push(b);return;}
+      const ac=mid(a,c),cb=mid(c,b),m=mid(ac,cb);
+      curve(points,a,ac,m,depth+1);curve(points,m,cb,b,depth+1);
+    };
+    for(const edge of cy.edges()){
+      if(!edge.visible())continue;
+      const a=edge.renderedSourceEndpoint(),b=edge.renderedTargetEndpoint();
+      if(!a||!b||![a.x,a.y,b.x,b.y].every(Number.isFinite))continue;
+      const controls=(edge.controlPoints()||[]).map(p=>({x:p.x*cy.zoom()+pan.x,y:p.y*cy.zoom()+pan.y})),points=[a];
+      for(let i=0;i<controls.length;i++)curve(points,points[points.length-1],controls[i],
+        i+1<controls.length?mid(controls[i],controls[i+1]):b);
+      if(!controls.length)points.push(b);
+      records.push({source:edge.source().id(),target:edge.target().id(),points});
+    }
+    const index=records.length?new SpatialIndex(records.length):null;
+    for(const {points} of records)index.add(Math.min(...points.map(p=>p.x)),Math.min(...points.map(p=>p.y)),
+      Math.max(...points.map(p=>p.x)),Math.max(...points.map(p=>p.y)));
+    if(index)index.finish();
+    cache=state.connectionHits={cy,view:state.shard,key,records,index};
+  }
+  const radius=6,candidates=(cache.index?.search(pointer.x-radius,pointer.y-radius,pointer.x+radius,pointer.y+radius)||[])
+    .map(i=>cache.records[i]).filter(({points})=>points.some((p,i)=>i&&segmentDistance(pointer,points[i-1],p)<=radius));
+  const candidateKey=JSON.stringify([...new Set(candidates.map(pair=>ConnectionTrace.key(pair.source,pair.target)))].sort());
+  if(cache.candidateKey!==candidateKey){
+    cache.candidateKey=candidateKey;cache.trace=ConnectionTrace.overlap(state.shard,candidates);
+  }
+  return cache.trace;
+}
+
+function preview(element, pointer = state.pointer, explicitTrace = null) {
+  if (state.drag || state.labelDrag || state.gestureActive&&!explicitTrace) return;
+  if(element!==state.cy&&element.isNode() && element.hasClass('expanded')) {
     const box=state.labelBoxes?.get(element.id()),p=pointer;
     if(!box||!p||p.x<box.x1||p.x>box.x2||p.y<box.y1||p.y>box.y2){
-      if(element.hasClass('hovered'))unfocus();return;
+      element=state.cy;
     }
   }
-  const edge=element.isEdge()&&state.shard.edges.find(e=>e.id===element.data('referenceId'));
-  if(element.isEdge()&&!edge)return;
-  const key=edge?ConnectionTrace.key(edge.source,edge.target):JSON.stringify(['node',element.id()]);
-  if(state.trace?.key===key) {
-    state.cy.elements('.hovered').not(element).removeClass('hovered');element.addClass('hovered');return;
+  const background=element===state.cy;
+  const edge=!background&&element.isEdge()&&state.shard.edges.find(e=>e.id===element.data('referenceId'));
+  if(!background&&element.isEdge()&&!edge)return;
+  let trace=explicitTrace||(edge||background?connectionAt(pointer,edge):ConnectionTrace.node(state.universe,state.shard,element.id()));
+  if(!trace){unfocus();return;}
+  if(trace.kind!=='node')trace=relativeTrace(trace,pointer);
+  const key=trace.key;
+  if(state.trace?.key===key&&state.trace.focus?.id===trace.focus?.id) {
+    if(!background){state.cy.elements('.hovered').not(element).removeClass('hovered');element.addClass('hovered');}return;
   }
   const cy = state.cy;
   // Native node and edge hover events can overlap; an old target must not clear a newer trace.
-  state.trace=edge?ConnectionTrace.pair(state.shard,edge.source,edge.target):ConnectionTrace.node(state.universe,state.shard,element.id());
+  state.trace=trace;
   if(!state.trace)return;
   cy.batch(()=>{
-    cy.elements('.hovered,.trace-endpoint,.trace-outgoing,.trace-incoming,.trace-within,.trace-both,.trace-reciprocal')
-      .removeClass('hovered trace-endpoint trace-outgoing trace-incoming trace-within trace-both trace-reciprocal');
-    element.addClass('hovered');
-    if (element.isNode()) {
+    cy.elements(TRACE_SELECTOR).removeClass(TRACE_CLASSES);
+    if(!background)element.addClass('hovered');
+    if (trace.kind==='node') {
       const family = cy.nodes().filter(n => state.universe.contains(element.id(), n.id()));
       const edges = family.connectedEdges();
       focus(family.union(edges).union(edges.connectedNodes()));
@@ -270,6 +348,7 @@ function preview(element, pointer = state.pointer) {
       const family=cy.edges().filter(e=>state.trace.roles.has(e.data('referenceId')));
       family.connectedNodes().addClass('trace-endpoint');
       focus(family.union(family.connectedNodes()));
+      if(trace.focus)cy.getElementById(trace.focus.id).addClass('trace-anchor');
     }
     for(const [id,role] of state.trace.roles) {
       const wire=cy.getElementById(state.universe.renderPrefix+id);wire.addClass('trace-'+role);
@@ -279,6 +358,24 @@ function preview(element, pointer = state.pointer) {
   });
   readableLabels();
   showTraceReadout(state.trace,pointer);
+}
+
+function relativeTrace(trace,pointer) {
+  const pairs=trace.kind==='overlap'?trace.pairs:[trace];
+  const ids=[...new Set(pairs.flatMap(pair=>[pair.source,pair.target]))].sort();
+  const previous=state.trace?.focus?.id||(state.trace?.kind==='node'?state.trace.source:null);
+  let id=ids.includes(previous)?previous:ids[0];
+  if(pointer&&Number.isFinite(pointer.x)&&Number.isFinite(pointer.y)){
+    const distances=ids.map(id=>{
+      const p=state.cy.getElementById(id).renderedPosition();
+      return{id,distance:Math.hypot(pointer.x-p.x,pointer.y-p.y)};
+    }).sort((a,b)=>a.distance-b.distance||a.id.localeCompare(b.id));
+    const current=distances.find(item=>item.id===previous),best=distances[0];
+    // A screen-space dead band keeps titles and directional colors steady around a midpoint.
+    id=current&&current.distance-best.distance<=Math.max(24,current.distance*.15)?current.id:best.id;
+  }
+  if(state.trace?.key===trace.key&&state.trace.focus?.id===id)return state.trace;
+  return ConnectionTrace.relative(trace,id);
 }
 
 function traceName(id) {
@@ -294,7 +391,32 @@ function traceTypes(refs) {
     (rows.length>3?`, +${rows.length-3} types`:'');
 }
 
+function tracePeerName(focus,peer) {
+  const duplicate=focus.peers.some(other=>other.id!==peer.id&&label(other.id)===label(peer.id))||label(peer.id)===label(focus.id);
+  return duplicate?traceName(peer.id):label(peer.id);
+}
+
 function traceSummary(trace) {
+  if(trace.focus){
+    const f=trace.focus,columns=['incoming','outgoing'].map(role=>({role,
+      title:role==='incoming'?'Incoming':'Outgoing',rows:f.peers.filter(peer=>peer[role]).slice(0,3).map(peer=>{
+        return[tracePeerName(f,peer),peer[role]];
+      })}));
+    const more=columns.some(column=>f.peers.filter(peer=>peer[column.role]).length>column.rows.length);
+    const total=ConnectionTrace.total(f.refs);
+    return{title:label(f.id),description:`${total} ${total===1?'ref':'refs'} in hovered connections`,columns,rows:[],
+      within:f.counts.within,notes:[more&&'More in Details.',f.others&&
+        `${f.others} other overlapping connection${f.others===1?'':'s'}.`,'Click to inspect.'].filter(Boolean)};
+  }
+  if(trace.kind==='overlap')return {
+    title:`${trace.pairs.length} connections here`,description:`${ConnectionTrace.total(trace.refs)} distinct references`,
+    scope:'In this view / directions belong to each named pair',
+    rows:trace.pairs.slice(0,3).flatMap(pair=>{
+      const rows=traceSummary(pair).rows;
+      return rows.map((row,i)=>[...row,undefined,i===rows.length-1?traceTypes(pair.refs):null]);
+    }),
+    notes:[trace.pairs.length>3&&`+${trace.pairs.length-3} more connections in Details.`,
+      'Lines overlap on screen; this is not an architectural junction.','Click to choose a connection.'].filter(Boolean)};
   if(trace.kind==='node') {
     const node=state.universe.nodes.get(trace.source),totals=state.universe.referenceStats.get(node.id);
     return {title:node.label,description:nodeDescription(node),path:traceName(node.id),
@@ -333,19 +455,35 @@ function configurationMarkLabel(id) {
 function showHoverCard(trace,point) {
   if(!state.cy.container())return;
   const card=$('hover-card'),summary=traceSummary(trace),rows=el('div',null,{class:'hover-rows'});
-  for(const [name,count,role,configuration] of summary.rows) {
+  for(const [name,count,role,configuration,types] of summary.rows) {
     const row=el('div',null,{class:'hover-row trace-'+role});
     row.append(el('span',name),el('strong',`${count} ${count===1?'ref':'refs'}`,{class:'hover-count'}));rows.append(row);
+    if(types)rows.append(el('small',types,{class:'hover-context'}));
     if(configuration){
       const subset=el('div',null,{class:'hover-row configuration-subset'});
       subset.append(el('span','Of which: project configuration'),el('span',configuration));rows.append(subset);
     }
   }
+  if(summary.columns){
+    rows.className='hover-directions';
+    for(const column of summary.columns){
+      const section=el('section',null,{class:'hover-direction trace-'+column.role});
+      section.append(el('h3',column.title));
+      if(!column.rows.length)section.append(el('span','None',{class:'hover-none'}));
+      for(const [name,count] of column.rows){
+        const row=el('div',null,{class:'hover-peer'});
+        row.append(el('span',name),el('strong',String(count)));section.append(row);
+      }
+      rows.append(section);
+    }
+    if(summary.within)rows.append(el('small',`Within/self: ${summary.within}`,{class:'hover-within trace-within'}));
+  }
   card.replaceChildren(el('strong',summary.title,{class:'hover-name'}),el('small',summary.description,{class:'hover-context'}));
   if(summary.path)card.append(el('small',summary.path,{class:'hover-context hover-path'}));
-  card.append(el('small',summary.scope,{class:'hover-context'}),rows,
-    ...summary.notes.map(note=>el('small',note,{class:'hover-context'})));
-  const cy=state.cy,node=cy.getElementById(trace.source),anchor=trace.kind==='node'&&!node.hasClass('expanded')?
+  if(summary.scope)card.append(el('small',summary.scope,{class:'hover-context'}));
+  card.append(rows,...(summary.columns?[el('small',summary.notes.join(' '),{class:'hover-context'})]:
+    summary.notes.map(note=>el('small',note,{class:'hover-context'}))));
+  const cy=state.cy,node=cy.getElementById(trace.source||trace.pairs[0].source),anchor=trace.kind==='node'&&!node.hasClass('expanded')?
     node.renderedPosition():point||node.renderedPosition();
   const graph=$('graph').getBoundingClientRect(),map=$('map').getBoundingClientRect();
   card.hidden=false;
@@ -357,7 +495,18 @@ function showHoverCard(trace,point) {
 
 function showTraceReadout(trace,point) {
   const counts=trace.counts;
-  if(trace.kind==='node') {
+  if(trace.focus){
+    const f=trace.focus;
+    showTooltip(`Focus: ${traceName(f.id)} / hovered connections`,
+      `Incoming: ${f.counts.incoming} / Outgoing: ${f.counts.outgoing}`+(f.counts.within?` / Within/self: ${f.counts.within}`:'')+
+      (f.others?` / ${f.others} other overlapping connection${f.others===1?'':'s'}`:'')+' / '+f.peers.slice(0,6).map(peer=>
+        `${tracePeerName(f,peer)}: ${peer.incoming} incoming, ${peer.outgoing} outgoing`).join(' / '));
+  } else if(trace.kind==='overlap'){
+    const summary=traceSummary(trace);
+    showTooltip(summary.title+' / '+summary.description,
+      summary.rows.map(([name,count,,,types])=>`${name}: ${count} refs`+(types?' ('+types+')':'')).join(' / ')+
+      (trace.pairs.length>3?` / +${trace.pairs.length-3} more; click to inspect`:''));
+  } else if(trace.kind==='node') {
     const summary=traceSummary(trace);
     showTooltip(`In this view / Focus: ${traceName(trace.source)}`,
       `Outgoing: ${counts.outgoing} / Incoming: ${counts.incoming} / Within: ${counts.within}`+
@@ -381,9 +530,12 @@ function showTooltip(title, text) {
 }
 
 function clearTrace() {
+  if(state.hoverFrame)cancelAnimationFrame(state.hoverFrame);
+  state.hoverFrame=null;
+  state.hoverTarget=null;
+  state.connectionHits=null;
   $('hover-card').hidden=true;
-  if(state.cy)state.cy.elements('.faded,.focus,.hovered,.trace-endpoint,.trace-outgoing,.trace-incoming,.trace-within,.trace-both,.trace-reciprocal')
-    .removeClass('faded focus hovered trace-endpoint trace-outgoing trace-incoming trace-within trace-both trace-reciprocal');
+  if(state.cy)state.cy.elements('.faded,.focus,'+TRACE_SELECTOR).removeClass('faded focus '+TRACE_CLASSES);
   state.trace=null;
   $('map-tooltip').hidden=false;
   $('map-tooltip').textContent=analysisHint(state.universe?.nodes.get(state.scopeShard?.scope))||
@@ -393,8 +545,8 @@ function clearTrace() {
 function unfocus(clearReadout = false) {
   $('hover-card').hidden=true;
   if (state.cy) {
-    const marked=state.cy.elements('.faded,.focus,.hovered,.trace-endpoint,.trace-outgoing,.trace-incoming,.trace-within,.trace-both,.trace-reciprocal');
-    if(marked.length){marked.removeClass('faded focus hovered trace-endpoint trace-outgoing trace-incoming trace-within trace-both trace-reciprocal');readableLabels();}
+    const marked=state.cy.elements('.faded,.focus,'+TRACE_SELECTOR);
+    if(marked.length){marked.removeClass('faded focus '+TRACE_CLASSES);readableLabels();}
   }
   state.trace=null;
   if(clearReadout)clearTrace();

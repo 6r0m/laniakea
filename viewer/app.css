@@ -100,10 +100,19 @@ main { flex: 1; min-height: 280px; display: flex; position: relative; }
 .hover-row > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
   overflow: hidden; overflow-wrap: anywhere; }
 .hover-count { font-size: 16px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hover-directions { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 12px; margin: 10px 0; }
+.hover-direction { min-width: 0; }
+#hover-card .hover-direction h3 { margin: 0 0 6px; font-size: 12px; font-weight: 600; }
+.hover-peer { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 7px; margin: 5px 0; align-items: baseline; }
+.hover-peer span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden; overflow-wrap: anywhere; }
+.hover-peer strong { font-size: 14px; font-variant-numeric: tabular-nums; }
+.hover-none { color: var(--muted); }
+.hover-within { grid-column: 1 / -1; }
 .configuration-subset { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 11px; padding-top: 0; }
-.trace-outgoing { color: var(--trace-outgoing); }
-.trace-incoming { color: var(--trace-incoming); }
-.trace-within { color: var(--trace-within); }
+.trace-outgoing, .connections .trace-outgoing { color: var(--trace-outgoing); }
+.trace-incoming, .connections .trace-incoming { color: var(--trace-incoming); }
+.trace-within, .connections .trace-within { color: var(--trace-within); }
 .direction-summary { display: flex; flex-wrap: wrap; gap: 8px 16px; }
 #map-help { position: absolute; bottom: calc(var(--trace-height) + 10px); left: 16px; right: 16px; margin: 0; pointer-events: none;
   color: var(--muted); font-size: 12px; text-align: center; }

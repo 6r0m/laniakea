@@ -336,7 +336,9 @@ test('self-reference loops keep control points outside their glyph through zoom 
 
 test('a late mouse-out from the previous target cannot erase the current hover trace',()=>{
   const {run}=viewer();
-  run(`globalThis.css=()=>'#888';globalThis.showTooltip=()=>{};globalThis.readableLabels=()=>{};
+  run(`globalThis.frames=[];globalThis.requestAnimationFrame=fn=>frames.push(fn);
+    globalThis.flushFrames=()=>frames.splice(0).forEach(fn=>fn());
+    globalThis.css=()=>'#888';globalThis.showTooltip=()=>{};globalThis.readableLabels=()=>{};
     globalThis.layout=()=>{};const create=cytoscape;
     globalThis.cytoscape=options=>create({...options,container:undefined,headless:true});
     state.scopeShard={scope:'app'};realRenderGraph();state.shard={nodes:fixture.nodes,edges:[]};
@@ -344,10 +346,10 @@ test('a late mouse-out from the previous target cannot erase the current hover t
       {data:{id:'connection',source:'app.core.db',target:'app.web.views'}}]);
     state.cy.getElementById('app.core.db').emit('mouseover');
     state.cy.getElementById('app.web.views').emit('mouseover');
-    state.cy.getElementById('app.core.db').emit('mouseout');`);
+    state.cy.getElementById('app.core.db').emit('mouseout');flushFrames();`);
   assert.equal(run("state.cy.getElementById('app.web.views').hasClass('hovered')"),true);
   assert.ok(run("state.cy.edges('.focus').length")>0);
-  run("state.cy.getElementById('app.web.views').emit('mouseout');");
+  run("state.cy.getElementById('app.web.views').emit('mouseout');flushFrames();");
   assert.equal(run("state.cy.elements('.focus,.hovered').length"),0);
   run('state.cy.destroy()');
 });

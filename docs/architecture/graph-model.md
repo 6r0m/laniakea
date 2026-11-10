@@ -105,11 +105,26 @@ source inside/target outside is outgoing, the reverse is incoming, and both insi
 and retain compact group weights. They describe the architecture projection after configuration exclusion, type,
 boundary and viewport filtering, labelled "In this view". Node inspection separately labels its all-recorded reference scope.
 
-Connection hover combines all shown families and both directions for the same unordered endpoint pair. A deterministic
-ID order fixes the displayed A/B identities, with full ownership paths and levels. Both directional totals and a bounded
+Connection inspection combines all shown families and both directions for the same unordered endpoint pair. A deterministic
+ID order fixes its A/B identities, with full ownership paths and levels. Both directional totals and a bounded
 type breakdown remain stable across native family/direction hits. A one-way pair explicitly reports zero in reverse;
 a real self-loop reports within/self. Coincident reciprocal paths have a neutral stroke and direction-colored arrows.
 Tracing styles existing edges only: no extra lanes, geometry changes, graph facts, hover requests or saved positions.
+Wire hover titles the endpoint nearest the pointer among the hovered pairs and marks it with a neutral halo. Incoming
+and outgoing colors and counts are relative to that title. A screen-space dead band holds the current viewpoint around
+midpoints; a clearly closer endpoint changes it. The compact card lists peer names and counts in two columns, scoped to
+hovered connections rather than whole-node usage. Within/self remains separate. Type breakdowns stay in Details.
+When different endpoint pairs overlap, hit testing retains all pairs under a fixed screen-space tolerance. The card
+counts only unique represented references incident to its titled endpoint, and discloses unrelated pairs separately.
+A visual crossing never creates a dependency junction. Peer captions are bounded, with explicit disclosure when either
+column truncates; the readout and Details retain full names. Clicking opens the candidate list in Details; focus or hover
+emphasizes one pair, and choosing it reuses both-direction exact inspection. Longer candidate lists render in batches. Projection changes
+that alter the represented references close stale inspection.
+
+Hit testing uses the rendered paths, including curves, and an ephemeral spatial index of the current rendered edges.
+It is independent of canonical reference indexing and saved positions. Pointer work is coalesced per animation frame;
+unchanged candidate sets reuse their trace. Projection/camera changes invalidate geometry, and gestures clear it.
+The hover card stays anchored while the candidate set and viewpoint remain unchanged. No automatic arrangement occurs on hover.
 During pair tracing, endpoint captions yield native pointer hits to connections so newly revealed text cannot steal
 the click; endpoint glyphs remain interactive. Leaving the trace restores normal caption interaction.
 The docked, keyboard-focusable readout retains the last summary after pointer exit while emphasis clears. Escape,
@@ -121,13 +136,13 @@ included in that total rather than added to it. These weighted subtree totals an
 or configuration marks. The project root's totals are labelled project/subtree statistics. A filtered-out incoming
 reference is not reported as no recorded users. A zero
 incoming total says "No incoming references recorded in this snapshot", never that runtime use is impossible.
-Connection cards retain the same two-direction projected scope as connection inspection. Cards stay anchored during
-same-pair pointer movement and yield native pointer hits to the graph. They disappear on exit, Escape, gestures or
-projection changes. The persistent readout mirrors the node totals for keyboard reading; inspection supplies exact rows.
+Cards yield native pointer hits to the graph. They disappear on exit, Escape, gestures or projection changes.
+The persistent readout retains readable counts and full names; inspection supplies exact rows.
 Following an exact architecture reference enables its type and boundary visibility if a current filter would hide it.
 Following an internal reference opens its owner and reference list rather than inventing a visible self-loop.
 Optional click inspection keeps its marker through projection refreshes while that exact item remains visible.
-Pair details use the same represented groups and directions as the readout. Both totals and shortcuts precede separate
+Pair details retain represented groups with explicitly named A/B directions; hover can orient counts to either endpoint.
+Both totals and shortcuts precede separate
 exact-reference pages per direction, so reaching the reverse list does not require scrolling through the forward list.
 Changing that group set or its weights closes the pair inspection; it never falls back to a single hit family.
 Exact-reference navigation retains its original identity. Hiding an inspected item closes its details instead
@@ -141,6 +156,8 @@ Source links resolve through the run's advertised roots; unavailable roots are d
 declaration provenance explains that it was not recorded. The viewer does not infer provider ownership from names.
 Providers use ordinary containment and boundary styling: one provider can have several consumers without becoming
 their child. Only referenced structure is revealed; external implementation analysis is not implied.
+Boundary containers at the project level are described as external dependency groups in the UI; this presentation
+does not change their canonical level or turn them into analysed projects.
 
 Known boundary children can be revealed from recorded containment, including external endpoints of exact
 references. This does not fetch or imply analysis of their own dependencies. Missing coverage remains unknown.

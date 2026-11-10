@@ -13,6 +13,43 @@ const ConnectionTrace = {
   signature(trace) {
     return JSON.stringify(trace.refs.map(ref=>[ref.group===undefined?ref.id:ref.group,ref.type,ref.count||1]).sort());
   },
+  relative(trace,id) {
+    const pairs=trace.kind==='overlap'?trace.pairs:[trace],roles=new Map(),peers=[];
+    const focus={id,groups:{incoming:[],outgoing:[],within:[]},others:0},seen=new Set();
+    for(const pair of pairs){
+      if(pair.source!==id&&pair.target!==id){
+        focus.others++;for(const key of pair.roles.keys())roles.set(key,'other');continue;
+      }
+      const reverse=pair.source!==id;
+      const groups={incoming:pair.groups[reverse?'outgoing':'incoming'],
+        outgoing:pair.groups[reverse?'incoming':'outgoing'],within:pair.groups.within};
+      for(const [role,refs] of Object.entries(groups))for(const ref of refs){
+        const key=ref.group===undefined?ref.id:ref.group;
+        if(!seen.has(key)){seen.add(key);focus.groups[role].push(ref);}
+      }
+      for(const [key,role] of pair.roles)roles.set(key,reverse&&role!=='within'?
+        role==='outgoing'?'incoming':'outgoing':role);
+      if(pair.source!==pair.target)peers.push({id:reverse?pair.source:pair.target,
+        incoming:this.total(groups.incoming),outgoing:this.total(groups.outgoing)});
+    }
+    focus.peers=peers;this.finish(focus);
+    return {...trace,focus,roles};
+  },
+  overlap(view,endpoints) {
+    const candidates=new Map(endpoints.map(pair=>[this.key(pair.source,pair.target),pair]));
+    const groups=new Map([...candidates.keys()].map(key=>[key,[]]));
+    for(const edge of view.edges||[])groups.get(this.key(edge.source,edge.target))?.push(edge);
+    const pairs=[...candidates].sort(([a],[b])=>a.localeCompare(b)).map(([key,pair])=>
+      this.pair({edges:groups.get(key)},pair.source,pair.target)).filter(Boolean);
+    if(pairs.length<2)return pairs[0]||null;
+    const refs=new Map(),roles=new Map();
+    for(const pair of pairs){
+      for(const ref of pair.refs)refs.set(ref.group===undefined?ref.id:ref.group,ref);
+      for(const [id,role] of pair.roles)roles.set(id,role);
+    }
+    return {kind:'overlap',key:JSON.stringify(['overlap',...pairs.map(pair=>pair.key)]),
+      pairs,refs:[...refs.values()],roles};
+  },
   node(map,view,id) {
     if(!view.nodes?.some(node=>node.id===id))return null;
     const trace={kind:'node',key:JSON.stringify(['node',id]),source:id,

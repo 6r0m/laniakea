@@ -25,6 +25,85 @@ function scene(t){
   return instance;
 }
 
+test('wire viewpoint follows the nearby endpoint and stays steady through midpoint jitter',t=>{
+  const {run}=scene(t);
+  run(`state.cy.getElementById('app.core.db').position({x:0,y:0});
+    state.cy.getElementById('app.web.views').position({x:200,y:0});state.cy.zoom(1);state.cy.pan({x:0,y:0});
+    for(const e of state.cy.edges()){
+      e.renderedSourceEndpoint=()=>e.source().id()===e.target().id()?{x:1000,y:0}:e.source().renderedPosition();
+      e.renderedTargetEndpoint=()=>e.source().id()===e.target().id()?{x:1100,y:0}:e.target().renderedPosition();
+      e.controlPoints=()=>undefined;
+    }
+    globalThis.wire=state.cy.edges().filter(e=>e.source().id()==='app.core.db'&&e.target().id()==='app.web.views')[0];
+    preview(wire,{x:180,y:0});`);
+  assert.equal(run('state.trace.focus?.id'),'app.web.views');
+  assert.equal(run('state.trace.focus.counts.incoming'),7);
+  assert.equal(run('state.trace.focus.counts.outgoing'),2);
+  assert.equal(run('state.cy.getElementById("app.web.views").hasClass("trace-anchor")'),true);
+  run('preview(wire,{x:99,y:0});preview(wire,{x:101,y:0});preview(wire,{x:95,y:0});');
+  assert.equal(run('state.trace.focus.id'),'app.web.views');
+  run('preview(wire,{x:60,y:0});');
+  assert.equal(run('state.trace.focus.id'),'app.core.db');
+  assert.equal(run('state.trace.focus.counts.outgoing'),7);
+  assert.equal(run('state.trace.focus.counts.incoming'),2);
+});
+
+test('overlapping different pairs are traced together without double counting direction families',t=>{
+  const {run}=scene(t);
+  run(`fixture.nodes.push({id:'second',label:'Second consumer',level:'function',parent:'app',boundary:false,status:'in-target'});
+    fixture.edges.push({id:'second-link',source:'second',target:'app.web.views',type:'calls',count:33,status:'resolved',origin:'synthetic'});
+    state.universe=new Universe(fixture);state.universe.place({},'auto');
+    state.universe.reveal('app.core.db');state.universe.reveal('app.web.views');refreshMap();
+    for(const e of state.cy.edges()){
+      e.renderedSourceEndpoint=()=>({x:e.source().id()===e.target().id()?1000:0,y:0});
+      e.renderedTargetEndpoint=()=>({x:e.source().id()===e.target().id()?1100:200,y:0});
+      e.controlPoints=()=>undefined;
+    }
+    const first=state.shard.edges.find(e=>e.source==='app.core.db'&&e.target==='app.web.views');
+    preview(state.cy.getElementById(state.universe.renderPrefix+first.id),{x:100,y:0});`);
+  assert.equal(run('state.trace.kind'),'overlap');
+  assert.equal(run('state.trace.pairs.length'),2);
+  assert.equal(run('ConnectionTrace.total(state.trace.refs)'),42);
+  assert.match(run('tooltip.text'),/Second consumer/);
+  assert.equal(run("state.trace.refs.some(ref=>ref.type==='uses.type')"),true);
+  assert.equal(run('state.cy.edges(".focus").length'),4);
+  run(`globalThis.before=state.trace.key;
+    preview(state.cy.getElementById(state.universe.renderPrefix+state.shard.edges.find(e=>e.id==='second-link').id),{x:101,y:0});`);
+  assert.equal(run('state.trace.key'),run('before'),'native edge order must not flip the candidate list');
+});
+
+test('external root containers have a presentation label distinct from analysed projects',t=>{
+  const {run}=scene(t);
+  assert.match(run("nodeDescription(state.universe.nodes.get('stdlib'))"),/^external dependency group/);
+  assert.match(run("nodeDescription(state.universe.nodes.get('app'))"),/^project/);
+});
+
+test('curve hit testing follows the visible path and keeps a fixed screen tolerance',t=>{
+  const {run}=scene(t);
+  run(`const first=state.cy.edges().filter(e=>e.source().id()!==e.target().id())[0];
+    state.cy.edges().not(first).style('display','none');state.cy.zoom(1);state.cy.pan({x:0,y:0});
+    first.renderedSourceEndpoint=()=>({x:0,y:0});first.renderedTargetEndpoint=()=>({x:200,y:0});
+    first.controlPoints=()=>[{x:100,y:200}];`);
+  assert.equal(run('connectionAt({x:100,y:100}).kind'),'pair');
+  assert.equal(run('connectionAt({x:100,y:104}).kind'),'pair');
+  assert.equal(run('connectionAt({x:100,y:109})'),null);
+  assert.equal(run('connectionAt({x:100,y:0})'),null,'the chord is not the visible curve');
+});
+
+test('overlap inspection preserves its candidates and closes when represented references change',t=>{
+  const {run}=scene(t);treeElements(run);
+  run(`state.universe.reveal('recur');refreshMap();
+    globalThis.overlap=ConnectionTrace.overlap(state.shard,[
+    {source:'app.core.db',target:'app.web.views'},{source:'recur',target:'recur'}]);
+    inspectOverlap(overlap);`);
+  assert.equal(run('state.selection.overlapInspection'),true);
+  assert.equal(run('state.selection.pairs.length'),2);
+  run('refreshMap();');
+  assert.equal(run('state.selection.overlapInspection'),true);
+  run("state.hidden.add('uses.type');refreshMap();");
+  assert.equal(run('state.selection'),null);
+});
+
 test('node tracing reports outgoing, incoming and within without double counting',t=>{
   const {run}=scene(t);
   run("preview(state.cy.getElementById('app.core.db'))");
@@ -41,9 +120,8 @@ test('opposite directions and mixed families share one stable pair readout',t=>{
     preview(state.cy.getElementById(state.universe.renderPrefix+reverse.id));`);
   assert.equal(run('tooltip.title'),run('forwardTip.title'),'the focus endpoint must not flip');
   assert.equal(run('tooltip.text'),run('forwardTip.text'));
-  assert.match(run('tooltip.text'),/A -> B: 7.*B -> A: 2/);
-  assert.match(run('tooltip.text'),/calls/);
-  assert.match(run('tooltip.text'),/type refs/);
+  assert.match(run('tooltip.text'),/Incoming: 2.*Outgoing: 7/);
+  assert.equal(run("state.trace.refs.some(ref=>ref.type==='calls')&&state.trace.refs.some(ref=>ref.type==='uses.type')"),true);
   run('state.cy.destroy()');
 });
 
@@ -130,10 +208,54 @@ test('high-degree trace derives from shown facts only and allocates no renderer 
     preview(state.cy.getElementById('app.core.db'));`);
   assert.match(run('tooltip.text'),/Outgoing: 250.*Incoming: 0.*Within: 0/);
   assert.equal(run('state.cy.elements().length'),run('count'));
+  run(`state.cy.nodes().positions(()=>({x:200,y:0}));
+    state.cy.getElementById('app.core.db').position({x:100,y:0});
+    for(const e of state.cy.edges()){
+      e.renderedSourceEndpoint=()=>({x:0,y:0});e.renderedTargetEndpoint=()=>({x:200,y:0});e.controlPoints=()=>undefined;
+    }
+    preview(state.cy.edges()[0],{x:100,y:0});globalThis.hitCache=state.connectionHits;
+    globalThis.firstTrace=state.trace;preview(state.cy.edges()[1],{x:101,y:0});`);
+  assert.equal(run('state.trace.pairs.length'),250);
+  assert.equal(run('ConnectionTrace.total(state.trace.refs)'),250);
+  assert.equal(run('traceSummary(state.trace).columns.flatMap(column=>column.rows).length'),3,
+    'dense hover limits peer captions, not candidate accounting');
+  assert.equal(run('state.trace===firstTrace&&state.connectionHits===hitCache'),true);
+  assert.equal(run('state.cy.elements().length'),run('count'));
+  treeElements(run);run('inspectOverlap(state.trace);');
+  assert.equal(run("$('details').children.find(n=>n.tag==='ul').children.length"),50);
+  run("$('details').children.find(n=>n.tag==='button').onclick();");
+  assert.equal(run("$('details').children.find(n=>n.tag==='ul').children.length"),100);
   run('unfocus(true);beginViewportGesture();');
   assert.equal(run('state.trace'),null);
   assert.equal(run('state.cy.edges(".focus,.hovered,.trace-outgoing").length'),0);
   assert.equal(run('state.cy.elements().length'),run('count'));
+});
+
+test('relative directions exclude unrelated pairs and keep recursion separate',()=>{
+  const edge=(id,source,target,count)=>({id,source,target,count,type:'calls'});
+  const view={edges:[edge('first','first','sdk',33),edge('second','second','sdk',62),
+    edge('self','sdk','sdk',1),edge('other','outside','elsewhere',7)]};
+  const raw=ConnectionTrace.overlap(view,view.edges);
+  const sdk=ConnectionTrace.relative(raw,'sdk');
+  assert.deepEqual(sdk.focus.counts,{incoming:95,outgoing:0,within:1});
+  assert.equal(sdk.focus.others,1);
+  assert.equal(sdk.roles.get('other'),'other');
+  assert.equal(sdk.roles.get('first'),'incoming');
+  const consumer=ConnectionTrace.relative(raw,'first');
+  assert.deepEqual(consumer.focus.counts,{incoming:0,outgoing:33,within:0});
+  assert.equal(consumer.focus.others,3);
+  assert.equal(consumer.roles.get('first'),'outgoing');
+  assert.equal(ConnectionTrace.total(consumer.refs),103,'the focused card must not discard other candidates');
+});
+
+test('compact columns disclose truncated directions even if each peer appears somewhere',t=>{
+  const {run}=scene(t);
+  run(`const sampleEdge=(id,source,target)=>({id,source,target,type:'calls'});
+    const edges=[sampleEdge('d-in','D','app'),sampleEdge('e-in','E','app'),sampleEdge('f-in','F','app'),
+      sampleEdge('a-out','app','A'),sampleEdge('b-out','app','B'),sampleEdge('c-out','app','C'),sampleEdge('d-out','app','D')];
+    globalThis.summary=traceSummary(ConnectionTrace.relative(ConnectionTrace.overlap({edges},edges),'app'));`);
+  assert.equal(run('summary.columns.every(column=>column.rows.length===3)'),true);
+  assert.equal(run("summary.notes.includes('More in Details.')"),true);
 });
 
 test('trace classification respects excluded configuration and external references',()=>{
