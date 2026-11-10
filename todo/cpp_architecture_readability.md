@@ -107,6 +107,15 @@ project. Do not hide test code or macro-generated declarations by spelling or so
   attribute, never an ownership node.
 - [Native cache preparation](../laniakea/unreal/symbol_cache.py) includes native adapter code digests in its key.
   An extraction change must not reuse facts which never recorded the missing owners.
+- [Map index construction](../laniakea/map_index.py), `build()`, retains canonical node labels/attributes but
+  reduces references to endpoint/type/count groups. Individual external declaration names remain in exact
+  reference payloads, not those groups. The existing
+  [external-declaration paging regression](../tests/test_map_index.py) proves that distinct declarations can
+  share one compact group and still be recovered through paging.
+- A synthetic probe against the installed LLVM 21.1.8 verified access, static/virtual/const method properties
+  and semantic versus lexical parents on out-of-line definitions without compiler errors. Its macro cases
+  demonstrated spelling/expansion locations, not a universal generated-code classifier. Lexical parents locate
+  syntactic ownership; retaining a header declaration location still requires collecting that declaration.
 
 - A live Chrome walkthrough used trusted wheel/mouse input from the overview through folder, plugin, module,
   class, method, closure, call operator and a nested closure/operator. Class ownership and deep wheel expansion
@@ -150,12 +159,12 @@ readability problem; their existing containment is not evidence that every lambd
 | F1 | `native_index.metadata()` and `symbols.merge()` omit namespace containers; source-backed helpers look unrelated | Preserve real compiler scope ownership, including anonymous/local contexts |
 | F2 | Native metadata publishes only broad class/function levels. A real struct appears as a class; a constructor and a static method appear as generic functions | Expose accurate declaration kind and compiler-observed callable properties |
 | F3 | Source contains public methods, a private constructor and stored fields; the map cannot explain these distinctions. A data-only struct has no indexed children and no field-coverage explanation | Summarize member access and recorded data/member coverage; never equate zero indexed children with an empty C++ type |
-| F4 | Class hover has reference counts but no base-type summary; inheritance is available only among exact reference rows | Derive a compact structural summary from existing inheritance/override facts, separately from ordinary usage counts |
+| F4 | Class hover lacks a concise inheritance/override readout; compact reference groups omit exact external declaration names | Show directional reference counts from the current projection; inspect exact declarations through existing paged Details |
 | F5 | Definition promotion retains one source location; method inspection requires expanding Metadata to see even its limited signature | Keep declaration and definition context distinct, and surface a useful signature before exhaustive metadata/reference rows |
 | F6 | Closure labels contain absolute compiler-copy paths. Deep breadcrumbs expand vertically and long ancestor links overflow horizontally; repeated operator names lose useful owner context | Readable closure names, bounded breadcrumbs/readout, and concise nearest-owner context with the full chain still accessible |
 | F7 | `findHits()`/`elsewhere()` match labels only. A recorded qualified method name returns no match; an ambiguous short name offers one global winner without its owner | Qualified lookup and explicit owner/signature disambiguation while preserving global search |
-| F8 | The live module overview admits a dense grid of dots/rings while suppressing almost all primary labels. Correctly nested classes become readable after zooming in | Namespace aggregation plus a useful density-aware reveal/label transition; no promise that a tiny overview can display every name |
-| F9 | A source module macro invocation produces a recorded helper class without explaining its origin, alongside authored types | Expose compiler-proven macro origin where available; preserve exact facts and do not guess which macro-created classes are disposable |
+| F8 | The live module overview admits a dense grid of dots/rings while suppressing almost all primary labels. Correctly nested classes become readable after zooming in | Recheck after namespace aggregation; change admission/labels only for a remaining reproduced defect |
+| F9 | A source module macro invocation produces a recorded helper class without explaining its origin, alongside authored types | Expose proven macro context when available, otherwise unknown plus recorded source; incomplete provenance does not block the feature |
 
 These are observability gaps, not evidence that every dependency or class parent is wrong. Existing hover direction
 colors, pair inspection, exact-reference paging and the tested wheel/pan path remain useful and should be preserved.
@@ -170,6 +179,24 @@ reuse the continuous map, existing Details, Browse & filters and reference reade
 and removes viewer-side ownership guesses and the need to open source just to identify a declaration's kind.
 It gives up mirroring filesystem organization as a second ownership tree, consistent with A1. A3/A4 bound the
 new presentation: no per-field graph explosion, duplicate relationship store or second navigation mode.
+
+### Delivery order
+
+1. **Existing evidence first:** Surface recorded signature, qualified text, source and parent context in hover/Details;
+   fix qualified/ambiguous search and bounded breadcrumbs. Use existing reference groups for inheritance/override
+   counts, clearly scoped to the current view and direction. This stage must work on the current published map
+   without new extraction, graph/schema changes or saved-position writes. Do not infer unavailable kind/access flags.
+2. **Missing compiler evidence:** Add namespace containment, precise declaration kinds/access/callable properties,
+   compact observed member summaries, distinct declaration/definition locations and readable closure names. Extend
+   native facts only for information not already recorded. Prove identities and pinned-library behavior with focused
+   fixtures, then perform one validated native extraction with the existing publication/cache safeguards.
+3. **Demonstrated residual gaps:** Repeat the real walkthrough against the new containment. Adjust density, labels
+   or camera limits only for a remaining reproduced defect. Attempt macro context within the native adapter's
+   supported evidence; an explicit unknown/source fallback is acceptable and must not trigger another extraction
+   or a broader mechanism merely to classify every helper. Complete full regression/browser/privacy acceptance.
+
+All stages belong to this single todo. These are recommended implementation steps, not new operator decisions
+or approval to implement. No additional plan, summary store, hover request or parser is required.
 
 ### Proposed containment contract
 
@@ -208,6 +235,9 @@ or infer lambda calls from text. Declaration-only/unreferenced lambdas need expl
 
 ### C++ readability contract
 
+- Promote existing signature and qualified/source context first. Preserve the recorded signature rather than
+  replacing it merely for formatting. Add type-API context only where the required kind/return/qualifier information
+  is genuinely absent; do not reconstruct a signature by parsing source text.
 - Retain compiler-observed declaration kind, member access and the callable properties demonstrated by the
   proof: constructor versus method/free function, static, virtual/override, const qualification and useful
   parameter/return-type context. Preserve template/operator distinctions. Extend the pinned native adapter;
@@ -224,12 +254,15 @@ or infer lambda calls from text. Declaration-only/unreferenced lambdas need expl
 - Preserve declaration and definition source locations when distinct. Remap both through existing source roots;
   keep source links and source-call locations separate. No absolute copy path in visible names or identities.
 - Put a concise kind/owner/signature and available encapsulation summary before exhaustive reference rows in
-  hover/Details. Expose base types and overrides through existing canonical relationships, not a second list of
-  independently maintained dependency facts. When original external declarations require an exact page, reuse
-  the bounded reader with observable loading, cancellation/stale-result protection and no request per mousemove.
+  hover/Details. Inheritance/override hover counts come only from the existing projected reference groups, with
+  direction, filters and current-view scope explicit. A reference total is not a count of distinct base types or
+  methods. Keep specific declaration names and locations in existing paged Details. Do not add hover requests,
+  prefetching or a relationship-summary store. Existing Details paging retains loading/cancellation/stale-result guards.
 - Compiler-proven macro expansion origin is descriptive context. It must not turn all macro-declared types into
   generated noise or hide real source-authored macro declarations. If compiler evidence cannot distinguish a
-  helper's origin reliably, disclose the limitation and preserve it; never classify by names or folders.
+  helper's origin reliably, show unknown/recorded source context and preserve it; never classify by names or folders.
+  This fallback satisfies F9 acceptance; exhaustive macro attribution is not a completion gate. Missing provenance
+  is distinct from a compiler/API/input failure, which retains the existing failure/publication behavior.
 - Keep the canvas names-only. Hover must distinguish the focused declaration from similarly named siblings,
   overloads and repeated call operators using the nearest useful owner and signature. Preserve all reference
   totals, configuration subsets and incoming/outgoing/within semantics; do not add a new default wire type.
@@ -280,24 +313,38 @@ or infer lambda calls from text. Declaration-only/unreferenced lambdas need expl
 
 ## Implementation tasks
 
-- [ ] Add native and browser regressions for F1-F9; observe each new failing contract before changing its owner.
-  Preserve existing correct nesting as a control, not an artificial red test.
-- [ ] Resolve the multi-unit anonymous/named identity cases above with the pinned compiler. Record the selected
-  identity and ownership rule in the existing profile owner, including genuine limits.
-- [ ] Extend native metadata/declaration collection for real scopes, declaration kinds/access/properties,
-  compact member summaries, declaration/definition locations and demonstrable macro origin. Use compiler APIs
-  and current workers, not a second parser or source-text heuristics. Retain error isolation and raw diagnostics.
-- [ ] Normalize owner chains in `symbols.py`, preserving retained symbol IDs and references. Refuse conflicting
-  containment instead of silently choosing a module. Exercise repeated declarations and definition promotion.
-- [ ] Update profile levels, module coverage and native cache invalidation as required by the added facts.
-  Inspect schema, shards and map index consumers; change them only where acceptance exposes a real gap.
-- [ ] Implement concise generic hover/Details context and structural relation readout. Preserve bounded exact
-  reference access and stale-request/closed-inspection protection.
-- [ ] Implement qualified/ambiguous search and bounded deep breadcrumbs/readout through existing controls.
-  Keep exact scope links, keyboard navigation, global lookup and explicit panel-close behavior.
-- [ ] Verify namespace/local/lambda names, data-only type coverage, F8 density and deep zoom reachability against
-  the updated graph. Make the smallest generic admission/label adjustment only where F8 remains demonstrated.
-- [ ] Run the verification matrix, update stable owners and inspect the final focused diff/privacy state.
+Before each stage, observe the relevant new regression assertions fail before changing that behavior's owner.
+Preserve existing correct nesting as a control, not an artificial red test. F9 guards evidence/fallback truthfulness,
+not universal attribution; F8/zoom corrections are conditional on remaining reproduced defects.
+
+### Stage 1 - Existing evidence
+
+- [ ] Add viewer regressions for recorded signature/qualified/parent context, projected relation counts,
+  qualified/ambiguous search and deep breadcrumbs. Include a no-hover-request assertion.
+- [ ] Implement those changes through current hover/Details, search/Browse controls and navigation.
+  Preserve exact paging, direction semantics, keyboard navigation and explicit panel-close behavior.
+- [ ] Verify on the current published map, including a legacy/missing-metadata case, without native extraction
+  or graph/layout writes. Record this stage's usability evidence before changing compiler facts.
+
+### Stage 2 - Missing compiler semantics
+
+- [ ] Add focused native regressions for missing scope/kind/access/properties/member/source context. Resolve
+  multi-unit anonymous/named identities with pinned LLVM before assigning new parents; record the rule and limits.
+- [ ] Extend native facts only where the existing evidence cannot meet the contract. Use current compiler APIs
+  and workers, not another parser or source-text heuristics. Preserve error isolation and diagnostics.
+- [ ] Normalize owner chains in `symbols.py` without changing retained symbol IDs or references. Refuse conflicting
+  containment; exercise repeated declarations, definition promotion and remapped declaration/definition sources.
+- [ ] Update required profile levels/coverage and invalidate incomplete fact caches. Inspect schema/shards/map-index
+  consumers; change them only for a demonstrated integration gap. No extra relationship-summary representation.
+- [ ] Run focused native/cache/normalization checks, then one validated extraction using the selected build context.
+
+### Stage 3 - Residual acceptance
+
+- [ ] Repeat namespace/local/lambda naming, data-only coverage, deep wheel navigation and search acceptance.
+  Recheck F8 after containment; make the smallest generic admission/label correction only if it remains reproduced.
+- [ ] Check macro context and its explicit unknown/source fallback. Preserve macro-created types and exact facts;
+  do not block unrelated acceptance or widen extraction to obtain exhaustive provenance.
+- [ ] Run the full declared verification matrix, migrate durable knowledge and review the final focused diff/privacy state.
 
 ## Test-first and verification plan
 
@@ -314,12 +361,12 @@ or infer lambda calls from text. Declaration-only/unreferenced lambdas need expl
 | Real module expansion | Direct namespace helpers appear as unrelated module stars | Before/after private browser acceptance |
 | Declaration kind and access | A struct, public static method and private constructor have no useful semantic distinction | One representative native normalization fixture plus hover/Details regression |
 | Data-only type | Stored fields are absent from indexed children and the UI gives no scope/coverage explanation | Compact member-summary regression with repeated-header deduplication and old runs with missing metadata |
-| Inheritance/override summary | Useful structural facts are buried among ordinary usage rows | Viewer summary regression using existing canonical relations; stale exact-page response control |
+| Inheritance/override readout | Useful relation counts are buried among ordinary usage rows | Projected count/direction/filter regression; exact external names stay pageable; no hover request or new summary data |
 | Declaration versus definition | Out-of-line promotion loses distinct declaration location/context | Native merge regression with header access and source definition, including source remapping |
 | Qualified and ambiguous search | Qualified method is unmatched; short name has one unqualified global choice | Synthetic shared short names/overloads in several owners; trusted keyboard acceptance |
 | Deep/long breadcrumbs and hover context | Header grows with compiler paths; an ancestor link overflows and a repeated leaf loses its nearest owner | Synthetic deep/long-name rendering, viewport-width and reachable-navigation checks |
 | Dense module/namespace reveal | Opening a group produces mostly anonymous glyphs at normal framing | Before/after live acceptance plus a faithful dense synthetic fixture; permanent guard for a reproduced admission/label defect |
-| Macro-origin context | Macro-created helper and intended macro-declared type are indistinguishable | Native macro fixture proving origin without suppressing either class or changing its references |
+| Macro-origin context | Unsupported evidence could be treated as certain origin or prevent completion | Native known-macro control plus insufficient-evidence fallback; neither case suppresses types, changes refs or requires universal attribution |
 | Added-depth reachability | New containers may exceed the zoom range, despite the previous shallower path working | Synthetic placement/camera acceptance for the added hierarchy; reject an inaccessible group control |
 
 The missing-namespace assertions must reject current output. Identity tests use a relevant merged-owner bad control
@@ -329,6 +376,12 @@ failing test. Use the existing synthetic project infrastructure in
 
 ### Green evidence
 
+- Stage 1 must pass the targeted viewer/browser checks against the existing published run. Confirm canonical graph
+  and saved-layout hashes are unchanged and node hover issues no exact-reference requests. Recorded labels/qualified
+  names may resolve retained project types; do not fabricate missing external declaration names from endpoint labels.
+- F9 passes with either proven macro context or an explicit unknown/recorded-source fallback. Verify both paths
+  preserve declarations and references. Do not require every helper to be attributable, treat source coordinates
+  as a disposability classifier, or convert actual compiler/API/input errors into successful unknown provenance.
 - Run the same native cases with `LANIAKEA_TEST_LIBCLANG` pointing to the local pinned library. Validate canonical
   graph, manifest levels, shards and map-index reference queries; IDs and exact pre-existing reference identities
   must survive added containment. Validate reordered batches and rejected ownership collisions.
@@ -377,10 +430,13 @@ correct. If identity constraints require changing existing IDs or generic source
 
 ## Completion criteria
 
-The verification matrix passes and F1-F9 have source-backed before/after evidence. Real containers replace the
-demonstrated flattening; a programmer can identify declaration kind, owner, access and coverage without opening
-raw metadata, and deep navigation/search remain usable. Old correct nesting and references remain correct,
-pins are preserved, and costs/coverage are recorded truthfully. No claim of
+The three delivery stages and their applicable verification pass. F1-F7 have source-backed before/after evidence;
+F8 records the post-containment result and requires a fix only if the defect remains. F9 accepts proven context
+or the verified unknown/recorded-source fallback; exhaustive macro attribution is not a gate. Real containers
+replace the demonstrated flattening; a programmer can identify declaration kind, owner, access and coverage
+without opening raw metadata, and deep navigation/search remain usable. No new summary store or hover network
+request is introduced. Old correct nesting and references remain correct, pins are preserved, and costs/coverage
+are recorded truthfully. No claim of
 exhaustive C++ indexing, runtime dispatch or untested ownership contexts. Implementation, privacy review and runtime
 acceptance remain outstanding; this investigation is not a feature completion report.
 
@@ -408,3 +464,20 @@ acceptance remain outstanding; this investigation is not a feature completion re
   it is not a matched dense-hover benchmark or proof for every graph branch. Browser-driver setup/timing failures
   were excluded from product findings.
 - **Authority:** D3 added; A3/A4 are recommendations for review. Implementation remains unapproved.
+
+### 2026-11-10 - Reviewer contract corrections
+
+- **Evidence:** Current map construction preserves node metadata but groups away per-reference external declaration
+  names; the existing paging regression recovers both original declarations. A pinned LLVM 21.1.8 probe verified
+  the relevant access/properties and semantic/lexical-parent distinction without compiler errors.
+- **Accepted:** F4 uses projected relation counts with exact declarations in paged Details, no hover request or
+  second summary store. F9 explicitly accepts unknown provenance without blocking other completion. Existing
+  facts are delivered before missing compiler semantics, then residual acceptance, within this same plan.
+- **Qualified:** F8 was already conditional in the readability contract and tasks; that condition is preserved and
+  made consistent in the findings/completion wording. Macro handling was already best effort in the design body,
+  but the previous blanket completion sentence needed the explicit fallback exception.
+- **Clarification:** A lexical parent is a syntactic owner, not the header declaration's location. Collecting
+  declarations and definitions separately remains necessary. Not every base name is absent from topology:
+  retained project node labels are present, whereas exact collapsed external declarations require paging.
+- **Change:** Only this transient plan. Reviewer recommendations are technical inputs, not new operator decisions
+  or feature implementation approval; D1-D3 and the identity/pin/publication safeguards remain unchanged.
