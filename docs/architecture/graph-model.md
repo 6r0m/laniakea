@@ -127,6 +127,9 @@ unchanged candidate sets reuse their trace. Projection/camera changes invalidate
 The hover card stays anchored while the candidate set and viewpoint remain unchanged. No automatic arrangement occurs on hover.
 During pair tracing, endpoint captions yield native pointer hits to connections so newly revealed text cannot steal
 the click; endpoint glyphs remain interactive. Leaving the trace restores normal caption interaction.
+Clicks inspect the same geometric candidates as hover, using a native edge only when no geometric hit is available.
+Single and double taps on expanded backgrounds give wires priority; constellation labels and empty backgrounds retain
+their group actions. A double tap on a wire does not fold the surrounding constellation.
 The docked, keyboard-focusable readout retains the last summary after pointer exit while emphasis clears. Escape,
 clear, gestures and projection changes reset it. Its reserved height does not change when trace text changes.
 Canvas titles show names only. A nearby hover card provides kind, containment, coverage and direction counts without

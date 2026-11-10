@@ -37,10 +37,18 @@ const ConnectionTrace = {
   },
   overlap(view,endpoints) {
     const candidates=new Map(endpoints.map(pair=>[this.key(pair.source,pair.target),pair]));
-    const groups=new Map([...candidates.keys()].map(key=>[key,[]]));
-    for(const edge of view.edges||[])groups.get(this.key(edge.source,edge.target))?.push(edge);
-    const pairs=[...candidates].sort(([a],[b])=>a.localeCompare(b)).map(([key,pair])=>
-      this.pair({edges:groups.get(key)},pair.source,pair.target)).filter(Boolean);
+    if(candidates.size<=1){const pair=candidates.values().next().value;return pair?this.pair(view,pair.source,pair.target):null;}
+    const groups=new Map();
+    for(const pair of candidates.values()){
+      const edges=[];
+      for(const [source,target] of [[pair.source,pair.target],[pair.target,pair.source]]){
+        if(!groups.has(source))groups.set(source,new Map());
+        groups.get(source).set(target,edges);
+      }
+    }
+    for(const edge of view.edges||[])groups.get(edge.source)?.get(edge.target)?.push(edge);
+    const pairs=[...candidates].sort(([a],[b])=>a.localeCompare(b)).map(([,pair])=>
+      this.pair({edges:groups.get(pair.source).get(pair.target)},pair.source,pair.target)).filter(Boolean);
     if(pairs.length<2)return pairs[0]||null;
     const refs=new Map(),roles=new Map();
     for(const pair of pairs){

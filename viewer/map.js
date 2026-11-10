@@ -104,13 +104,8 @@ function renderGraph() {
   const cy = state.cy;
   state.mapSize = {width:cy.width(),height:cy.height()};
   cy.on('tap', 'node', event => {
-    if(event.target.hasClass('expanded')){
-      const box=state.labelBoxes?.get(event.target.id()),p=event.renderedPosition;
-      if(p&&(!box||p.x<box.x1||p.x>box.x2||p.y<box.y1||p.y>box.y2)){
-        const trace=connectionAt(p);
-        if(trace){if(trace.kind==='overlap')inspectOverlap(trace);else inspectPair(trace.source,trace.target);return;}
-      }
-    }
+    const trace=backgroundConnection(event);
+    if(trace){if(trace.kind==='overlap')inspectOverlap(trace);else inspectPair(trace.source,trace.target);return;}
     clearTimeout(state.inspectTimer);
     const id = event.target.id();
     // Opening a panel on the first tap can move or cover the target before a double-tap completes.
@@ -123,6 +118,7 @@ function renderGraph() {
     const edge=state.shard.edges.find(e=>e.id===event.target.data('referenceId'));
     const trace=edge&&connectionAt(event.renderedPosition,edge);
     if(trace?.kind==='overlap')inspectOverlap(trace);
+    else if(trace)inspectPair(trace.source,trace.target);
     else if(edge)inspectPair(edge.source,edge.target);
   });
   cy.on('tap', event => { if (event.target === cy) {
@@ -131,7 +127,13 @@ function renderGraph() {
     else if(trace)inspectPair(trace.source,trace.target);
     else {unfocus();renderDetails(null);}
   } });
-  cy.on('dbltap', 'node', event => { clearTimeout(state.inspectTimer); toggleGroup(event.target.id()); });
+  cy.on('dbltap', 'node', event => {
+    clearTimeout(state.inspectTimer);
+    const trace=backgroundConnection(event);
+    if(trace?.kind==='overlap')inspectOverlap(trace);
+    else if(trace)inspectPair(trace.source,trace.target);
+    else toggleGroup(event.target.id());
+  });
   cy.on('mouseover mousemove',event=>schedulePreview(event.target,event.renderedPosition));
   cy.on('mouseout','node, edge',event=>{
     if(state.hoverTarget?.element===event.target||event.target.hasClass('hovered'))schedulePreview(cy,event.renderedPosition);
@@ -278,13 +280,24 @@ function segmentDistance(p,a,b) {
   return Math.hypot(p.x-a.x-t*dx,p.y-a.y-t*dy);
 }
 
+function backgroundConnection(event) {
+  if(!event.target.hasClass('expanded')||!event.renderedPosition)return null;
+  const box=state.labelBoxes?.get(event.target.id()),p=event.renderedPosition;
+  if(box&&p.x>=box.x1&&p.x<=box.x2&&p.y>=box.y1&&p.y<=box.y2)return null;
+  return connectionAt(p);
+}
+
 function connectionAt(pointer,fallback=null) {
   if(!pointer||!Number.isFinite(pointer.x)||!Number.isFinite(pointer.y))
     return fallback&&ConnectionTrace.pair(state.shard,fallback.source,fallback.target);
   const cy=state.cy,pan=cy.pan(),key=[cy.zoom(),pan.x,pan.y].join();
   let cache=state.connectionHits;
   if(!cache||cache.cy!==cy||cache.view!==state.shard||cache.key!==key){
-    const records=[],mid=(a,b)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
+    const records=[],positions=new Map(),mid=(a,b)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
+    const position=id=>{
+      if(!positions.has(id))positions.set(id,cy.getElementById(id).renderedPosition());
+      return positions.get(id);
+    };
     const curve=(points,a,c,b,depth=0)=>{
       if(depth>=10||segmentDistance(c,a,b)<=1){points.push(b);return;}
       const ac=mid(a,c),cb=mid(c,b),m=mid(ac,cb);
@@ -292,17 +305,21 @@ function connectionAt(pointer,fallback=null) {
     };
     for(const edge of cy.edges()){
       if(!edge.visible())continue;
-      const a=edge.renderedSourceEndpoint(),b=edge.renderedTargetEndpoint();
+      // Summary styles use straight, centre-to-centre paths; loops and exact curves keep native geometry.
+      const straight=edge.hasClass('derived')&&!edge.hasClass('loop');
+      const a=straight?position(edge.data('source')):edge.renderedSourceEndpoint(),
+        b=straight?position(edge.data('target')):edge.renderedTargetEndpoint();
       if(!a||!b||![a.x,a.y,b.x,b.y].every(Number.isFinite))continue;
-      const controls=(edge.controlPoints()||[]).map(p=>({x:p.x*cy.zoom()+pan.x,y:p.y*cy.zoom()+pan.y})),points=[a];
+      const controls=straight?[]:(edge.controlPoints()||[]).map(p=>({x:p.x*cy.zoom()+pan.x,y:p.y*cy.zoom()+pan.y})),points=[a];
       for(let i=0;i<controls.length;i++)curve(points,points[points.length-1],controls[i],
         i+1<controls.length?mid(controls[i],controls[i+1]):b);
       if(!controls.length)points.push(b);
-      records.push({source:edge.source().id(),target:edge.target().id(),points});
+      let x1=a.x,y1=a.y,x2=a.x,y2=a.y;
+      for(const p of points){x1=Math.min(x1,p.x);y1=Math.min(y1,p.y);x2=Math.max(x2,p.x);y2=Math.max(y2,p.y);}
+      records.push({source:edge.data('source'),target:edge.data('target'),points,x1,y1,x2,y2});
     }
     const index=records.length?new SpatialIndex(records.length):null;
-    for(const {points} of records)index.add(Math.min(...points.map(p=>p.x)),Math.min(...points.map(p=>p.y)),
-      Math.max(...points.map(p=>p.x)),Math.max(...points.map(p=>p.y)));
+    for(const record of records)index.add(record.x1,record.y1,record.x2,record.y2);
     if(index)index.finish();
     cache=state.connectionHits={cy,view:state.shard,key,records,index};
   }

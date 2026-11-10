@@ -67,6 +67,11 @@ async page => {
       await move(await point('a','b',fraction));
       check(await page.evaluate(()=>state.trace.focus.id==='b'),'Midpoint jitter must not flip the viewpoint');
     }
+    check(await page.evaluate(()=>state.cy.edges('.derived').not('.loop').every(edge=>{
+      const a=edge.renderedSourceEndpoint(),b=edge.renderedTargetEndpoint(),
+        source=edge.source().renderedPosition(),target=edge.target().renderedPosition();
+      return Math.hypot(a.x-source.x,a.y-source.y)<.001&&Math.hypot(b.x-target.x,b.y-target.y)<.001;
+    })),'Summary hit paths must agree with native rendered centre-to-centre endpoints');
     const pairPoint=await point('a','b',.3);await move(pairPoint);
     // Focused captions can grow across a previously hovered connection.
     await page.evaluate(()=>{
@@ -277,9 +282,39 @@ async page => {
       'The readable summary must retain disambiguated full ownership paths');
     check(requests.length===0&&errors.length===0&&await page.evaluate(()=>JSON.stringify(state.positionCache.layouts)===traceProof.pins),
       'Viewpoint hover wrote positions, fetched facts or produced errors');
+    await page.setViewportSize({width:1440,height:1000});
+    // A wide native hit area can select a neighboring wire instead of the geometric centreline under the pointer.
+    await page.evaluate(()=>{
+      inspectPair('first','sdk');
+      state.cy.nodes('.expanded').style('events','no');
+      state.cy.getElementById(state.universe.renderPrefix+'first-sdk').style({'width':40,'z-index':100});
+      state.cy.getElementById(state.universe.renderPrefix+'second-sdk').style('events','no');state.connectionHits=null;
+      globalThis.nativeTap=null;state.cy.one('tap',e=>{globalThis.nativeTap=e.target.id();});
+    });
+    await page.waitForFunction(()=>!state.gestureActive&&!state.viewportFrame);await frames();
+    const mismatched=await point('second','sdk',.6);await page.mouse.move(mismatched.x,mismatched.y);await frames();
+    await page.mouse.click(mismatched.x,mismatched.y);await frames();
+    check(await page.evaluate(()=>nativeTap===state.universe.renderPrefix+'first-sdk'&&state.selection?.pairInspection&&
+      [state.selection.source,state.selection.target].includes('second')),
+      'Native wide-edge hit must not override the single geometric hover pair');
+    // Route native double taps through the expanded background while keeping the underlying wires geometrically visible.
+    await page.evaluate(()=>{
+      state.cy.nodes('.expanded').removeStyle('events');state.cy.edges().removeStyle('width z-index');
+      state.cy.edges().style('events','no');state.connectionHits=null;
+      inspectOverlap(ConnectionTrace.overlap(state.shard,state.shard.edges));
+      globalThis.nativeDouble=null;state.cy.one('dbltap',e=>{globalThis.nativeDouble=e.target.id();});
+    });
+    await page.waitForFunction(()=>!state.gestureActive&&!state.viewportFrame);await frames();
+    const beneath=await point('first','sdk',.4);await page.mouse.dblclick(beneath.x,beneath.y,{delay:40});await frames();
+    check(await page.evaluate(()=>['one','two'].includes(nativeDouble)&&state.universe.expanded.has('one')&&
+      state.universe.expanded.has('two')&&state.selection?.pairInspection&&
+      state.selection.key===ConnectionTrace.key('first','sdk')),
+      'Double-clicking a wire routed through an expanded background must not fold the group');
+    check(requests.length===0&&errors.length===0,'Pointer routing wrote layouts or produced runtime errors');
     return {nativeReciprocalPath:true,bothDirectionInspection:true,oneWay:true,recursion:true,filterRefresh:true,
       noHoverRequests:true,noDecorations:true,keyboardReadout:true,externalOwnership:true,externalZoom:true,
       exactDeclarationLinks:true,sharedProvider:true,missingProvenance:true,crossingCandidates:true,proximityFocus:true,midpointStable:true,
-      coincidentPairs:true,stableOverlapCard:true,keyboardCandidate:true,compactSharedEndpoint:true,longPeersNarrow:true,contrasts,errors};
+      coincidentPairs:true,stableOverlapCard:true,keyboardCandidate:true,compactSharedEndpoint:true,longPeersNarrow:true,
+      mismatchedNativeHit:true,wireDoubleClickKeepsGroup:true,contrasts,errors};
   }finally{page.off('request',observe);page.off('pageerror',onError);await page.reload();}
 }

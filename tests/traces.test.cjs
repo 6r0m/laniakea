@@ -1,9 +1,46 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const {inspectionViewer,treeElements}=require('./viewer-support.cjs');
+const {viewer,inspectionViewer,treeElements}=require('./viewer-support.cjs');
 const {ConnectionTrace}=require('../viewer/traces.js');
 const {Universe}=require('../viewer/universe.js');
+
+function pointerScene(t){
+  const instance=viewer();t.after(()=>instance.run('state.cy.destroy();clearTimeout(state.inspectTimer);'));
+  instance.run(`globalThis.css=()=>'#888';globalThis.readableLabels=()=>{};globalThis.layout=()=>{};
+    const create=cytoscape;globalThis.cytoscape=options=>create({...options,container:undefined,headless:true});
+    realRenderGraph();
+    state.shard={nodes:fixture.nodes,edges:[{id:'native',source:'app.core.db',target:'app.web.views'},
+      {id:'geometric',source:'app.core.models',target:'app.core.db'}]};
+    state.cy.add(fixture.nodes.map(n=>({data:{id:n.id}})));
+    state.cy.add(state.shard.edges.map(e=>({data:{...e,referenceId:e.id}})));
+    state.cy.getElementById('app.core').addClass('expanded');
+    state.labelBoxes=new Map([['app.core',{x1:0,y1:0,x2:80,y2:20}]]);
+    globalThis.calls=[];globalThis.folds=[];globalThis.hit={kind:'pair',source:'app.core.models',target:'app.core.db'};
+    globalThis.connectionAt=()=>hit;
+    globalThis.inspectPair=(source,target)=>calls.push([source,target]);
+    globalThis.inspectOverlap=trace=>calls.push(trace.kind);globalThis.toggleGroup=id=>folds.push(id);`);
+  return instance;
+}
+
+test('edge taps inspect the geometric pair even when the native hit names a different edge',t=>{
+  const {run}=pointerScene(t);
+  run("state.cy.getElementById('native').emit({type:'tap',renderedPosition:{x:100,y:100}});");
+  assert.deepEqual(Array.from(run('calls[0]')),['app.core.models','app.core.db']);
+  run("hit=null;state.cy.getElementById('native').emit({type:'tap',renderedPosition:{x:100,y:100}});");
+  assert.deepEqual(Array.from(run('calls[1]')),['app.core.db','app.web.views'],'missing geometry retains the native fallback');
+});
+
+test('double taps on wires beneath expanded backgrounds keep the group open while labels still fold',t=>{
+  const {run}=pointerScene(t);
+  run("state.cy.getElementById('app.core').emit({type:'dbltap',renderedPosition:{x:100,y:100}});");
+  assert.equal(run('folds.length'),0,'a wire hit must not fold its background constellation');
+  assert.deepEqual(Array.from(run('calls[0]')),['app.core.models','app.core.db']);
+  run("state.cy.getElementById('app.core').emit({type:'dbltap',renderedPosition:{x:10,y:10}});");
+  assert.equal(run('folds.length'),1,'constellation labels retain double-tap folding');
+  run("hit=null;state.cy.getElementById('app.core').emit({type:'dbltap',renderedPosition:{x:100,y:100}});");
+  assert.equal(run('folds.length'),2,'empty expanded backgrounds retain double-tap folding');
+});
 
 function scene(t){
   const instance=inspectionViewer(true);
@@ -54,13 +91,16 @@ test('overlapping different pairs are traced together without double counting di
     fixture.edges.push({id:'second-link',source:'second',target:'app.web.views',type:'calls',count:33,status:'resolved',origin:'synthetic'});
     state.universe=new Universe(fixture);state.universe.place({},'auto');
     state.universe.reveal('app.core.db');state.universe.reveal('app.web.views');refreshMap();
+    state.cy.zoom(1);state.cy.pan({x:0,y:0});
+    state.cy.getElementById('app.core.db').position({x:0,y:0});state.cy.getElementById('second').position({x:0,y:0});
+    state.cy.getElementById('app.web.views').position({x:200,y:0});
     for(const e of state.cy.edges()){
       e.renderedSourceEndpoint=()=>({x:e.source().id()===e.target().id()?1000:0,y:0});
       e.renderedTargetEndpoint=()=>({x:e.source().id()===e.target().id()?1100:200,y:0});
       e.controlPoints=()=>undefined;
     }
     const first=state.shard.edges.find(e=>e.source==='app.core.db'&&e.target==='app.web.views');
-    preview(state.cy.getElementById(state.universe.renderPrefix+first.id),{x:100,y:0});`);
+    preview(state.cy.getElementById(state.universe.renderPrefix+first.id),{x:180,y:0});`);
   assert.equal(run('state.trace.kind'),'overlap');
   assert.equal(run('state.trace.pairs.length'),2);
   assert.equal(run('ConnectionTrace.total(state.trace.refs)'),42);
@@ -68,7 +108,7 @@ test('overlapping different pairs are traced together without double counting di
   assert.equal(run("state.trace.refs.some(ref=>ref.type==='uses.type')"),true);
   assert.equal(run('state.cy.edges(".focus").length'),4);
   run(`globalThis.before=state.trace.key;
-    preview(state.cy.getElementById(state.universe.renderPrefix+state.shard.edges.find(e=>e.id==='second-link').id),{x:101,y:0});`);
+    preview(state.cy.getElementById(state.universe.renderPrefix+state.shard.edges.find(e=>e.id==='second-link').id),{x:181,y:0});`);
   assert.equal(run('state.trace.key'),run('before'),'native edge order must not flip the candidate list');
 });
 
@@ -81,13 +121,39 @@ test('external root containers have a presentation label distinct from analysed 
 test('curve hit testing follows the visible path and keeps a fixed screen tolerance',t=>{
   const {run}=scene(t);
   run(`const first=state.cy.edges().filter(e=>e.source().id()!==e.target().id())[0];
-    state.cy.edges().not(first).style('display','none');state.cy.zoom(1);state.cy.pan({x:0,y:0});
+    state.cy.edges().not(first).style('display','none');first.removeClass('derived');first.style('curve-style','bezier');
+    state.cy.zoom(1);state.cy.pan({x:0,y:0});
     first.renderedSourceEndpoint=()=>({x:0,y:0});first.renderedTargetEndpoint=()=>({x:200,y:0});
     first.controlPoints=()=>[{x:100,y:200}];`);
   assert.equal(run('connectionAt({x:100,y:100}).kind'),'pair');
   assert.equal(run('connectionAt({x:100,y:104}).kind'),'pair');
   assert.equal(run('connectionAt({x:100,y:109})'),null);
   assert.equal(run('connectionAt({x:100,y:0})'),null,'the chord is not the visible curve');
+});
+
+test('straight summary hits reuse rendered endpoint positions without querying native curve geometry',t=>{
+  const {run}=scene(t);
+  run(`state.cy.edges('.loop').style('display','none');
+    state.cy.zoom(1);state.cy.pan({x:0,y:0});
+    state.cy.getElementById('app.core.db').position({x:0,y:0});
+    state.cy.getElementById('app.web.views').position({x:200,y:0});
+    for(const edge of state.cy.edges('.derived').not('.loop')){
+      edge.renderedSourceEndpoint=edge.renderedTargetEndpoint=edge.controlPoints=()=>{throw Error('redundant native geometry query');};
+    }
+    globalThis.hit=connectionAt({x:100,y:0});`);
+  assert.equal(run('hit.kind'),'pair');
+  assert.equal(run('ConnectionTrace.total(hit.refs)'),9);
+});
+
+test('overlap lookup does not serialize keys for unrelated projected wires',()=>{
+  let keys=0;
+  const trace={...ConnectionTrace,key(...args){keys++;return ConnectionTrace.key(...args);}};
+  const edges=[{id:'a-b',source:'a',target:'b',type:'calls'},{id:'c-d',source:'c',target:'d',type:'calls'},
+    ...Array.from({length:5000},(_,i)=>({id:'unrelated-'+i,source:'other-'+i,target:'elsewhere',type:'calls'}))];
+  const result=trace.overlap({edges},edges.slice(0,2));
+  assert.equal(result.pairs.length,2);
+  assert.equal(result.refs.length,2);
+  assert.ok(keys<=8,'endpoint keys should be constructed for candidates, not every visible wire');
 });
 
 test('overlap inspection preserves its candidates and closes when represented references change',t=>{
