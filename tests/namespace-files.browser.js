@@ -54,7 +54,17 @@ async page=>{
   await reset();
   const p=await page.evaluate(id=>{const p=state.cy.getElementById(id).renderedPosition(),b=$('graph').getBoundingClientRect();
     return{x:p.x+b.x+2,y:p.y+b.y+2};},header);
-  await page.mouse.move(p.x,p.y);await page.mouse.wheel(0,-120);await settle();
+  await page.mouse.move(p.x,p.y);await page.mouse.wheel(0,-1);await settle();
+  check(await page.evaluate(id=>!state.universe.expanded.has(id),alias),'Tiny wheel input jumped into the contextual file');
+  for(let i=0;i<40&&!await page.evaluate(id=>state.scopeShard.scope===id,alias);i++){
+    const before=await page.evaluate(id=>{const u=state.universe,b=$('graph').getBoundingClientRect(),p=u.positions.get(id),zoom=worldZoom(),pan=state.cy.pan();
+      return{x:b.x+p.x*zoom+pan.x,y:b.y+p.y*zoom+pan.y,size:2*u.radii.get(id)*zoom};},header);
+    await page.mouse.move(before.x,before.y);await page.mouse.wheel(0,-60);await settle();
+    if(await page.evaluate(id=>state.scopeShard.scope===id,alias))check(await page.evaluate(({alias,before})=>{
+      const b=state.universe.bounds.get(alias),zoom=worldZoom(),span=Math.max(b.x2-b.x1,b.y2-b.y1,2*state.universe.radii.get(alias));
+      return Math.abs(span*zoom-before.size*Math.exp(.108))<1e-5;
+    },{alias,before}),'Contextual file entry changed its apparent footprint');
+  }
   check(await page.evaluate(id=>state.scopeShard.scope===id&&state.cy.getElementById('build').length,alias),'Trusted wheel missed the contextual header');
   await reset();await page.evaluate(id=>flyToNode(id,false),header);await settle();
   const q=await page.evaluate(id=>{const p=state.cy.getElementById(id).renderedPosition(),b=$('graph').getBoundingClientRect();return{x:p.x+b.x,y:p.y+b.y};},header);

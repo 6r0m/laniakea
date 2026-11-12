@@ -216,7 +216,7 @@ test('file frontiers use call-site provenance and definition links retain one cl
   assert.equal(map.nodes.get('method').parent,'api');
   assert.deepEqual(map.nodes.get(producer).attrs.source_definitions,['method']);
   const p=map.positions.get(producer),r=map.radii.get(producer);
-  assert.deepEqual(map.zoomStep(180/r,{x:p.x+r*0.2,y:p.y},1),{action:'definition',id:'method'},
+  assert.deepEqual(map.zoomStep(180/r,{x:p.x+r*0.2,y:p.y},1),{action:'definition',id:'method',from:producer},
     'definition zoom must tolerate a pointer near the file, not only its exact world coordinate');
   assert.equal(map.referenceStats.get(producer).outgoing,3);assert.equal(map.referenceStats.get(header).outgoing,2);
   assert.equal(map.referenceStats.get(header).incoming,1);assert.equal(map.referenceStats.get('api').outgoing,5);

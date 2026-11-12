@@ -130,6 +130,7 @@ class Universe {
       ids.every(id=>this.nodes.get(id).parent===parent)?parent:null;
   }
   navigationTarget(id){ return this.fileEntries.get(id)||(this.fileCovers.has(id)?null:this.definitionTarget(id)); }
+  zoomReady(id,zoom){ return 2*this.radii.get(id)*zoom>=300; }
   contains(parent, id) { return this.paths.get(id).includes(parent); }
 
   fileContext(edge,end){
@@ -368,13 +369,13 @@ class Universe {
     if (direction > 0) {
       const nearby=this.spatial?this.spatial.search(point.x,point.y,point.x,point.y).map(i=>this.spatialIds[i]):[...this.nodes.keys()];
       const candidates = nearby.filter(id => id !== this.root && (this.isGroup(id)||this.navigationTarget(id)) &&
-        !this.regions.has(id) && !this.expanded.has(id) && this.representative(id) === id && 2 * this.radii.get(id) * zoom >= 300 &&
+        !this.regions.has(id) && !this.expanded.has(id) && this.representative(id) === id && this.zoomReady(id,zoom) &&
         Math.hypot(point.x - this.positions.get(id).x, point.y - this.positions.get(id).y) <= this.radii.get(id));
       candidates.sort((a, b) => Math.hypot(point.x - this.positions.get(a).x, point.y - this.positions.get(a).y) -
         Math.hypot(point.x - this.positions.get(b).x, point.y - this.positions.get(b).y));
       if (candidates.length) {
         const id=candidates[0],target=this.navigationTarget(id);
-        this.expanded.add(id);return { action: target?'definition':'expand', id:target||id };
+        this.expanded.add(id);return target?{action:'definition',id:target,from:id}:{action:'expand',id};
       }
     } else if (direction < 0) {
       const closing = [...this.expanded].filter(id => id !== this.root && !this.regions.has(id) && 2 * this.radii.get(id) * zoom < 190);

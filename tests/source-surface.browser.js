@@ -4,7 +4,7 @@ async page=>{
   const check=(ok,message)=>{if(!ok)throw Error(message);},errors=[],writes=[];
   page.on('pageerror',e=>errors.push(e.message));
   page.on('request',r=>{if(r.method()==='POST'&&r.url().includes('/layout/'))writes.push(r.url());});
-  const settle=async()=>{await page.waitForFunction(()=>!state.viewportFrame&&!state.gestureActive);
+  const settle=async()=>{await page.waitForFunction(()=>!state.viewportFrame&&!state.gestureActive&&!state.zoomFrame&&!state.wheelFrame);
     await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));};
   check(await page.evaluate(()=>state.target.id==='sample'&&state.universe.nodes.has('method')),'Requires the disposable source surface fixture');
   const initial=await page.evaluate(()=>JSON.stringify(state.positionCache.layouts));
@@ -12,16 +12,32 @@ async page=>{
   const files=await page.evaluate(()=>Object.fromEntries(state.universe.fileIds.map(id=>[state.universe.nodes.get(id).label,id])));
   check(files['API.h']&&files['Producer.cpp']&&files['Helpers.cpp']&&files['Other.cpp'],'Missing concrete file representatives');
   await page.evaluate(id=>{state.universe.expanded=new Set([state.universe.root]);state.universe.reveal(id);refreshMap();frameNode('module');},files['API.h']);await settle();
-  const headerPoint=await page.evaluate(id=>{const p=state.cy.getElementById(id).renderedPosition(),b=$('graph').getBoundingClientRect();
-    return{x:b.x+p.x+3,y:b.y+p.y+3};},files['API.h']);
-  await page.mouse.move(headerPoint.x,headerPoint.y);await page.mouse.wheel(0,-120);await settle();
+  const camera=await page.evaluate(()=>({zoom:worldZoom(),pan:{...state.cy.pan()}}));
+  let wheelSteps=0;
+  const gradual=async id=>{
+    for(let i=0;i<40&&!await page.evaluate(id=>state.universe.expanded.has(id),id);i++){
+      const before=await page.evaluate(id=>{const p=state.cy.getElementById(id).renderedPosition(),b=$('graph').getBoundingClientRect();
+        return{x:b.x+p.x,y:b.y+p.y,zoom:worldZoom()};},id);
+      await page.mouse.move(before.x,before.y);await page.mouse.wheel(0,-60);await settle();wheelSteps++;
+      check(await page.evaluate(before=>Math.abs(worldZoom()/before.zoom-Math.exp(.108))<1e-6,before),
+        'Inward wheel fitted contents instead of applying the requested scale');
+    }
+  };
+  await gradual(files['API.h']);
   check(await page.evaluate(id=>state.scopeShard.scope===id&&state.universe.expanded.has(id)&&state.cy.getElementById('class').length,files['API.h']),
-    'One trusted wheel step over a header did not reveal its declarations');
-  const classPoint=await page.evaluate(()=>{const p=state.cy.getElementById('class').renderedPosition(),b=$('graph').getBoundingClientRect();
-    return{x:b.x+p.x+3,y:b.y+p.y+3};});
-  await page.mouse.move(classPoint.x,classPoint.y);await page.mouse.wheel(0,-120);await settle();
+    'Gradual wheel did not reveal header declarations');
+  check(wheelSteps>1&&!await page.evaluate(()=>state.universe.expanded.has('class')),'A small header skipped directly to class members');
+  await gradual('class');
   check(await page.evaluate(()=>state.scopeShard.scope==='class'&&state.universe.expanded.has('class')&&state.cy.getElementById('method').length),
-    'One trusted wheel step inside a header did not reveal class members');
+    'Gradual wheel did not reveal class members');
+  for(let i=0;i<wheelSteps;i++){
+    const before=await page.evaluate(()=>worldZoom());await page.mouse.wheel(0,60);await settle();
+    check(await page.evaluate(before=>Math.abs(worldZoom()/before-Math.exp(-.108))<1e-6,before),'Outward wheel changed scale unexpectedly');
+  }
+  check(await page.evaluate(({camera,file})=>Math.abs(worldZoom()-camera.zoom)<1e-6&&
+    Math.hypot(state.cy.pan().x-camera.pan.x,state.cy.pan().y-camera.pan.y)<.1&&
+    !state.universe.expanded.has(file)&&!state.universe.expanded.has('class'),{camera,file:files['API.h']}),
+    'Equal wheel movement did not return to the original file overview');
   await page.evaluate(()=>{state.universe.expanded=new Set([state.universe.root]);flyToNode('module',false);state.universe.expanded.add('module');refreshMap();frameNode('module');});await settle();
   check(await page.evaluate(()=>state.shard.edges.every(e=>!state.universe.regions.has(e.source)&&!state.universe.regions.has(e.target))),
     'An organizational region receives dependency wires');
@@ -92,6 +108,6 @@ async page=>{
   }),pins),'Arranged real pins did not survive reload');
   check(!errors.length,'Arrangement runtime errors');
   return {concreteFiles:true,organizationalRegion:true,physicalPaging:true,singleSymbol:true,definitionNavigation:true,
-    privateOwnership:true,wheel:true,headerOneStep:true,classOneStep:true,keyboard:true,narrow:true,reload:true,sourceBands:true,arrangeCancel:true,
+    privateOwnership:true,wheel:true,gradualLayers:true,reversibleCamera:true,wheelSteps,keyboard:true,narrow:true,reload:true,sourceBands:true,arrangeCancel:true,
     arrangeLocal:true,arrangeReload:true,errors,writes:writes.length};
 }

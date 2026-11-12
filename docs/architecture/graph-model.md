@@ -187,6 +187,8 @@ Exact-reference navigation retains its original identity. Hiding an inspected it
 of highlighting a different ancestor. Hover and wheel exploration do not require an inspected item.
 Node inspection keeps identity, source and analysis state visible; secondary metadata has a separate disclosure so
 references and navigation remain reachable. Constellation controls track expansion without resetting the reference reader.
+The panel's close button remains available while scrolling and uses the same inspection cancellation as Escape.
+Closing with that button returns keyboard focus to the toolbar's Details control.
 
 Profiles may annotate source partitions and owners that expose source sections. The viewer folds marked implementation
 branches into derived source regions, with their recorded subfolders inside. Public or unclassified branches stay
@@ -213,8 +215,11 @@ not a dependency endpoint; references still resolve to concrete files or reveale
 remain authoritative: a source region is not proof that a declaration is an abstract interface.
 Sibling file captions may omit a long common identifier prefix at a word boundary. Full filenames, source paths and
 reference identities remain available in hover and inspection; the shortened caption is presentation only.
-Zooming in over a visible file glyph or its name enters its next recorded layer directly. Revealed code groups within
-the active detail scope follow the same rule, without the world-radius threshold used for broader constellations.
+Wheel input over a file glyph, name or revealed code group keeps the pointer-anchored camera scale. Its next layer
+opens only when there is enough screen space, using the same threshold as surrounding constellations. Each inward
+step reveals at most one layer and never fits its contents automatically; outward steps use the separate closing
+threshold. Navigation-only file entries preserve their apparent footprint and screen anchor when entering a recorded
+context elsewhere in the layout. Double-click and explicit Open controls retain direct, fitted navigation.
 Empty files with no unambiguous navigation target do not
 invent internals. Mixed-file namespaces retain their canonical scope and their namespace type icon beside file boxes.
 Implementation styling also follows a semantic entity's recorded source partition; its shape still identifies code,

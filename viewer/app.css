@@ -149,6 +149,10 @@ aside { flex: 0 0 296px; width: 296px; min-width: 0; overflow: auto; padding: 18
   border: 0 solid var(--line); scrollbar-gutter: stable; overscroll-behavior: contain; }
 #filters { flex-basis: 242px; width: 242px; border-right-width: 1px; }
 #details { border-left-width: 1px; }
+.details-close { float: right; position: sticky; top: 4px; z-index: 2; width: 32px; height: 32px;
+  margin: 0 0 8px 8px; padding: 0; font-size: 22px; line-height: 1; background: var(--panel); }
+#details > h2 { margin-top: 0; }
+#details .reference-pager { padding-right: 40px; }
 aside h2 { margin: 0 0 10px; font-size: 17px; font-weight: 600; overflow-wrap: anywhere; }
 aside h2:not(:first-child), h3 { margin-top: 22px; }
 h3 { font-size: 14px; font-weight: 600; margin-bottom: 8px; }

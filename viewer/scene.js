@@ -87,6 +87,20 @@ function setSceneScope(id) {
   renderCrumbs(); rememberView();
 }
 
+function enterWheelScope(id, from=id) {
+  const map=state.universe;
+  if(from!==id){
+    // A catalog portal changes world context, not its apparent footprint or screen location.
+    const source=map.positions.get(from),bounds=map.bounds.get(id),p=map.positions.get(id),pan=state.cy.pan(),zoom=worldZoom();
+    const center=map.isGroup(id)?{x:(bounds.x1+bounds.x2)/2,y:(bounds.y1+bounds.y2)/2}:p;
+    const span=Math.max(bounds.x2-bounds.x1,bounds.y2-bounds.y1,2*map.radii.get(id));
+    const level=Math.max(state.cy.minZoom(),Math.min(state.cy.maxZoom(),zoom*2*map.radii.get(from)/span));
+    setWorldViewport(level,{x:source.x*zoom+pan.x-center.x*level,y:source.y*zoom+pan.y-center.y*level});
+  }
+  map.reveal(id);if(map.isGroup(id))map.expanded.add(id);
+  setSceneScope(id);unfocus();refreshMap();
+}
+
 function semanticZoom(direction) {
   if (state.zoomFrame) cancelAnimationFrame(state.zoomFrame);
   state.zoomFrame = requestAnimationFrame(() => {
@@ -96,8 +110,7 @@ function semanticZoom(direction) {
     const detail=direction>0&&detailAtPointer(state.pointer);
     if(detail){
       const id=map.navigationTarget(detail)||detail;
-      map.reveal(id);if(map.isGroup(id))map.expanded.add(id);
-      setSceneScope(id);unfocus();refreshMap();frameNode(id);rememberView();return;
+      enterWheelScope(id,detail);rememberView();return;
     }
     const point = {x:(state.pointer.x-pan.x)/zoom,y:(state.pointer.y-pan.y)/zoom};
     let change, changed = false;
@@ -106,10 +119,9 @@ function semanticZoom(direction) {
       if (!change) break;
       changed = true;
       if(change.action==='definition'){
-        map.reveal(change.id);if(map.isGroup(change.id))map.expanded.add(change.id);
-        setSceneScope(change.id);refreshMap();frameNode(change.id);break;
+        enterWheelScope(change.id,change.from);break;
       }
-      if (change.action === 'expand') setSceneScope(change.id);
+      if (change.action === 'expand') {setSceneScope(change.id);break;}
       else if (map.contains(change.id, state.scopeShard.scope)) {
         setSceneScope(map.viewParents.get(change.id) || map.root);
       }

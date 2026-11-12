@@ -546,6 +546,9 @@ function renderDetails(item) {
   state.referenceObservers = [];
   panel.scrollTop=0;panel.scrollLeft=0;
   panel.replaceChildren();
+  const close=el('button','\u00d7',{type:'button',class:'details-close','aria-label':'Close details',title:'Close details (Esc)'});
+  close.onclick=()=>{renderDetails(null);$('toggle-details').focus();};
+  panel.append(close);
   if (!item) {
     togglePanel('details', false);
     panel.append(el('h2', 'Details'), el('p', 'Hover to trace. Click a star or connection to inspect it.'));

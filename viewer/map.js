@@ -881,6 +881,7 @@ function detailAtPointer(pointer){
   for(const node of state.cy.nodes().not('.expanded')){
     if(!node.hasClass('source-file')&&(!local||!map.contains(scope.id,node.id())))continue;
     if(map.regions.has(node.id())||map.expanded.has(node.id())||!map.isGroup(node.id())&&!map.navigationTarget(node.id()))continue;
+    if(!map.zoomReady(node.id(),worldZoom()))continue;
     const p=node.renderedPosition(),dx=pointer.x-p.x,dy=pointer.y-p.y,box=state.labelBoxes?.get(node.id());
     const glyph=Math.abs(dx)<=node.renderedWidth()/2+4&&Math.abs(dy)<=node.renderedHeight()/2+4;
     const caption=box&&pointer.x>=box.x1&&pointer.x<=box.x2&&pointer.y>=box.y1&&pointer.y<=box.y2;

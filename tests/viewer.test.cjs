@@ -12,22 +12,32 @@ test('header search distinguishes recorded file paths without losing equal-basen
   assert.equal(run("DeclarationContext.search('One/API.h',files).items[0].id"),'One');
 });
 
-test('a file under the wheel pointer enters its next layer without a large world-radius threshold',()=>{
+test('wheel detail waits for space and preserves the camera while opening one file or class layer',()=>{
   const {run,context}=inspectionViewer(true);
   context.surface=JSON.parse(require('node:fs').readFileSync(require.resolve('../fixtures/source-surface.graph.json'),'utf8'));
   try{
     run(`state.universe=new Universe(surface);state.universe.place({},'auto');
       globalThis.file=[...state.universe.nodes.values()].find(n=>n.attrs?.source_file&&n.label==='API.h').id;
       state.universe.reveal(file);refreshMap();
-      const p=state.cy.getElementById(file).renderedPosition();state.pointer={x:p.x+3,y:p.y+3};
+      const p=state.cy.getElementById(file).renderedPosition();state.pointer={x:p.x,y:p.y};
       globalThis.requestAnimationFrame=fn=>{fn();return 1;};globalThis.cancelAnimationFrame=()=>{};
       globalThis.setSceneScope=id=>state.scopeShard.scope=id;globalThis.frameNode=id=>globalThis.framed=id;
       globalThis.rememberView=()=>{};globalThis.unfocus=()=>{};semanticZoom(1);`);
+    assert.equal(run('state.universe.expanded.has(file)'),false,'tiny inward wheel input must not enter a distant file');
+    assert.equal(run('globalThis.framed'),undefined);
+    run(`state.cy.zoom(310/(2*state.universe.radii.get(file)));refreshMap();
+      {const p=state.cy.getElementById(file).renderedPosition();state.pointer={x:p.x,y:p.y};}
+      globalThis.cameraBefore={zoom:worldZoom(),pan:{...state.cy.pan()}};semanticZoom(1);`);
     assert.equal(run('state.universe.expanded.has(file)'),true);
-    assert.equal(run('state.scopeShard.scope'),run('file'));assert.equal(run('framed'),run('file'));
-    run(`{const p=state.cy.getElementById('class').renderedPosition();state.pointer={x:p.x+3,y:p.y+3};semanticZoom(1);}`);
+    assert.equal(run('state.scopeShard.scope'),run('file'));assert.equal(run('globalThis.framed'),undefined);
+    assert.equal(run('worldZoom()'),run('cameraBefore.zoom'));
+    assert.equal(run('JSON.stringify(state.cy.pan())'),run('JSON.stringify(cameraBefore.pan)'));
+    assert.equal(run("state.universe.expanded.has('class')"),false,'opening a header must not skip straight to members');
+    run(`state.cy.zoom(310/(2*state.universe.radii.get('class')));refreshMap();
+      {const p=state.cy.getElementById('class').renderedPosition();state.pointer={x:p.x,y:p.y};semanticZoom(1);}`);
     assert.equal(run("state.universe.expanded.has('class')"),true);
     assert.equal(run('state.scopeShard.scope'),'class');
+    assert.equal(run('globalThis.framed'),undefined);
   }finally{run('state.cy.destroy()');}
 });
 
@@ -42,6 +52,34 @@ test('the active expanded navigation scope survives a fit around spread-out save
     assert.ok(run('viewportCamera(0).force.includes(file)'));
     run('state.universe.expanded.delete(file)');
     assert.ok(!run('viewportCamera(0).force.includes(file)'),'closed scopes must still release their details');
+  }finally{run('state.cy.destroy()');}
+});
+
+test('wheel portals preserve their screen footprint and anchor without fitting or moving pins',()=>{
+  const {run,context}=inspectionViewer(true);
+  context.surface=JSON.parse(require('node:fs').readFileSync(require.resolve('../fixtures/source-surface.graph.json'),'utf8'));
+  context.namespace=JSON.parse(require('node:fs').readFileSync(require.resolve('../fixtures/namespace-files.graph.json'),'utf8'));
+  try{
+    run(`globalThis.setSceneScope=id=>state.scopeShard.scope=id;globalThis.rememberView=()=>{};
+      globalThis.frameNode=()=>{throw Error('Wheel must not fit contents');};
+      for(const [graph,path,decls,defs] of [[surface,'Private/Producer.cpp',[],['method']],
+        [namespace,'Public/API.h',['build','record'],['record']]]){
+        const at=id=>graph.nodes.findIndex(n=>n.id===id);
+        graph.files=[{owner:at('module'),root:'project',path:'Source/Sample/'+path,
+          declarations:decls.map(at),definitions:defs.map(at)}];
+        state.universe=new Universe(graph);state.universe.place({},'auto');
+        const u=state.universe,from=u.fileIds[0],id=u.navigationTarget(from);
+        if(!id)throw Error('Fixture needs a recorded portal');u.reveal(from);refreshMap();
+        const zoom=155/u.radii.get(from),pan={x:81,y:43},p=u.positions.get(from);
+        setWorldViewport(zoom,pan);
+        const anchor={x:p.x*zoom+pan.x,y:p.y*zoom+pan.y},size=2*u.radii.get(from)*zoom;
+        const pins=JSON.stringify([...u.positions]);enterWheelScope(id,from);
+        const b=u.bounds.get(id),q=u.isGroup(id)?{x:(b.x1+b.x2)/2,y:(b.y1+b.y2)/2}:u.positions.get(id);
+        const span=Math.max(b.x2-b.x1,b.y2-b.y1,2*u.radii.get(id)),after=worldZoom(),next=state.cy.pan();
+        if(Math.abs(span*after-size)>1e-6||Math.hypot(q.x*after+next.x-anchor.x,q.y*after+next.y-anchor.y)>1e-6)
+          throw Error('Wheel portal jumped in scale or screen position');
+        if(JSON.stringify([...u.positions])!==pins)throw Error('Portal moved saved coordinates');
+      }`);
   }finally{run('state.cy.destroy()');}
 });
 
@@ -237,6 +275,25 @@ test('following configuration retains exact provenance without enabling wires or
   run('renderDetails(null);refreshMap()');assert.equal(run('state.selection'),null);
 });
 
+test('details close control dismisses stars and connections without moving the map',t=>{
+  const {run}=inspectionViewer();treeElements(run);t.after(()=>run('state.cy.destroy()'));
+  run(`globalThis.appendReferences=()=>{};globalThis.focused=null;$('toggle-details').focus=()=>focused='toggle-details';
+    globalThis.beforePositions=JSON.stringify([...state.universe.positions]);
+    globalThis.beforeExpansion=JSON.stringify([...state.universe.expanded]);
+    globalThis.closed=0;
+    for(const item of [state.universe.nodes.get('app.core'),state.shard.edges[0]]){
+      renderDetails(item);
+      const close=$('details').children.find(n=>n.attrs?.['aria-label']==='Close details');
+      if(!close)throw Error('Inspection needs an accessible close control');
+      close.onclick();refreshMap();
+      if(!$('details').hidden||state.selection||state.cy.elements(':selected').length)throw Error('Close left inspection selected');
+      closed++;
+    }`);
+  assert.equal(run('closed'),2);assert.equal(run('focused'),'toggle-details');
+  assert.equal(run('JSON.stringify([...state.universe.positions])'),run('beforePositions'));
+  assert.equal(run('JSON.stringify([...state.universe.expanded])'),run('beforeExpansion'));
+});
+
 test('a late project declaration page cannot reopen closed inspection or replace a new star',async t=>{
   const {run}=inspectionViewer();treeElements(run);t.after(()=>run('state.cy.destroy()'));
   run(`const nodes=fixture.nodes,at=id=>nodes.findIndex(n=>n.id===id);
@@ -248,7 +305,8 @@ test('a late project declaration page cannot reopen closed inspection or replace
     state.referencePages={cancel(){cancelled++;},load:()=>new Promise(resolve=>requests.push(resolve))};
     renderDetails({...state.universe.nodes.get('app'),projectContext:true});
     globalThis.oldEpoch=state.referenceEpoch;
-    renderDetails(null);refreshMap();
+    $('toggle-details').focus=()=>{};
+    $('details').children.find(n=>n.attrs?.['aria-label']==='Close details').onclick();refreshMap();
     requests[0]({total:1,items:[],next_cursor:null});`);
   await new Promise(setImmediate);
   assert.equal(run('state.selection'),null);assert.equal(run("$('details').hidden"),true);
@@ -257,7 +315,7 @@ test('a late project declaration page cannot reopen closed inspection or replace
     selectNode('app.core');requests[1]({total:1,items:[],next_cursor:null});`);
   await new Promise(setImmediate);
   assert.equal(run('state.selection.id'),'app.core');
-  assert.equal(run("$('details').children[0].textContent"),'core');
+  assert.equal(run("$('details').children.find(n=>n.tag==='h2').textContent"),'core');
 });
 
 test('zoom context explains unavailable internals and clears the hint on returning to an analysed scope',()=>{

@@ -112,6 +112,11 @@ async (page) => {
     await page.waitForFunction(()=>!state.referencePages?.pending.size);
     check(await page.locator('#details').innerText().then(text=>/Project configuration.*listed targets/s.test(text)),
       'Project context lost exact declarations and distinct target counts');
+    const closeDetails=page.getByRole('button',{name:'Close details',exact:true});
+    await closeDetails.focus();await page.keyboard.press('Enter');await page.evaluate(()=>refreshMap());
+    check(await page.locator('#details').isHidden()&&await page.locator('#toggle-details').evaluate(n=>n===document.activeElement),
+      'Keyboard close must dismiss inspection and return focus to Details');
+    await projectDetails.click();
     await page.keyboard.press('Escape');await page.evaluate(()=>refreshMap());
     check(await page.locator('#details').isHidden(),'Escape must close context without reopening Project details');
     await projectDetails.click();await page.getByRole('button',{name:'Clear selection',exact:true}).click();
@@ -219,7 +224,9 @@ async (page) => {
     await page.mouse.click(wire.x,wire.y);await frames();
     check(await page.evaluate(()=>state.selection&&state.selection.level===undefined&&!$('details').hidden),
       'A constellation background blocks connection inspection');
-    await page.getByRole('button',{name:'Clear selection',exact:true}).click();
+    await closeDetails.click();await page.evaluate(()=>refreshMap());
+    check(await page.evaluate(()=>$('details').hidden&&state.selection===null&&state.cy.elements(':selected').length===0),
+      'Connection close left inspection open or selected');
     await page.evaluate(()=>selectNode('folder:Sample'));
     await page.getByRole('button',{name:'Collapse constellation',exact:true}).click();
     await page.getByRole('button',{name:'Clear selection',exact:true}).click();
@@ -453,6 +460,14 @@ async (page) => {
     const narrow=await page.evaluate(()=>({width:document.documentElement.scrollWidth,viewport:innerWidth,
       count:state.cy.nodes().length,error:$('error').hidden}));
     check(narrow.width<=narrow.viewport&&narrow.count>0&&narrow.error,'Narrow viewport overflows or loses the map');
+    await page.evaluate(()=>selectNode('folder:Sample'));await page.waitForFunction(()=>!state.referencePages?.pending.size);
+    await page.evaluate(()=>$('details').scrollTop=200);await frames();
+    check(await closeDetails.evaluate(button=>{
+      const b=button.getBoundingClientRect(),pane=document.getElementById('details'),p=pane.getBoundingClientRect();
+      return b.top>=p.top&&b.bottom<=p.bottom&&b.left>=p.left&&b.right<=p.right&&
+        document.elementFromPoint(b.x+b.width/2,b.y+b.height/2)===button&&pane.scrollWidth<=pane.clientWidth;
+    }),'Close details is obscured or offscreen after scrolling the narrow panel');
+    await closeDetails.click();check(await page.locator('#details').isHidden(),'Narrow details close failed');
     await page.setViewportSize({width:1440,height:1000});
     await page.evaluate(()=>{renderDetails(null);state.universe.expanded=new Set([state.universe.root]);});
     await page.selectOption('#layout','galaxy');await frames();
@@ -478,7 +493,7 @@ async (page) => {
       wheelExpansion:true,wheelCollapse:true,hoverOnlyTracing:true,allReferencesAccounted:true,
       exactReferenceFollow:true,doubleClickExpansion:true,spaceFlight:true,reloadAndHistory:true,
       groupDragSaved:true,deepPinSaved:true,labelDragSaved:true,freshBrowserRestored:true,
-      narrowViewport:true,keyboardPaging:true,stickyPager:true,boundedReferenceRows:true,
+      narrowViewport:true,detailsClose:true,keyboardPaging:true,stickyPager:true,boundedReferenceRows:true,
       compactStaleWarning:true,metadataDisclosure:true,liveGroupControl:true,overviewAddress:true,resetRefusal:true,
       interiorConnectionTracing:true,centeredGalaxy:true,configurationSubset:true,primaryNames:true,galaxyPinIsolated:true,
       outsideTargetHint:true,openSteps,errors};
