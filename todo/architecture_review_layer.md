@@ -42,6 +42,9 @@ an entire architecture automatically.
 - **D5:** Preserve saved arrangements and archive completed todos rather than deleting them.
   Effect: neither pins nor completed plans are migrated or removed. Reason: retain arrangements and task history.
   Source: earlier operator requests in this session.
+- **D6:** Evaluate the supplied audit against the code and apply valid in-scope corrections.
+  Effect: revise the investigation contract; the proposed runtime feature still requires implementation approval.
+  Reason: not stated. Source: operator review request, 2026-11-12.
 
 ### Operator gates
 
@@ -55,8 +58,10 @@ an entire architecture automatically.
   not extraction, file watching or a policy editor.
 - **A4 [ACTIVE]:** Start at module/build-dependency granularity; preserve exact native calls as evidence. Do not
   implement arbitrary class-level policies or a configurable rule language in the MVP.
+- **A5 [ACTIVE]:** Triage follows the rule's module-level semantic concern. Location drift refreshes exact evidence
+  without reopening an otherwise unchanged acknowledged finding.
 
-The attachment is design input, not authorization. A1-A4 are recommendations awaiting approval.
+The attachments are design input, not authorization. A1-A5 are recommendations awaiting approval.
 
 ## Non-goals
 
@@ -73,6 +78,7 @@ The attachment is design input, not authorization. A1-A4 are recommendations awa
 | evidence | consequence |
 |---|---|
 | [Native dependency notes](../laniakea/unreal/symbols.py), `_dependency_reviews`, annotate cross-module `calls` with `dependency_review`, `transitive_path` and `public_exposure_path` | Reuse these notes; do not duplicate dependency-path inference in the generic evaluator. The note explicitly says it is not a violation. |
+| [Native reference identities](../laniakea/unreal/symbols.py), `merge`, include source path, line and column in the reference key | Raw reference IDs and locations are exact-evidence locators, not semantic triage fingerprints. Moving an unchanged call can change its ID. |
 | [Unreal graph construction](../laniakea/unreal/graph.py), `DEPENDENCY_FIELDS` and `build` | Public/private build dependencies, include paths, dynamic loads and descriptor requirements are different facts. Only project modules have exported outgoing dependencies; Engine boundaries are incomplete. |
 | [Unreal manifest](../laniakea/unreal/__init__.py), `extract` | The run records profile, selected target/platform/configuration, compiler source when enabled and coverage limitations. Native analysis remains opt-in. |
 | [Read index](../laniakea/map_index.py), `build`, `MapIndex.references` | SQLite retains exact canonical edge payloads. Its `seq` is the run's edge ordinal; reference groups and cursors are run-bound, not durable issue identities. |
@@ -159,6 +165,7 @@ Missing or contradictory facts required by the witness make it unavailable, not 
 Per-check status distinguishes disabled, evaluated-on-recorded-scope, partial, unavailable and error. Zero findings
 is displayed as "No findings in recorded scope", with that scope and coverage, never "Architecture is correct".
 Severity and triage are separate. An acknowledged red finding remains a red finding.
+Out-of-box analysis supplies yellow candidates only; red requires an explicitly configured applicable constraint.
 
 ### Configurable patterns and profile boundary
 
@@ -210,14 +217,20 @@ Severity and triage are separate. An acknowledged red finding remains a red find
 
 ### Map and inspection
 
-- Add one optional Review control with separate violation/candidate totals and a paged, keyboard-accessible list.
-  Default off. Keep the existing trace colors and reference filters unchanged.
+- Add one optional Review control with active violation/candidate totals, a separate acknowledged count and a paged,
+  keyboard-accessible list. Default off. Keep the existing trace colors and reference filters unchanged.
+- By default, exclude acknowledged findings from active badges and the active list. Show acknowledged includes them
+  with their original severity and explicit acknowledgement state, providing inspection and Reopen. This presentation
+  control does not change policy, triage or evidence. An acknowledged-only entity has no active badge.
 - Map affected canonical IDs to their current representatives and show small passive red/yellow badges with a
   symbol/count, not color alone. Deduplicate finding IDs per collapsed representative and in global totals. One
   cycle is not counted again for every participant or file alias. Review findings hidden by map filters remain in
   the list and are described as off-view; filters never change the verdict.
 - Badge placement must not enlarge node geometry, add graph nodes/edges or introduce another pointer interception
-  layer. Select findings through the Review list or the affected entity's existing Details; retain keyboard access.
+  layer. With Review enabled, the existing click/keyboard inspection of a marked entity puts its findings immediately
+  below the entity heading, before metadata and reference lists. A single finding shows its explanation, evidence and
+  acknowledgement actions inline in that one gesture; multiple findings use a compact, paged summary with actions.
+  The Review list is an alternative route. Preserve node/label/wire hit priority and ordinary entity inspection.
 - Details show rule/rationale, focused entities, target/context, evidence, limitations, likely impact and one or two
   conditional investigation steps. For a cycle, inspect the witness and consider a boundary/interface change; do not
   prescribe breaking an intentional cycle. For native notes, inspect the call and build chain before editing rules.
@@ -231,16 +244,27 @@ Severity and triage are separate. An acknowledged red finding remains a red find
 
 - Store Accept risk and Not relevant, with an optional bounded reason, under the target's `review/triage.json`.
   These are the two acknowledgement categories; dismiss is not a third permanent hiding mechanism. Reopen returns
-  a finding to active. Acknowledged findings remain inspectable and counted separately, never labelled fixed.
+  a finding to the active list and badges. Acknowledged findings remain inspectable through Show acknowledged and
+  counted separately, never labelled fixed. A successful acknowledgement removes the active marker/list entry and
+  updates collapsed-group/global counts; a refused write leaves the displayed state unchanged and reports the error.
 - Stable finding identity uses rule ID, finding kind and canonical subjects (directed pair or sorted cycle members),
   scoped to the compatible profile/target/platform/configuration. Never use screen position, file aliases, reference
   group numbers, witness ordinal or run ID as the cross-run identity.
-- Bind a decision to that rule's effective definition/evaluator version and an evidence fingerprint, including relevant
-  edges, provenance, annotations and cycle membership. Evidence or policy changes reopen it with an explanation.
-  Input ordering alone must not invalidate it; an unrelated rule edit must not reopen this rule's findings.
-- Preserve acknowledgements across compatible runs only when those bindings still match. Changed source locations
-  conservatively change evidence. Unlike ArchUnit's default line-insensitive baseline, this is not automatic freezing.
-  An absent finding is "not observed in this report", not automatically resolved, especially under reduced coverage.
+- Bind a decision to the rule's effective semantic definition/evaluator version and a semantic fingerprint at A4's
+  granularity: affected modules, constraint-relevant typed dependency relations, cycle membership/internal relations
+  or the native candidate's missing-direct-dependency state and relevant build context. Changed rule semantics,
+  affected modules or those relationships reopen the finding with an explanation. Unrelated rule edits do not.
+- Exclude raw reference/symbol IDs of individual call sites, line/column drift, selected witness choice, display text
+  and input order from that fingerprint. Source paths matter only where they change policy applicability or module
+  ownership. Additional call sites/count changes for the same module-pair concern do not alone reopen it; this MVP
+  reviews that module relationship, not every call. Do not add fuzzy symbol matching or alter canonical IDs.
+- Keep report cache identity and exact witness validation content-sensitive. A location-only edit regenerates the
+  report and supplies current reference IDs/source links while preserving matching triage; never reuse stale pages
+  or weakened exact-reference checks to make acknowledgement persist. A5 does not freeze evidence or infer coverage.
+- Preserve acknowledgements across compatible runs only when semantic bindings can be established. Unknown
+  compatibility cannot silently reuse a decision. An absent finding is "not observed in this report", not automatically
+  resolved, especially under reduced coverage. ArchUnit's line-insensitive baseline supports avoiding location noise;
+  Laniakea still keeps explicit user triage and current exact evidence separately.
 - One triage owner serializes read/validate/merge/atomic replacement, including other local server processes. Validate
   target, report digest, finding, state, reason and revision; reject stale writes rather than losing another tab's decision.
   Unknown/unavailable triage is an error, not an empty store. Do not discard records for temporarily absent findings.
@@ -270,6 +294,8 @@ Severity and triage are separate. An acknowledged red finding remains a red find
 6. Inspection cancellation, label/wire priority, gradual wheel navigation and saved positions remain unchanged.
 7. Findings are regenerable, policy and triage are separate durable local input; no parallel graph or source-of-truth store.
 8. All learned data and decisions stay ignored, local and offline; tracked examples use only synthetic projects.
+9. Acknowledgement changes active presentation, not severity or facts. Semantic changes can reopen a finding;
+   location-only changes refresh exact evidence without invalidating the decision under A5.
 
 ## Implementation tasks
 
@@ -280,8 +306,10 @@ Severity and triage are separate. An acknowledged red finding remains a red find
 - [ ] Add on-demand report generation/caching and paged local routes to the existing server. Keep failure independent of
   serving/extraction. Add the coordinated triage writer with stale-write and no-mutation refusal tests.
 - [ ] Add the Review list, passive projection badges and existing-Details integration. Verify exact witnesses and late
-  response cancellation before adding any presentation polish. Do not add pointer targets or a second scene layer.
-- [ ] Prove triage reopen/restart/cross-run behavior, bounded retention, generic compatibility, privacy and saved pins.
+  response cancellation, direct marked-entity inspection and active/acknowledged visibility before presentation polish.
+  Do not add pointer targets or a second scene layer.
+- [ ] Prove semantic-versus-location triage reuse, reopen/restart/cross-run behavior, bounded retention, generic
+  compatibility, privacy and saved pins.
 - [ ] Run the real Unreal walkthrough and matched performance checks; fix only demonstrated gaps in this scope.
 - [ ] Migrate contracts to the stable owners below, inspect the complete diff, then record evidence/limitations and archive
   this plan per the todo lifecycle. No automatic commit or publication.
@@ -300,12 +328,15 @@ edges and compiler annotations; no private project material in fixtures.
 | Cycle semantics - permanent guard | Three build modules yield one SCC candidate and a real closed witness. A diamond, legitimate Engine hub and ordinary calls/recursion do not. An explicit applicable acyclic rule changes the result to red. |
 | Scope/coverage - permanent guard | Boundary-only/partial inputs never imply clean results; unknown selectors, unsupported families, missing native facts and malformed policy have distinct observable outcomes. Recorded positive witnesses remain valid despite unrelated missing coverage. |
 | Existing native notes - permanent guard | Collect annotated calls by module pair, keep counts and exact paths/locations; ignore unannotated calls and compiler/SDK providers. No native run means unavailable; old notes never imply exhaustive coverage. |
-| Determinism/scale - permanent guard | Edge/node reorder preserves identity, evidence and decisions. A large synthetic SCC does not enumerate all cycles; paged findings preserve totals and witnesses without emitting every call. |
+| Determinism/scale - permanent guard | Edge/node reorder and an alternative valid witness preserve finding identity, semantic fingerprint and decisions. A large synthetic SCC does not enumerate all cycles; paged findings preserve totals and witnesses without emitting every call. |
 | Evidence route - permanent guard plus browser acceptance | Every witness resolves to its exact canonical ID in the pinned run. A stale locator, late page or wrong pair cannot be shown as offending evidence. Contextual pair pages are labelled separately. |
-| Triage - permanent guard | Acknowledge/reopen persists across restart and matching runs. Relevant rule/evidence/context changes reopen; unrelated rules and ordering do not. Missing/disabled rules do not erase decisions or label findings fixed. |
+| Triage semantics - permanent guard | Acknowledge/reopen persists across restart and matching runs. Rule semantics, affected module/typed relation, SCC internal-edge or relevant context changes reopen; unrelated rules and ordering do not. Missing/disabled rules do not erase decisions or label findings fixed. |
+| Location drift - permanent guard plus browser acceptance | Insert a line above an unchanged annotated call, change its line/column and raw reference ID, and verify matching triage stays acknowledged while current exact paging/source links resolve the new location. Adding another call to the same pair alone stays acknowledged; changing the affected module relationship reopens. Include location-sensitive lambda IDs without fuzzy matching. |
+| Acknowledged visibility - permanent guard plus browser acceptance | Accept risk/Not relevant removes the finding from the active list and every aggregated active badge, preserves severity and increments the acknowledged count. Show acknowledged exposes inspection/Reopen; Reopen restores active badges. A refused write changes none of those counts. |
 | Failure/concurrency - permanent guard | Two-tab/process updates serialize or conflict explicitly; stale/malformed/foreign-origin writes and interrupted publication leave prior bytes intact. Corrupt stores are not silently replaced. Analysis failure leaves the map usable. |
 | Projection - permanent guard plus browser acceptance | Collapsed modules, namespaces and contextual files aggregate unique findings; aliases/participants do not multiply global totals. Filtering changes visibility, not rule results. |
-| Operator workflow - browser acceptance | Open Review, reach a finding by keyboard, inspect exact source, acknowledge, close and reload. No late reopen, blocked wire hit, zoom jump, new graph elements or pin movement. |
+| Direct explanation - browser acceptance | One click or keyboard inspection of a marked entity reveals a single finding's explanation, evidence and triage actions above metadata/paging. Aggregated multiple findings remain reachable; node/label/wire priority and ordinary Details still work. Review off does not fetch analysis through node clicks. |
+| Operator workflow - browser acceptance | Open Review, inspect a marked entity or use the list by keyboard, inspect exact source, acknowledge, Show acknowledged, Reopen, close and reload. No late reopen, blocked wire hit, zoom jump, new graph elements or pin movement. |
 | Readability - reviewer judgement | A fresh C++ developer can distinguish violation, candidate, acknowledgement and unavailable analysis; understand the evidence and next investigation step without reading a manual. |
 
 ### Green evidence and runtime acceptance
@@ -336,8 +367,12 @@ edges and compiler annotations; no private project material in fixtures.
 - **Navigation:** add one route in `docs/architecture/README.md`. Add the review component to `structure.md` and its
   relationships only to `diagrams/main.md`; link the concern instead of restating its contracts there.
 - **Consumers:** `graph-model.md` owns projection/inspection effects only; `unreal-profile.md` owns adapter fact
-  requirements only; `docs/guide.md` owns the operator workflow and replaces its blanket manual-only statement;
-  `tests/README.md` routes to new checks. Keep research rationale in the review concern only where it explains a choice.
+  requirements only; `docs/guide.md` owns the operator workflow and distinguishes implemented checks from questions
+  that still need manual review; `tests/README.md` routes to new checks. Keep research rationale in the review concern
+  only where it explains a choice.
+- **Capability wording:** describe automatic candidates versus configured policy violations only after implementation.
+  Current README/guide correctly describe exploration and manual judgement; do not advertise the pending review layer
+  or automatic hard Unreal diagnoses. Runtime/Editor constraint detection remains outside this MVP.
 - **Lifecycle:** no stable file links to this todo; no task routing added to `todo/README.md`. On completion record the
   outcome here and move to `todo/done/`, rebasing links and preserving decisions/history under D5.
 
@@ -350,6 +385,8 @@ feature must leave those local decisions intact. No graph schema or identity mig
 ## Completion criteria
 
 - All three checks produce the specified positive/negative/unknown outcomes with exact, inspectable witnesses.
+- Acknowledgement clears active clutter, Show acknowledged/Reopen works, marked entities explain findings in one
+  gesture, and harmless coordinate drift preserves triage while meaningful module-relation changes reopen it.
 - Real-use walkthrough proves useful explanation and durable triage; synthetic UI regressions and matched timings
   pass without damaged pins, extraction coupling or materially worse navigation.
 - Stable owners describe implemented behavior, no unverified whole-architecture claim remains, and this plan is archived.
@@ -364,3 +401,13 @@ feature must leave those local decisions intact. No graph schema or identity mig
   documentation and privacy tests passed. No Engine/native extraction or browser feature acceptance was run here.
 - Existing uncommitted contributor/documentation work is outside this task and remains untouched. Only this todo
   is an intended repository edit; investigation diagnostics are ignored.
+
+### 2026-11-12 - Product-contract audit
+
+- F1-F3 accepted under D6: active/acknowledged visibility, semantic triage bindings and direct marked-entity Details
+  are specified with discriminating acceptance cases. A5 added; this remains a plan, not implemented behavior.
+- F2 is supported by the native reference-key construction. Exact evidence stays location-sensitive; triage does not.
+- Clarifications: the audit introduces "two" corrections but lists three. Its product-warning point is future guidance,
+  not a current README defect: the published guide explicitly requires manual judgement for the listed checks.
+- Verification: all four existing documentation/privacy tests passed; ASCII and diff whitespace checks passed.
+  No runtime code changed. The new semantic/UI acceptance cases remain requirements for future implementation.
