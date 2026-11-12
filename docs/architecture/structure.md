@@ -2,9 +2,8 @@
 
 ## Purpose
 
-Let a developer explore an Unreal C++ project progressively, project -> plugins -> modules -> classes -> functions, with typed dependency
-edges and jump to source. Every view is regenerated from source and build rules, and the analysed project needs
-nothing installed, configured or committed for it.
+Explore Unreal C++ structure progressively, with typed dependencies and source links. Views are generated from source
+and build rules; the analysed project needs no Laniakea installation, configuration or committed files.
 
 ## Owns
 
@@ -40,13 +39,11 @@ nothing installed, configured or committed for it.
 - **Schema** (`schema/graph.v1.schema.json`, validated by `laniakea/schema.py`): the shapes of graph, shard and
   manifest.
 - **Server** (`laniakea/server.py`) and **viewer** (`viewer/`, Cytoscape.js): presentation and saved user positions.
-  The viewer's `app.js` owns startup and HTML controls; `universe.js` owns the canonical hierarchy, reference
-    projection and world positions; `sections.js` derives optional source and header regions while retaining canonical ownership;
-    `traces.js` derives node/pair direction scopes from that projection for hover and
-  inspection; `context.js` shares recorded declaration context and bounded qualified lookup between hover, inspection
-  and search; `map.js` owns canvas rendering and hover; `icons.js` owns recorded-kind glyphs and their native image decoration;
-  `scene.js` owns camera gestures and
-  navigation; `positions.js` owns loading and ordered saves of released pins; `references.js` owns bounded reference-page
+  `app.js` owns startup and HTML controls; `universe.js` owns hierarchy, reference projection and world positions;
+  `sections.js` derives source/header regions without changing canonical ownership; `traces.js` calculates hover and
+  inspection directions; `context.js` shares declaration context and qualified lookup; `map.js` renders the canvas
+  and hover; `icons.js` decorates native nodes; `scene.js` owns camera navigation;
+  `positions.js` loads and saves released pins in order; `references.js` owns bounded reference-page
   retention and cancellation. See [viewport and memory lifetime](graph-model.md#viewport-and-memory-lifetime).
   Project configuration uses existing inspection and projected-node annotations, as defined by
   [configuration context](graph-model.md#centered-overview-and-configuration).
@@ -57,7 +54,7 @@ nothing installed, configured or committed for it.
 
 ## Relationships
 
-They are drawn once, in [the main view](diagrams/main.md).
+See the [component relationships](diagrams/main.md).
 
 Through the profile contract: a profile is a module with `NAME`, `project_file`, `target_fields`, `default_id`,
 `inputs(target, manifest=None)` and `extract(target, run_dir, previous_manifest=None, tools_dir=None)`. The previous successfully published manifest is
@@ -71,16 +68,14 @@ the pipeline supplies profile execution, shard writing/validation and total time
 manifest validation/serialization and promotion. Parent phases contain their subphases, so values are not additive.
 
 **Decision:** language profiles, with only the `unreal` profile built.
-**Why:** the operator wants Rust, Python or similar later; the seam is proven by `fixtures/generic.graph.json`, not
-by a second extractor nobody needs yet.
+**Why:** additional languages can reuse the core and viewer. `fixtures/generic.graph.json` exercises that boundary.
 
 Through Unreal Build Tool's command line and LLVM's native indexing API: the Unreal profile owns compiler-facing preparation
 and normalization, with every learned output in the workspace. The viewer only consumes the language-neutral graph contract.
 
 **Decision:** reuse UBT's evaluated module graph and native compiler facts; build no custom parser, renderer or authoritative database.
-**Why:** UBT already owns the evaluated rules; no mature free tool joins plugins, modules and code on Windows
-([prior-art.md](../prior-art.md)). A disposable SQLite presentation index accelerates reads of the canonical JSON graph;
-it does not own graph facts.
+**Why:** UBT owns evaluated rules and the compiler owns semantic facts. A disposable SQLite index accelerates reads
+of canonical JSON without owning graph facts. See the [tool comparison](../prior-art.md).
 
 Through HTTP on 127.0.0.1, port 8737 unless `--port` says otherwise: the viewer reads `/data/targets.json` and run
 files. Content-bound `/map/` endpoints provide compact topology and bounded exact-reference queries. The
@@ -138,19 +133,10 @@ advertised run. A fresh page reads saved pins from the server rather than treati
 **Why:** the maintainer's target platform; Linux and Mac are not targets, so no code path serves them.
 
 **Decision:** Python standard library only, and Cytoscape.js vendored, not fetched.
-**Why:** a machine with Unreal installed already has Python, and the viewer must work offline (invariant 10).
+**Why:** no extra Python packages or runtime network resources are required.
 
 **Decision:** GNU AGPL-3.0-or-later.
 **Why:** the maintainer's choice, so that modified versions stay open, including when offered over a network.
-
-## Accepted decisions
-
-- Language profiles, `unreal` only - see [Relationships](#relationships)
-- Reuse evaluated build/compiler facts; no custom parser, renderer or authoritative database - see [Relationships](#relationships)
-- Black box analysed project; all data in `workspace/` - see [Invariants](#invariants)
-- Windows only - see [Invariants](#invariants)
-- Standard library only; vendored viewer library - see [Invariants](#invariants)
-- AGPL-3.0-or-later - see [Invariants](#invariants)
 
 ## Risks and technical debt
 
