@@ -216,9 +216,9 @@ remain authoritative: a source region is not proof that a declaration is an abst
 Sibling file captions may omit a long common identifier prefix at a word boundary. Full filenames, source paths and
 reference identities remain available in hover and inspection; the shortened caption is presentation only.
 Wheel input over a file glyph, name or revealed code group keeps the pointer-anchored camera scale. Its next layer
-opens only when there is enough screen space, using the same threshold as surrounding constellations. Each inward
-step reveals at most one layer and never fits its contents automatically; outward steps use the separate closing
-threshold. Navigation-only file entries preserve their apparent footprint and screen anchor when entering a recorded
+opens only when there is enough screen space, using the same threshold as surrounding constellations. Each wheel
+callback opens or closes at most one layer and never fits its contents automatically; outward steps use the separate
+closing threshold. Navigation-only file entries preserve their apparent footprint and screen anchor when entering a recorded
 context elsewhere in the layout. Double-click and explicit Open controls retain direct, fitted navigation.
 Empty files with no unambiguous navigation target do not
 invent internals. Mixed-file namespaces retain their canonical scope and their namespace type icon beside file boxes.

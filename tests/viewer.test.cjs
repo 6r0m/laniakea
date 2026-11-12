@@ -41,6 +41,40 @@ test('wheel detail waits for space and preserves the camera while opening one fi
   }finally{run('state.cy.destroy()');}
 });
 
+test('outward wheel closes only the deepest eligible layer per callback',()=>{
+  const {run,context}=inspectionViewer(true);
+  context.namespace=JSON.parse(require('node:fs').readFileSync(require.resolve('../fixtures/namespace-files.graph.json'),'utf8'));
+  try{
+    run(`state.universe=new Universe(namespace);state.universe.place({},'auto');
+      const u=state.universe;u.reveal('build');
+      globalThis.header=u.paths.get('build').find(id=>u.nodes.get(id).attrs?.source_file);
+      state.scopeShard.scope=header;state.pointer={x:0,y:0};refreshMap();
+      globalThis.pins=JSON.stringify([...u.positions]);
+      globalThis.camera={zoom:worldZoom(),pan:{...state.cy.pan()}};
+      const level=90/Math.max(...['module','scope',header].map(id=>u.radii.get(id)));
+      globalThis.worldZoom=()=>level;
+      globalThis.requestAnimationFrame=fn=>{fn();return 1;};globalThis.cancelAnimationFrame=()=>{};
+      globalThis.setSceneScope=id=>state.scopeShard.scope=id;globalThis.rememberView=()=>{};
+      globalThis.frameNode=()=>{throw Error('Outward wheel must not fit the camera');};
+      semanticZoom(-1);`);
+    assert.equal(run('state.universe.expanded.has(header)'),false);
+    assert.equal(run("state.universe.expanded.has('scope')"),true,'one callback must not also close the namespace');
+    assert.equal(run("state.universe.expanded.has('module')"),true,'one callback must not jump to the project');
+    assert.equal(run('state.scopeShard.scope'),'scope');
+    run('semanticZoom(-1);');
+    assert.equal(run("state.universe.expanded.has('scope')"),false);
+    assert.equal(run("state.universe.expanded.has('module')"),true);
+    assert.equal(run('state.scopeShard.scope'),'module');
+    run('semanticZoom(-1);');
+    assert.equal(run("state.universe.expanded.has('module')"),false);
+    assert.equal(run('state.universe.expanded.has(state.universe.root)'),true);
+    assert.equal(run('state.scopeShard.scope'),'root');
+    assert.equal(run('JSON.stringify([...state.universe.positions])'),run('pins'));
+    assert.equal(run('state.cy.zoom()'),run('camera.zoom'));
+    assert.equal(run('JSON.stringify(state.cy.pan())'),run('JSON.stringify(camera.pan)'));
+  }finally{run('state.cy.destroy()');}
+});
+
 test('the active expanded navigation scope survives a fit around spread-out saved children',()=>{
   const {run,context}=viewer();
   context.surface=JSON.parse(require('node:fs').readFileSync(require.resolve('../fixtures/source-surface.graph.json'),'utf8'));

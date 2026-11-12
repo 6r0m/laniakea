@@ -122,8 +122,11 @@ function semanticZoom(direction) {
         enterWheelScope(change.id,change.from);break;
       }
       if (change.action === 'expand') {setSceneScope(change.id);break;}
-      else if (map.contains(change.id, state.scopeShard.scope)) {
-        setSceneScope(map.viewParents.get(change.id) || map.root);
+      if (change.action === 'collapse') {
+        if (map.contains(change.id, state.scopeShard.scope)) {
+          setSceneScope(map.viewParents.get(change.id) || map.root);
+        }
+        break;
       }
     }
     if (changed) { unfocus(); refreshMap(); }
