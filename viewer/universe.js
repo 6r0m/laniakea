@@ -69,6 +69,7 @@ class Universe {
     this.canonicalPaths=this.paths;
     Object.assign(this,{nodes:sections.nodes,children:sections.children,paths:sections.paths,viewParents:sections.parents});
     this.fileIds=sections.fileIds;
+    this.contextFiles=sections.contextFiles;this.fileCovers=sections.fileCovers;this.fileEntries=sections.fileEntries;
     this.regions=new Set([...this.nodes.values()].filter(n=>n.attrs?.source_region).map(n=>n.id));
     this.viewNodes=[...this.nodes.values()];
     const edgeIds = new Set();
@@ -128,24 +129,34 @@ class Universe {
     return parent!==this.root&&!this.nodes.get(parent)?.attrs?.source_sections&&
       ids.every(id=>this.nodes.get(id).parent===parent)?parent:null;
   }
+  navigationTarget(id){ return this.fileEntries.get(id)||(this.fileCovers.has(id)?null:this.definitionTarget(id)); }
   contains(parent, id) { return this.paths.get(id).includes(parent); }
+
+  fileContext(edge,end){
+    const file=this.fileIds[edge[end+'File']];
+    return file&&(this.paths.get(edge[end]).find(id=>id!==file&&this.contextFiles.get(id)===file)||file);
+  }
 
   referencePath(edge,end){
     const path=this.paths.get(edge[end]),file=this.fileIds[edge[end+'File']];
     if(!file)return path;
-    return [...new Set([...path.filter(id=>!this.nodes.get(id).attrs?.presentation_group),...this.paths.get(file)])];
+    return [...new Set([...path.filter(id=>!this.nodes.get(id).attrs?.presentation_group),
+      ...this.paths.get(file),...this.paths.get(this.fileContext(edge,end))])];
   }
 
   referenceInside(id,edge,end){
     const file=this.fileIds[edge[end+'File']];
-    return this.nodes.get(id)?.attrs?.presentation_group&&file?this.contains(id,file):this.contains(id,edge[end]);
+    if(!this.nodes.get(id)?.attrs?.presentation_group||!file)return this.contains(id,edge[end]);
+    return this.contains(id,file)||this.contains(id,this.fileContext(edge,end));
   }
 
   endpoint(edge,end,expanded){
     const base=this.representative(edge[end],expanded),file=this.fileIds[edge[end+'File']];
     if(!file)return base;
     const owner=this.nodes.get(file).attrs.source_owner;
-    if(!this.nodes.get(base).attrs?.presentation_group&&base!==owner&&this.canonicalPaths.get(base)?.includes(owner))return base;
+    const node=this.nodes.get(base),context=this.fileContext(edge,end);
+    if(!node.attrs?.presentation_group&&(node.level!=='namespace'||base===edge[end])&&base!==owner&&this.canonicalPaths.get(base)?.includes(owner))return base;
+    if(context!==file&&this.representative(context,expanded)===context)return context;
     return this.representative(file,expanded);
   }
 
@@ -192,7 +203,7 @@ class Universe {
   indexPositions() {
     this.spatialIds = [...this.positions.keys()];
     this.bounds=new Map(this.spatialIds.map(id=>{
-      const p=this.positions.get(id),r=this.isGroup(id)||this.definitionTarget(id)?this.radii.get(id):0,area=this.areas?.get(id);
+      const p=this.positions.get(id),r=this.isGroup(id)||this.navigationTarget(id)?this.radii.get(id):0,area=this.areas?.get(id);
       const rx=area?area.width/2:r,ry=area?area.height/2:r;
       return [id,{x1:p.x-rx,y1:p.y-ry,x2:p.x+rx,y2:p.y+ry}];
     }));
@@ -257,8 +268,11 @@ class Universe {
     const endpoints = new Set(edges.flatMap(e => [e.source, e.target]));
     const admitted = cut && new Set([...cut.seeds,...endpoints,...internal.keys()]);
     if (admitted) for (const id of [...admitted]) for (const parent of this.paths.get(id)) if(expanded.has(parent)) admitted.add(parent);
-    const nodes = this.viewNodes.filter(n => (boundary || !n.boundary) && (!admitted || admitted.has(n.id)) && representative(n.id) === n.id &&
+    let nodes = this.viewNodes.filter(n => (boundary || !n.boundary) && (!admitted || admitted.has(n.id)) && representative(n.id) === n.id &&
       (n.id !== this.root || !this.isGroup(n.id) || endpoints.has(n.id) || internal.has(n.id)));
+    const present=new Set(nodes.map(n=>n.id)),forcedFiles=new Set(camera?.force||[]);
+    nodes=nodes.filter(n=>!this.fileCovers.has(n.id)||endpoints.has(n.id)||internal.has(n.id)||forcedFiles.has(n.id)||
+      ![...this.fileCovers.get(n.id)].every(context=>present.has(context)));
     const total=[...this.typeCounts.values()].reduce((a,b)=>a+b,0);
     const visible=new Set(nodes.map(n=>n.id)),configurationMarks=new Map();
     for(const target of this.configurationTargets) {
@@ -353,13 +367,13 @@ class Universe {
   zoomStep(zoom, point, direction) {
     if (direction > 0) {
       const nearby=this.spatial?this.spatial.search(point.x,point.y,point.x,point.y).map(i=>this.spatialIds[i]):[...this.nodes.keys()];
-      const candidates = nearby.filter(id => id !== this.root && (this.isGroup(id)||this.definitionTarget(id)) &&
+      const candidates = nearby.filter(id => id !== this.root && (this.isGroup(id)||this.navigationTarget(id)) &&
         !this.regions.has(id) && !this.expanded.has(id) && this.representative(id) === id && 2 * this.radii.get(id) * zoom >= 300 &&
         Math.hypot(point.x - this.positions.get(id).x, point.y - this.positions.get(id).y) <= this.radii.get(id));
       candidates.sort((a, b) => Math.hypot(point.x - this.positions.get(a).x, point.y - this.positions.get(a).y) -
         Math.hypot(point.x - this.positions.get(b).x, point.y - this.positions.get(b).y));
       if (candidates.length) {
-        const id=candidates[0],target=this.definitionTarget(id);
+        const id=candidates[0],target=this.navigationTarget(id);
         this.expanded.add(id);return { action: target?'definition':'expand', id:target||id };
       }
     } else if (direction < 0) {

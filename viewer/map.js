@@ -188,7 +188,7 @@ function viewportCamera(padding = 220) {
   if(!cy.width() || !cy.height()) return null;
   const force=[];
   const scope=state.scopeShard?.scope;
-  if(scope&&scope!==state.universe.root&&state.universe.expanded.has(scope))force.push(scope);
+  if(scope&&scope!==state.universe.root&&(state.universe.expanded.has(scope)||state.universe.fileCovers.has(scope)))force.push(scope);
   const inspection=state.selection;
   const exact=inspection?.referenceGroup || inspection?.refs?.length===1&&inspection.id===inspection.refs[0].id;
   const selected=state.pendingReference || (exact ? inspection : null);
@@ -880,7 +880,7 @@ function detailAtPointer(pointer){
   let nearest=null,distance=Infinity;
   for(const node of state.cy.nodes().not('.expanded')){
     if(!node.hasClass('source-file')&&(!local||!map.contains(scope.id,node.id())))continue;
-    if(map.regions.has(node.id())||map.expanded.has(node.id())||!map.isGroup(node.id())&&!map.definitionTarget(node.id()))continue;
+    if(map.regions.has(node.id())||map.expanded.has(node.id())||!map.isGroup(node.id())&&!map.navigationTarget(node.id()))continue;
     const p=node.renderedPosition(),dx=pointer.x-p.x,dy=pointer.y-p.y,box=state.labelBoxes?.get(node.id());
     const glyph=Math.abs(dx)<=node.renderedWidth()/2+4&&Math.abs(dy)<=node.renderedHeight()/2+4;
     const caption=box&&pointer.x>=box.x1&&pointer.x<=box.x2&&pointer.y>=box.y1&&pointer.y<=box.y2;

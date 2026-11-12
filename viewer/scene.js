@@ -95,7 +95,7 @@ function semanticZoom(direction) {
     const map = state.universe, cy = state.cy, zoom = worldZoom(), pan = cy.pan();
     const detail=direction>0&&detailAtPointer(state.pointer);
     if(detail){
-      const id=map.definitionTarget(detail)||detail;
+      const id=map.navigationTarget(detail)||detail;
       map.reveal(id);if(map.isGroup(id))map.expanded.add(id);
       setSceneScope(id);unfocus();refreshMap();frameNode(id);rememberView();return;
     }
@@ -122,6 +122,11 @@ function semanticZoom(direction) {
 function toggleGroup(id) {
   const map = state.universe;
   if(map.regions.has(id)){selectNode(id);return;}
+  const target=map.navigationTarget(id);
+  if(target){
+    map.reveal(target);if(map.isGroup(target))map.expanded.add(target);
+    setSceneScope(target);unfocus();refreshMap();frameNode(target);rememberView();return;
+  }
   if (!map.isGroup(id)) { selectNode(id); return; }
   rememberView();
   if (map.expanded.has(id) && id !== map.root) {

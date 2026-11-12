@@ -15,6 +15,69 @@ function fixture(){
       {id:'check',source:'test',target:'api',type:'calls',count:2}]};
 }
 
+test('a multi-file namespace preserves the physical-file frontier and switches to its active context once',()=>{
+  const graph=JSON.parse(require('node:fs').readFileSync(require.resolve('../fixtures/namespace-files.graph.json'),'utf8'));
+  const at=id=>graph.nodes.findIndex(n=>n.id===id),paths=['Private/API.cpp','Public/API.h','Private/Helper.cpp'];
+  const files=paths.map((path,i)=>({owner:at('module'),root:'project',path:'Source/Sample/'+path,
+    declarations:(i===0?['scope']:i===1?['build','record']:['helper']).map(at),
+    definitions:(i===0?['build']:i===1?['record']:['helper']).map(at),
+    partition:{id:i===1?'public':'private',label:i===1?'Public':'Implementation',collapsed:i!==1,folders:[]}}));
+  const location=path=>files.findIndex(f=>f.path===path);
+  const references=new Map();
+  for(const e of graph.edges){
+    const source=location(e.attrs?.location?.path),target=location(e.attrs?.target_declaration?.location?.path);
+    const key=JSON.stringify([e.source,e.target,e.type,source,target]);
+    if(!references.has(key))references.set(key,{source:at(e.source),target:at(e.target),type:e.type,count:0,
+      ...(source>=0?{source_file:source}:{}),...(target>=0?{target_file:target}:{})});
+    references.get(key).count++;
+  }
+  const topology={schema:'laniakea.map/1',nodes:graph.nodes,files,references:[...references.values()]};
+  const before=JSON.stringify(topology),map=new Universe(topology);
+  map.place({auto:{build:{x:17,y:32},helper:{x:60,y:15}}},'auto');
+  const pins=JSON.stringify([...map.positions]);map.expanded.add('module');
+  const [cpp,header,helper]=map.fileIds;
+  const projected=(view,group)=>view.edges.find(e=>e.refs.some(r=>r.group===group));
+  let view=map.project();
+  assert.equal(projected(view,1).target,header,'a collapsed namespace must not swallow recorded header provenance');
+  assert.equal(projected(view,2).source,cpp);assert.equal(projected(view,2).target,helper);
+  assert.equal(projected(view,4).target,'scope','missing provenance keeps the semantic fallback');
+  const alias=[...map.nodes.values()].find(n=>n.attrs?.source_file&&n.attrs.source_owner==='scope'&&n.source.path===files[1].path).id;
+  assert.equal(map.navigationTarget(header),alias,'a header enters its existing declaration context, not just its one definition');
+  map.expanded.add('scope');view=map.project();
+  assert.equal(projected(view,1).target,alias);
+  assert.equal(view.nodes.filter(n=>n.attrs?.source_file&&n.source.path===files[1].path).length,1,'no disconnected second header');
+  assert.equal(map.referenceStats.get(alias).incoming,6,'context statistics retain weighted and fallback references');
+  map.reveal('build');view=map.project();assert.equal(projected(view,1).target,'build');
+  assert.equal(projected(view,5).source,'build');assert.equal(projected(view,5).target,'build','real recursion is retained');
+  assert.equal(projected(view,3).target,'record','a revealed class wins over its source-file abstraction');
+  const groups=map.viewNodes.filter(n=>map.isGroup(n.id)&&n.id!==map.root).map(n=>n.id);
+  for(let mask=0;mask<2**groups.length;mask++){
+    map.expanded=new Set([map.root,...groups.filter((_,i)=>mask&(1<<i))]);view=map.project();
+    const refs=[...view.edges.flatMap(e=>e.refs),...[...view.internal.values()].flat()];
+    assert.equal(new Set(refs.map(r=>r.group)).size,topology.references.length,'each exact group is represented once');
+    assert.equal(refs.reduce((sum,e)=>sum+e.count,0),9);
+    const visible=new Set(view.nodes.map(n=>n.id));
+    assert.ok(view.edges.every(e=>visible.has(e.source)&&visible.has(e.target)));
+  }
+  assert.equal(JSON.stringify([...map.positions]),pins);assert.equal(JSON.stringify(topology),before);
+  assert.equal(map.nodes.get('build').parent,'scope');assert.equal(map.nodes.get('record').parent,'scope');
+  const shared=JSON.parse(before),second=shared.nodes.length+1;
+  shared.nodes.push({id:'scope2',parent:'module',level:'namespace',label:'Second scope',attrs:{source_sections:true}},
+    {...shared.nodes[at('build')],id:'second',parent:'scope2',label:'Second'});
+  shared.files[1].declarations.push(second);shared.files[0].definitions.push(second);
+  shared.references.push({source:at('other'),target:second,type:'uses.function',count:4,target_file:1},
+    {source:at('other'),target:at('scope'),type:'uses.namespace',count:1,target_file:0});
+  const two=new Universe(shared);two.place({},'galaxy');two.expanded.add('module');two.expanded.add('scope');
+  let split=two.project();
+  assert.equal(projected(split,6).target,two.fileIds[1],'the unopened second scope still needs the whole-file representative');
+  assert.notEqual(projected(split,1).target,two.fileIds[1],'the opened first scope uses its own contextual header');
+  assert.equal(projected(split,7).target,'scope','a genuine namespace reference is not a namespace aggregation');
+  assert.equal(two.navigationTarget(two.fileIds[1]),null,'a shared header must not choose one namespace or its one definition');
+  two.expanded.add('scope2');split=two.project();
+  assert.ok(!split.nodes.some(n=>n.id===two.fileIds[1]));
+  assert.notEqual(projected(split,1).target,projected(split,6).target,'different namespace contexts do not share a false owner');
+});
+
 test('file catalog lays out public and implementation sections as separate readable bands',()=>{
   const graph=JSON.parse(require('node:fs').readFileSync(require.resolve('../fixtures/source-surface.graph.json'),'utf8'));
   // The compact catalog is normally supplied by the disposable read index.

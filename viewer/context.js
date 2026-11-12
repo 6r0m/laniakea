@@ -10,7 +10,7 @@ const DeclarationContext = (() => {
     if(attrs.source_region)context.push('Organizational region; wires reach concrete files and symbols.');
     if(attrs.source_file&&attrs.source_definitions)context.push(`${attrs.source_definitions.length} recorded definitions / `+
       `${attrs.source_declarations.length} declarations. Inspect to follow existing symbols.`);
-    if(attrs.source_file&&map.definitionTarget?.(node.id))context.push('Zoom to follow its recorded definitions.');
+    if(attrs.source_file&&map.navigationTarget?.(node.id))context.push('Zoom to enter its recorded scope.');
     if(attrs.source_partition)context.push('Recorded source: '+attrs.source_partition.label+
       (attrs.source_partition.folders.length?' / '+attrs.source_partition.folders.join(' / '):'')+
       '. Source visibility is separate from C++ member access.');

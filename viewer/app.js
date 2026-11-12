@@ -574,7 +574,7 @@ function renderDetails(item) {
     attributes(list, Object.fromEntries(entries.filter(isAnalysis)));
     panel.append(list);
     if(item.attrs?.source_file)renderFileSymbols(panel,item);
-    if (state.universe.isGroup(item.id) && !item.attrs?.source_region && item.id !== state.universe.root) {
+    if ((state.universe.isGroup(item.id)||state.universe.navigationTarget(item.id)) && !item.attrs?.source_region && item.id !== state.universe.root) {
       const button = el('button', null, {type:'button','data-action':'toggle-group'});
       updateGroupControl(button, item.id);
       button.onclick = () => toggleGroup(item.id);
@@ -717,8 +717,9 @@ function renderOverlapDetails(panel,trace) {
 
 function updateGroupControl(button, id) {
   const opened = state.universe.expanded.has(id);
-  button.textContent = opened ? 'Collapse constellation' : 'Expand constellation';
-  button.setAttribute('aria-expanded', String(opened));
+  const target=state.universe.navigationTarget(id);
+  button.textContent = target ? 'Open recorded scope' : opened ? 'Collapse constellation' : 'Expand constellation';
+  if(!target)button.setAttribute('aria-expanded', String(opened));
 }
 
 function referenceRow(edge) {

@@ -90,6 +90,8 @@ navigation, reload, dragging through real symbol pins and narrow inspection on t
 and trusted wire interaction against the former empty-centre regression on that sample.
 `tests/source-surface.browser.js` checks concrete implementation files, exact file counts and declaration/definition
 navigation to one class-owned symbol, using `fixtures/source-surface.graph.json` through the normal read index/server.
+`tests/namespace-files.browser.js` checks file-first references across collapsed and expanded namespaces, contextual
+file navigation, exact paging and pin preservation, using `fixtures/namespace-files.graph.json` through that pipeline.
 `tests/viewer.performance.js` measures trusted mouse/wheel input, frame intervals, main-thread work and heap through
 Playwright/CDP on the current map, then restores its camera. Compare the same scope and expansion state; frame times
 depend on hardware and local load. It checks that zooming changes no world positions or saved pins.

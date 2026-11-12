@@ -76,8 +76,9 @@ only the visible projection, not graph facts or the surrounding arrangement.
 
 Semantic detail maps an endpoint to its first collapsed ancestor, or to itself when all its ancestors are expanded.
 When a profile supplies source-organization hints, the disposable map index records authored file membership and
-reference call-site/target-declaration files. A coarse file frontier uses that recorded provenance; a visible semantic
-type or callable retains its own endpoint. Build declarations keep their structural endpoints. Each reference still
+reference call-site/target-declaration files. A coarse file frontier uses that recorded provenance; a collapsed namespace
+does not replace the physical file. A visible semantic type or callable retains its own endpoint, as does an exact
+reference to a namespace itself. Build declarations keep their structural endpoints. Each reference still
 belongs to one projected connection/internal/beyond/filtered count, including when one method has call sites in several files.
 File reference totals describe recorded file provenance, while type/callable totals describe semantic containment.
 Missing file provenance falls back to the recorded semantic representative, without guessing an include dependency.
@@ -96,8 +97,14 @@ not canonical C++ owners; their synthetic IDs never enter the pin store. Older m
 their recorded semantic grouping and expose coverage through existing inspection.
 Navigation-only files without contained symbols have no independent drag position; their definition links reach
 the existing, arrangeable symbols. Files containing real symbols retain subtree dragging through those canonical pins.
-Wheel zoom on a navigation-only file follows a single recorded definition, or its common type when all definitions
-belong to that type. Ambiguous multi-owner files retain their named definition links; no owner is inferred from callers.
+When a namespace spans files, the module's catalog and namespace-local file contexts describe the same recorded files.
+Wires follow the file context that is currently visible. A redundant catalog entry disappears only when all its
+recorded members are covered by visible contexts and no wire or explicit inspection still needs it. Contextual file
+inspection counts and pages only the references belonging to that context; the catalog retains whole-file provenance.
+Wheel zoom, double-click and the file's inspection control enter a unique recorded file context before following
+individual definitions. Without such a context, navigation follows a single recorded definition, or its common type
+when all definitions belong to that type. Ambiguous multi-context or multi-owner files retain named navigation links;
+no namespace or owner is chosen from its name or inferred from callers. These routes preserve canonical symbols and pins.
 
 A reference directly owned by an expanded container meets its named top boundary, rather than an unmarked point
 inside its background. Descendant references meet their own visible representatives. The boundary endpoint and pointer

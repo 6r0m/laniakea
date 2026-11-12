@@ -127,7 +127,33 @@ const SourceSections=(()=>{
       return paths.get(id);
     };
     for(const id of nodes.keys())path(id);
-    return{nodes,parents,children,paths,fileIds};
+    const catalogs=new Set(fileIds),contextFiles=new Map(fileIds.map(id=>[id,id])),fileCovers=new Map(),fileEntries=new Map();
+    for(const node of nodes.values()){
+      if(!node.attrs?.source_file||catalogs.has(node.id))continue;
+      let owner=node.attrs.source_owner;
+      while(owner){
+        const catalog=filePrefix+JSON.stringify([owner,node.source.root,node.source.path]);
+        if(catalogs.has(catalog)){contextFiles.set(node.id,catalog);break;}
+        owner=nodes.get(owner).parent;
+      }
+    }
+    for(const [id,catalog] of contextFiles){
+      if(id===catalog)continue;
+      const source=nodes.get(catalog).attrs,attrs=nodes.get(id).attrs;
+      for(const field of ['source_declarations','source_definitions'])
+        attrs[field]=(source[field]||[]).filter(symbol=>paths.get(symbol).includes(id));
+    }
+    for(const catalog of catalogs){
+      if((children.get(catalog)||[]).length)continue;
+      const attrs=nodes.get(catalog).attrs;
+      const members=[...new Set([...(attrs.source_declarations||[]),...(attrs.source_definitions||[])])]
+        .filter(id=>nodes.get(id).level!=='namespace');
+      const contexts=members.map(id=>paths.get(id).find(parent=>parent!==catalog&&contextFiles.get(parent)===catalog));
+      if(!contexts.length||contexts.some(id=>!id))continue;
+      const cover=new Set(contexts);fileCovers.set(catalog,cover);
+      if(cover.size===1)fileEntries.set(catalog,[...cover][0]);
+    }
+    return{nodes,parents,children,paths,fileIds,contextFiles,fileCovers,fileEntries};
   }
   return{build};
 })();

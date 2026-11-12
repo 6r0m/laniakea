@@ -13,6 +13,24 @@ from laniakea.workspace import Workspace, read_json, write_json
 
 
 class MapIndex(unittest.TestCase):
+    def test_namespace_file_fixture_records_locations_without_changing_canonical_owners(self):
+        self.graph=read_json(Path(__file__).resolve().parent.parent/'fixtures/namespace-files.graph.json')
+        before=json.dumps(self.graph);index=self.build();topology=index.topology();files=topology['files']
+        self.assertEqual(json.dumps(self.graph),before)
+        self.assertEqual({f['path'] for f in files},{'Source/Sample/Public/API.h','Source/Sample/Private/API.cpp',
+                                                   'Source/Sample/Private/Helper.cpp'})
+        groups={item['reference']['id']:group for group in range(1,len(topology['references'])+1)
+                for item in index.references({'groups':[group]})['items']}
+        rows=topology['references']
+        call=rows[groups['build-helper-1']-1]
+        self.assertEqual(files[call['source_file']]['path'],'Source/Sample/Private/API.cpp')
+        self.assertEqual(files[call['target_file']]['path'],'Source/Sample/Private/Helper.cpp')
+        incoming=rows[groups['external-build']-1]
+        self.assertEqual(files[incoming['target_file']]['path'],'Source/Sample/Public/API.h')
+        self.assertNotIn('target_file',rows[groups['unknown-location']-1])
+        self.assertEqual(sum(row['count'] for row in rows),9)
+        self.assertEqual(next(n for n in topology['nodes'] if n['id']=='build')['parent'],'scope')
+
     def test_file_provenance_splits_compact_groups_without_splitting_symbols(self):
         self.graph=read_json(Path(__file__).resolve().parent.parent/'fixtures/source-surface.graph.json')
         before=json.dumps(self.graph);index=self.build();topology=index.topology();files=topology['files']
