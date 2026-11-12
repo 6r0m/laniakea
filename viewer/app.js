@@ -58,6 +58,7 @@ async function start() {
     return;
   }
   const select = $('target');
+  state.review = new ArchitectureReview();
   for (const target of state.targets) select.add(new Option(`${target.project} (${target.id})`, target.id));
   select.onchange = () => show(select.value, null, 'push');
   const saved = recall('layout');
@@ -181,6 +182,7 @@ async function show(id, file, mode) {
     Object.assign(state, { target, manifest, shard, scopeShard: shard, universe, file: wanted,
       elsewhere: null, selection: null, positionCache, index, referencePages,
       indexLookup:new Map(index.nodes.map(n=>[n.id,n])) });
+    if(changed)state.review?.reset(target);
     universe.reveal(shard.scope);
     if (shard.scope !== universe.root && universe.isGroup(shard.scope)) universe.expanded.add(shard.scope);
     remember('target', id);
@@ -561,6 +563,8 @@ function renderDetails(item) {
   const list = el('dl');
   if (item.level !== undefined) {
     panel.append(el('h2', item.label), el('p', nodeDescription(item), {class:'muted'}));
+    const reviewSlot=el('div',null,{'data-review-slot':item.id});
+    panel.append(reviewSlot);state.review?.details(reviewSlot,item);
     const context=DeclarationContext.describe(item,state.universe);
     if(context.path)panel.append(el('p',context.path,{class:'declaration-owner'}));
     if(context.signature)panel.append(el('code',context.signature,{class:'declaration-signature'}));

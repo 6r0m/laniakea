@@ -13,12 +13,13 @@ async page=>{
   check(files['API.h']&&files['Producer.cpp']&&files['Helpers.cpp']&&files['Other.cpp'],'Missing concrete file representatives');
   await page.evaluate(id=>{state.universe.expanded=new Set([state.universe.root]);state.universe.reveal(id);refreshMap();frameNode('module');},files['API.h']);await settle();
   const camera=await page.evaluate(()=>({zoom:worldZoom(),pan:{...state.cy.pan()}}));
-  let wheelSteps=0;
+  let wheelSteps=0;const wheelAnchors=[];
   const gradual=async id=>{
     for(let i=0;i<40&&!await page.evaluate(id=>state.universe.expanded.has(id),id);i++){
       const before=await page.evaluate(id=>{const p=state.cy.getElementById(id).renderedPosition(),b=$('graph').getBoundingClientRect();
         return{x:b.x+p.x,y:b.y+p.y,zoom:worldZoom()};},id);
-      await page.mouse.move(before.x,before.y);await page.mouse.wheel(0,-60);await settle();wheelSteps++;
+      const anchor={x:Math.round(before.x),y:Math.round(before.y)};wheelAnchors.push(anchor);
+      await page.mouse.move(anchor.x,anchor.y);await page.mouse.wheel(0,-60);await settle();wheelSteps++;
       check(await page.evaluate(before=>Math.abs(worldZoom()/before.zoom-Math.exp(.108))<1e-6,before),
         'Inward wheel fitted contents instead of applying the requested scale');
     }
@@ -30,7 +31,9 @@ async page=>{
   await gradual('class');
   check(await page.evaluate(()=>state.scopeShard.scope==='class'&&state.universe.expanded.has('class')&&state.cy.getElementById('method').length),
     'Gradual wheel did not reveal class members');
-  for(let i=0;i<wheelSteps;i++){
+  // Invert the actual input sequence: inward targeting can move between file and class centres.
+  for(const anchor of [...wheelAnchors].reverse()){
+    await page.mouse.move(anchor.x,anchor.y);
     const before=await page.evaluate(()=>worldZoom());await page.mouse.wheel(0,60);await settle();
     check(await page.evaluate(before=>Math.abs(worldZoom()/before-Math.exp(-.108))<1e-6,before),'Outward wheel changed scale unexpectedly');
   }

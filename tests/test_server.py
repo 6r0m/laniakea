@@ -3,8 +3,11 @@
 
 import http.client
 import json
+import select
+import socket
 import tempfile
 import threading
+import time
 import unittest
 from unittest.mock import patch
 from pathlib import Path
@@ -18,6 +21,35 @@ from support import copy_sample, fake_engine, recorded_ubt
 
 
 class Server(unittest.TestCase):
+    def test_post_refusal_delivers_response_with_an_unread_body(self):
+        before=self.get('/layout/sample/entry.json')
+        payload=json.dumps({'padding':'x'*(64*1024)}).encode()
+        for _ in range(5):
+            with socket.create_connection(('127.0.0.1',self.port),timeout=5) as connection:
+                headers=(f'POST /layout/sample/entry.json HTTP/1.1\r\nHost: 127.0.0.1:{self.port}\r\n'
+                         f'Origin: https://foreign.example\r\nContent-Type: application/json\r\n'
+                         f'Content-Length: {len(payload)}\r\nConnection: close\r\n\r\n')
+                connection.sendall(headers.encode())
+                # A finite body can arrive after the server decides to refuse, before the client reads that refusal.
+                select.select([connection],[],[],0.01);time.sleep(0.01)
+                connection.sendall(payload)
+                response=http.client.HTTPResponse(connection);response.begin()
+                self.assertEqual(response.status,403);response.read();response.close()
+        self.assertEqual(self.get('/layout/sample/entry.json'),before)
+
+    def test_review_is_optional_pinned_and_refuses_unsafe_writes(self):
+        target=self.server.index[0]; owner=self.server.reviews['sample']; before=self.get('/layout/sample/entry.json')
+        self.assertIsNone(owner.current)
+        status,body=self.get(target['review_url']); self.assertEqual(status,200)
+        data=json.loads(body)
+        self.assertTrue(any(c['status']=='unavailable' for c in data['checks']))
+        self.assertEqual(self.get(target['review_url']+'?ack=wrong')[0],400)
+        self.assertEqual(self.post(target['review_url'],{'action':'recheck'},{'Origin':'https://foreign.example'})[0],403)
+        self.assertEqual(self.post(target['review_url'],{'action':'triage','report':'old'})[0],409)
+        self.assertEqual(self.post(target['review_url'],{'action':'recheck','extra':True})[0],400)
+        self.assertEqual(self.get(target['review_url'].replace('/review','/triage.json'))[0],404)
+        self.assertEqual(self.get('/layout/sample/entry.json'),before)
+
     def test_advertised_source_roots_belong_to_the_selected_immutable_run(self):
         from laniakea.server import target_index
         workspace = self.server.workspace_for_tests

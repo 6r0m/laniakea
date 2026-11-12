@@ -272,6 +272,7 @@ function refreshMap() {
     state.visibleLabels = null;
   }
   state.renderedMap = {cy, elements:definitions};
+  state.review?.project();
   readableLabels();
   updateScopeSummary();
   renderFilters();

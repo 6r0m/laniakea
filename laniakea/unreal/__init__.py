@@ -9,6 +9,7 @@ from time import perf_counter
 
 from .. import LaniakeaError
 from . import builds, descriptors, engine, graph, ubt, source_inputs
+from . import review as review_adapter
 
 NAME = "unreal"
 CONFIGURATION = "Development"

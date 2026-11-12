@@ -9,6 +9,7 @@ Trace dependencies to source, explore public contracts and inspect the evidence 
 - [Trace a dependency to its cause](#trace-a-dependency-to-its-cause)
 - [Find the public contract and its implementation](#find-the-public-contract-and-its-implementation)
 - [Investigate a suspicious relationship](#investigate-a-suspicious-relationship)
+- [Use architecture review](#use-architecture-review)
 - [Account for missing information](#account-for-missing-information)
 
 ## Open a project
@@ -108,11 +109,25 @@ High connection counts can reflect an intended integration point.
 Descriptor `kind` (Runtime/Editor) differs from UBT `type` (CPlusPlus/External). Check the descriptor if kind is missing;
 do not infer it from a name. Native exact-call rows can include `dependency_review`, `transitive_path` and
 `public_exposure_path`. An empty path means none was found in that exported graph. These notes are review candidates,
-not violations. The cycle, runtime/editor, public-exposure and coupling checks above require manual review.
+not violations. Review can collect recorded cycles and native notes; runtime/editor, public-exposure and coupling
+judgements still require manual investigation.
 
 For UE rules, see Epic's [module guide](https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-engine-modules)
 and [module properties](https://dev.epicgames.com/documentation/en-us/unreal-engine/module-properties-in-unreal-engine).
 Apply them to the project's intended boundaries and actual target conditions.
+
+## Use architecture review
+
+1. Enable **Review**. Read the candidate/violation counts and availability; ordinary exploration remains independent.
+2. Click a marked star or choose a finding in the Review list. Details show the rule, affected modules, limits and
+   investigation guidance above metadata. Open **Exact evidence** to inspect current references and source links.
+3. Use **Accept risk** or **Not relevant**, optionally recording a reason. The finding leaves active markers/list.
+   **Show acknowledged** retains inspection and **Reopen**; acknowledgement never means fixed.
+4. For project constraints, open **Policy & availability**, edit the shown local JSON path and use **Recheck**.
+   Adapt the [synthetic policy](../fixtures/review.rules.json); inspect its resolved modules before trusting results.
+
+Defaults produce yellow review candidates. Red violations need applicable configured constraints; the tool does not
+decide a project's intended architecture. See [rule meaning, coverage and saved decisions](architecture/review.md).
 
 ## Account for missing information
 

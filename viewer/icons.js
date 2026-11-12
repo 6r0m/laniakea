@@ -32,14 +32,18 @@ const NodeIcons=(()=>{
     if(['method','constructor','destructor','conversion function','function template'].includes(k))return 'function';
     return Object.hasOwn(paths,node.level)?node.level:'entity';
   }
-  function image(kind,ink){
+  function image(kind,ink,reviewMark=''){
     kind=Object.hasOwn(paths,kind)?kind:'entity';
     ink=/^#[0-9a-f]{3,8}$/i.test(ink)?ink:'#888888';
-    const key=kind+ink;
+    const key=kind+ink+reviewMark;
+    const parts=reviewMark.split(':'),count=Number(parts[1]),badge=Number.isSafeInteger(count)&&count>0?
+      '<circle cx="19" cy="5" r="5" fill="'+(parts[0]==='violation'?'#ab2838':'#855600')+'"/>'+
+      '<text x="19" y="7.5" text-anchor="middle" font-family="sans-serif" font-size="7" font-weight="bold" fill="#fff"'+
+      (count>99?' textLength="9" lengthAdjust="spacingAndGlyphs"':'')+'>'+(count>99?'99+':String(count))+'</text>':'';
     if(!images.has(key)){
       if(images.size>=128)images.clear();
       images.set(key,'data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">'+
-        '<g fill="none" stroke="'+ink+'" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+paths[kind]+'</g></svg>'));
+        '<g fill="none" stroke="'+ink+'" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+paths[kind]+'</g>'+badge+'</svg>'));
     }
     return images.get(key);
   }
@@ -52,7 +56,7 @@ const NodeIcons=(()=>{
     const expanded=node.hasClass('expanded'),title=titles.get(node),open=node.hasClass('group')||node.hasClass('source-region')||node.hasClass('not-in-target');
     const ink=expanded||open?palette.fg:palette.bg;
     const size=expanded?16:Math.min(20,node.width()*zoom*0.58);
-    apply(node,{'background-image':image(node.data('iconKind'),ink),'background-fit':'none','background-clip':'none',
+    apply(node,{'background-image':image(node.data('iconKind'),ink,node.data('reviewMark')||''),'background-fit':'none','background-clip':'none',
       'background-image-containment':'over','background-width':size/zoom,'background-height':size/zoom,
       'background-position-x':'50%','background-position-y':expanded?'0%':'50%',
       'background-offset-x':expanded&&title?.visible?title.x/zoom:0,'background-offset-y':expanded&&title?.visible?title.y/zoom:0,

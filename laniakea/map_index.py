@@ -162,6 +162,16 @@ class MapIndex:
         with closing(sqlite3.connect(uri, uri=True)) as db:
             return frozenset(row[0] for row in db.execute('SELECT id FROM nodes'))
 
+    def iter_references(self):
+        """Stream canonical payloads with run-bound locators; no full reference graph in memory."""
+        uri = (self.root / 'references.sqlite').resolve().as_uri()+'?mode=ro'
+        try:
+            with closing(sqlite3.connect(uri, uri=True)) as db:
+                for seq, group, payload in db.execute('SELECT seq,group_id,payload FROM refs ORDER BY seq'):
+                    yield {'seq':seq, 'group':group, 'reference':json.loads(payload)}
+        except sqlite3.Error as error:
+            raise LaniakeaError(f'could not stream reference index: {error}') from error
+
     def references(self, query):
         try:
             return self._reference_page(query)

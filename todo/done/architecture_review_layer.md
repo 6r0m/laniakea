@@ -1,10 +1,10 @@
 # Architecture review layer
 
-**Status:** REVIEW REQUIRED
+**Status:** DONE
 
-**Scope:** optional, evidence-based review of a published graph; no implementation in this investigation
+**Scope:** optional, evidence-based review of a published graph
 
-**Stable documentation owner:** proposed `docs/architecture/review.md`
+**Stable documentation owner:** `docs/architecture/review.md`
 
 ## Contents
 
@@ -27,7 +27,7 @@ an entire architecture automatically.
 
 ### Operator decisions
 
-- **D1:** Investigate automatic architecture checks with configurable patterns used by programmers, using the
+- **D1 [SUPERSEDED IN PART by D7 - investigation-only execution boundary]:** Investigate automatic architecture checks with configurable patterns used by programmers, using the
   supplied proposal and `investigate-change`. Effect: one reviewable plan, not runtime implementation.
   Reason: not stated. Source: current request, 2026-11-12.
 - **D2:** Preserve seamless zoom, hover and exploration with minimal actions and visual noise.
@@ -45,23 +45,34 @@ an entire architecture automatically.
 - **D6:** Evaluate the supplied audit against the code and apply valid in-scope corrections.
   Effect: revise the investigation contract; the proposed runtime feature still requires implementation approval.
   Reason: not stated. Source: operator review request, 2026-11-12.
+- **D7:** Implement this approved plan using `implement-approved-change`.
+  Supersedes: D1's investigation-only execution boundary; its investigation goal remains historical scope.
+  Effect: implement and verify A1-A5 within the existing invariants; no commit or publication authorized.
+  Reason: not stated. Source: current operator skill invocation, 2026-11-12.
+- **D8:** Run the three Engine integration cases now in one additional focused attempt.
+  Effect: resolves Q1's retry authorization; no broader rerun or source change authorized by this decision alone.
+  Reason: not stated. Source: operator reply "do now" to the pending retry question, 2026-11-12.
 
 ### Operator gates
 
-- No unresolved investigation blocker. Implementation requires explicit approval of this plan.
+- Implementation approved by D7.
+- **Q1 [RESOLVED by D8 - additional focused attempt]:** The initial whole-suite run and the focused replacement both stopped all three
+  Engine integration cases at UBT's conflicting-instance guard before their assertions. May one additional focused
+  attempt run when UBT is idle, or should closure retain this explicit verification gap? The operator authorized the
+  additional attempt under D8; runtime success still requires the resulting assertions to pass.
 
 ### Working assumptions
 
-- **A1 [ACTIVE]:** The three MVP checks below are enough to prove a useful review workflow. Other checks are excluded.
-- **A2 [ACTIVE]:** Severity distinguishes explicit constraint violations from review candidates; no universal quality score.
-- **A3 [ACTIVE]:** Review is opt-in and on demand. Rules are local JSON; changing them requires explicit Recheck,
+- **A1 [RESOLVED by D7]:** The three MVP checks below are enough to prove a useful review workflow. Other checks are excluded.
+- **A2 [RESOLVED by D7]:** Severity distinguishes explicit constraint violations from review candidates; no universal quality score.
+- **A3 [RESOLVED by D7]:** Review is opt-in and on demand. Rules are local JSON; changing them requires explicit Recheck,
   not extraction, file watching or a policy editor.
-- **A4 [ACTIVE]:** Start at module/build-dependency granularity; preserve exact native calls as evidence. Do not
+- **A4 [RESOLVED by D7]:** Start at module/build-dependency granularity; preserve exact native calls as evidence. Do not
   implement arbitrary class-level policies or a configurable rule language in the MVP.
-- **A5 [ACTIVE]:** Triage follows the rule's module-level semantic concern. Location drift refreshes exact evidence
+- **A5 [RESOLVED by D7]:** Triage follows the rule's module-level semantic concern. Location drift refreshes exact evidence
   without reopening an otherwise unchanged acknowledged finding.
 
-The attachments are design input, not authorization. A1-A5 are recommendations awaiting approval.
+The attachments are design input; D7 supplies implementation authority for A1-A5.
 
 ## Non-goals
 
@@ -77,16 +88,16 @@ The attachments are design input, not authorization. A1-A5 are recommendations a
 
 | evidence | consequence |
 |---|---|
-| [Native dependency notes](../laniakea/unreal/symbols.py), `_dependency_reviews`, annotate cross-module `calls` with `dependency_review`, `transitive_path` and `public_exposure_path` | Reuse these notes; do not duplicate dependency-path inference in the generic evaluator. The note explicitly says it is not a violation. |
-| [Native reference identities](../laniakea/unreal/symbols.py), `merge`, include source path, line and column in the reference key | Raw reference IDs and locations are exact-evidence locators, not semantic triage fingerprints. Moving an unchanged call can change its ID. |
-| [Unreal graph construction](../laniakea/unreal/graph.py), `DEPENDENCY_FIELDS` and `build` | Public/private build dependencies, include paths, dynamic loads and descriptor requirements are different facts. Only project modules have exported outgoing dependencies; Engine boundaries are incomplete. |
-| [Unreal manifest](../laniakea/unreal/__init__.py), `extract` | The run records profile, selected target/platform/configuration, compiler source when enabled and coverage limitations. Native analysis remains opt-in. |
-| [Read index](../laniakea/map_index.py), `build`, `MapIndex.references` | SQLite retains exact canonical edge payloads. Its `seq` is the run's edge ordinal; reference groups and cursors are run-bound, not durable issue identities. |
-| [Publication](../laniakea/pipeline.py), `extract` | A validated run becomes latest only after successful extraction. Optional review must not become another extraction/publication gate. |
-| [Profile registry](../laniakea/profiles.py) | One existing registry owns adapters; there is no review framework to extend or replace. |
-| [Workspace writer](../laniakea/workspace.py), `write_json`, `writer_lock`; [layout writer](../laniakea/layouts.py) | Atomic replacement does not serialize concurrent read/merge/write. Triage needs its own coordinated writer, separate from layouts. |
-| [Inspection](../viewer/app.js), `renderDetails`; [reference retention](../viewer/references.js) | Reuse Details, exact paging and request cancellation. A late review response must not reopen closed inspection. |
-| [Projection](../viewer/universe.js); [source sections](../viewer/sections.js) | File representatives are navigation abstractions. Findings must originate in canonical entities, then map onto the visible frontier. |
+| [Native dependency notes](../../laniakea/unreal/symbols.py), `_dependency_reviews`, annotate cross-module `calls` with `dependency_review`, `transitive_path` and `public_exposure_path` | Reuse these notes; do not duplicate dependency-path inference in the generic evaluator. The note explicitly says it is not a violation. |
+| [Native reference identities](../../laniakea/unreal/symbols.py), `merge`, include source path, line and column in the reference key | Raw reference IDs and locations are exact-evidence locators, not semantic triage fingerprints. Moving an unchanged call can change its ID. |
+| [Unreal graph construction](../../laniakea/unreal/graph.py), `DEPENDENCY_FIELDS` and `build` | Public/private build dependencies, include paths, dynamic loads and descriptor requirements are different facts. Only project modules have exported outgoing dependencies; Engine boundaries are incomplete. |
+| [Unreal manifest](../../laniakea/unreal/__init__.py), `extract` | The run records profile, selected target/platform/configuration, compiler source when enabled and coverage limitations. Native analysis remains opt-in. |
+| [Read index](../../laniakea/map_index.py), `build`, `MapIndex.references` | SQLite retains exact canonical edge payloads. Its `seq` is the run's edge ordinal; reference groups and cursors are run-bound, not durable issue identities. |
+| [Publication](../../laniakea/pipeline.py), `extract` | A validated run becomes latest only after successful extraction. Optional review must not become another extraction/publication gate. |
+| [Profile registry](../../laniakea/profiles.py) | One existing registry owns adapters; there is no review framework to extend or replace. |
+| [Workspace writer](../../laniakea/workspace.py), `write_json`, `writer_lock`; [layout writer](../../laniakea/layouts.py) | Atomic replacement does not serialize concurrent read/merge/write. Triage needs its own coordinated writer, separate from layouts. |
+| [Inspection](../../viewer/app.js), `renderDetails`; [reference retention](../../viewer/references.js) | Reuse Details, exact paging and request cancellation. A late review response must not reopen closed inspection. |
+| [Projection](../../viewer/universe.js); [source sections](../../viewer/sections.js) | File representatives are navigation abstractions. Findings must originate in canonical entities, then map onto the visible frontier. |
 
 Search found no existing rule evaluator, triage store or competing active review-layer todo. Existing native notes are
 the reusable feature, not an implementation of the proposed review workflow.
@@ -123,9 +134,9 @@ architecture bad.
 
 ## Current architecture and source of truth
 
-The [structure](../docs/architecture/structure.md), [component view](../docs/architecture/diagrams/main.md),
-[graph contract](../docs/architecture/graph-model.md) and [Unreal profile contract](../docs/architecture/unreal-profile.md)
-own the existing boundaries. The [guide](../docs/guide.md) currently describes architectural judgement as manual.
+The [structure](../../docs/architecture/structure.md), [component view](../../docs/architecture/diagrams/main.md),
+[graph contract](../../docs/architecture/graph-model.md) and [Unreal profile contract](../../docs/architecture/unreal-profile.md)
+own the existing boundaries. The [guide](../../docs/guide.md) currently describes architectural judgement as manual.
 
 The published graph/manifest own recorded facts and context. The read index is disposable. The server advertises a
 pinned run; the viewer projects it without changing ownership. Positions belong to a separate mutable store.
@@ -299,20 +310,21 @@ Out-of-box analysis supplies yellow candidates only; red requires an explicitly 
 
 ## Implementation tasks
 
-- [ ] Establish failing acceptance cases below against existing synthetic fixtures; record baseline map/pin hashes and
+- [X] Establish failing acceptance cases below against existing synthetic fixtures; record baseline map/pin hashes and
   matched scene timings. Add the smallest policy/report contracts and validators under the review owner, not graph v1.
-- [ ] Extend the read index with bounded streaming access to canonical references. Implement the generic forbidden-edge
+- [X] Extend the read index with bounded streaming access to canonical references. Implement the generic forbidden-edge
   and SCC checks plus the optional Unreal adapter consuming existing native notes; test applicability and limitations.
-- [ ] Add on-demand report generation/caching and paged local routes to the existing server. Keep failure independent of
+- [X] Add on-demand report generation/caching and paged local routes to the existing server. Keep failure independent of
   serving/extraction. Add the coordinated triage writer with stale-write and no-mutation refusal tests.
-- [ ] Add the Review list, passive projection badges and existing-Details integration. Verify exact witnesses and late
+- [X] Add the Review list, passive projection badges and existing-Details integration. Verify exact witnesses and late
   response cancellation, direct marked-entity inspection and active/acknowledged visibility before presentation polish.
   Do not add pointer targets or a second scene layer.
-- [ ] Prove semantic-versus-location triage reuse, reopen/restart/cross-run behavior, bounded retention, generic
+- [X] Prove semantic-versus-location triage reuse, reopen/restart/cross-run behavior, bounded retention, generic
   compatibility, privacy and saved pins.
-- [ ] Run the real Unreal walkthrough and matched performance checks; fix only demonstrated gaps in this scope.
-- [ ] Migrate contracts to the stable owners below, inspect the complete diff, then record evidence/limitations and archive
+- [X] Run the real Unreal walkthrough and matched performance checks; fix only demonstrated gaps in this scope.
+- [X] Migrate contracts to the stable owners below, inspect the complete diff, then record evidence/limitations and archive
   this plan per the todo lifecycle. No automatic commit or publication.
+  Contracts and implementation evidence are migrated; the D8 Engine run closes Q1's acceptance gap.
 
 ## Test-first and verification plan
 
@@ -342,7 +354,7 @@ edges and compiler annotations; no private project material in fixtures.
 ### Green evidence and runtime acceptance
 
 - Run focused new evaluator, report/cache, triage and projection tests first, then the existing commands in
-  [verification entrypoints](../tests/README.md). Run documentation/privacy checks after final doc migration.
+  [verification entrypoints](../../tests/README.md). Run documentation/privacy checks after final doc migration.
 - Extend existing browser functions for the affected controls, then run all existing browser suites with disposable
   synthetic targets. Test keyboard, narrow viewport, Escape/Clear, overlapping wires, gradual inward/outward wheel,
   target switches and delayed responses. These are real input tests, not only direct JavaScript calls.
@@ -351,7 +363,7 @@ edges and compiler annotations; no private project material in fixtures.
   Never manufacture a real-project violation or run a costly extraction solely to fill a screenshot.
 - Hash all existing layouts before/after review, navigation, triage, restart and policy recheck. Require byte identity;
   use disposable synthetic layouts for drag/reset regression suites. Canonical run/index data also remain read-only.
-- Use [the existing performance harness](../tests/viewer.performance.js) with matching graph, scope, camera, filters,
+- Use [the existing performance harness](../../tests/viewer.performance.js) with matching graph, scope, camera, filters,
   expansions, machine/load and repeated trials: Review off versus on, cold generation, cache hit and first hover after
   pan/zoom. Record wall time, analysis phases, peak memory, payload/page size, interaction/frame p95 and maximum.
   Reject repeatable materially worse interaction; do not claim a fixed 10% threshold or compare different scenes.
@@ -411,3 +423,55 @@ feature must leave those local decisions intact. No graph schema or identity mig
   not a current README defect: the published guide explicitly requires manual judgement for the listed checks.
 - Verification: all four existing documentation/privacy tests passed; ASCII and diff whitespace checks passed.
   No runtime code changed. The new semantic/UI acceptance cases remain requirements for future implementation.
+
+### 2026-11-12 - Implementation under D7
+
+- Implemented the three bounded module-level checks, optional Unreal interpretation, local JSON policy, on-demand
+  checksum-verified report cache and coordinated revision-checked triage. Canonical graph/schema/extraction and pins
+  are unchanged. Generic checks operate on indexed recorded facts; no parser, database, dependency or service added.
+- Review starts off. Existing icons receive passive counts; the paged list and marked-entity Details expose exact
+  evidence and decisions. Acknowledgement removes active clutter. Recheck failure clears stale presentation while
+  ordinary exploration remains usable. Background updates preserve the ordinary Details reader and keyboard focus.
+- Durable contracts migrated to the planned stable owners. The todo README remains lifecycle-only.
+
+#### Discriminating bug evidence
+
+- `tests/review.browser.js`, delayed initial-analysis case: keeping focus on the ordinary inspection control failed
+  because analysis completion rebuilt all Details. Updating only its findings slot passes the same guard. A keyboard
+  acknowledgement guard also failed when the removed action lost focus; completion now returns focus only when the
+  initiating action disappeared and the operator has not moved elsewhere.
+- `python -m unittest test_server.Server.test_post_refusal_delivers_response_with_an_unread_body`: the baseline
+  server response method, replayed unchanged in an isolated probe, fails with Windows connection-aborted error 10053
+  when a finite rejected POST body arrives late. The bounded refusal drain passes and preserves layout bytes.
+  Host/origin refusal remains enforced. This adjacent fix makes existing refusal checks reliable on Windows.
+- The source-surface browser camera assertion failed identically against baseline and changed code. Its inward
+  pointer positions changed between nested centres, while outward inputs held the last position. Reverse the actual
+  integer-CSS pointer sequence; retain the original strict camera assertion. No production camera behavior changed.
+
+#### Final execution evidence
+
+| command or route | result and boundary |
+|---|---|
+| `node --test tests/icons.test.cjs tests/sections.test.cjs tests/viewer.test.cjs tests/universe.test.cjs tests/references.test.cjs tests/traces.test.cjs tests/review.test.cjs` | 163 passed |
+| `python -m unittest test_review` with `PYTHONPATH` including `tests` | 20 passed; includes location-sensitive callable identity drift, exact current evidence, policy exclusions and retained decisions |
+| Whole non-Engine suite via ignored selection runner, LLVM enabled | 177 executed: 173 passed, four optional skips; only the three previously blocked Engine cases excluded |
+| `python -m unittest discover -s tests` initial run | Three Engine failures at the UBT conflicting-instance guard; no Engine assertions reached |
+| `python -m unittest test_engine_integration` focused replacement | Same three pre-assertion refusals; Q1 governs another attempt |
+| `python -m unittest -v test_engine_integration.RealEngine` under D8 | Three passed, none skipped; project-write boundary, recorded export and dependency regeneration assertions reached |
+| Eight existing Playwright browser functions plus two Review scenarios | All ten passed through live Chromium and ordinary disposable pipeline/index/server fixtures; no JavaScript runtime errors |
+| Real local published native map, ordinary localhost route | Genuine candidate inspection and exact source evidence verified; module-only fixture explicitly reports native analysis unavailable |
+| Existing performance harness, three matched off/on pairs in each of two real scenes | No repeatable material interaction regression established; occasional long frames remain. Cold lookup is a cost proxy, separate from full input settling |
+| Isolated uncached real-index review worker and warm pages | Cold/warm time, payload and worker lifetime peak working set recorded; no LLVM module loaded. Main-server sampling was only a bounded observation window |
+| Layout and canonical/index checksum comparisons | All pre-existing layout bytes unchanged; served canonical graph and index still match their publication marker |
+| Documentation/privacy tests and local hook-pattern worktree scan | Passed; no staging, commit, push or remote writes |
+
+Raw execution logs, measurements and diagnostics remain in ignored `workspace/tmp/architecture-review/implementation/`;
+real screenshots remain outside the clone. No analysed-project identifiers, counts or timings are copied here.
+
+#### Final acceptance
+
+The feature is implemented and available from Review in the local server. The D8 focused run passed all three
+Engine cases after UBT became idle. Combined with the separate non-Engine run, Python evidence covers 176 passing
+tests and four optional skips; skipped paths are not claimed verified. No further code change or costly native
+re-extraction was needed for this read-only review feature. Optional analysis remains evidence-limited, and
+occasional long frames remain a measured usability limit. Completed plan archived under D5; no commit or push.

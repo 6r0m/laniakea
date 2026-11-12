@@ -1,0 +1,16 @@
+{
+ "version": 1,
+ "rules": [
+  {"id": "module-cycles", "kind": "cycles"},
+  {
+   "id": "sample-core-boundary",
+   "kind": "forbidden",
+   "reason": "The synthetic core must not depend on gameplay.",
+   "source": {"label_glob": "SampleCore"},
+   "target": {"label_glob": "SampleGameplay"},
+   "types": ["depends.public", "depends.private"],
+   "context": {"name": "SampleEditor", "platform": "Win64", "configuration": "Development"}
+  },
+  {"id": "native-direct-dependency", "kind": "native"}
+ ]
+}

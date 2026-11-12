@@ -2,7 +2,7 @@
 """The loopback file server: the viewer, plus each target's last good run.
 
 It binds 127.0.0.1 only and answers only requests addressed to that host, so a web page cannot reach it through a
-rebound DNS name. Only validated user positions can be written, in the ignored workspace. Freshness is computed
+rebound DNS name. Validated positions and review decisions are written only in the ignored workspace. Freshness is computed
 once at start.
 """
 
@@ -18,6 +18,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 from . import LaniakeaError, map_index, pipeline
 from .layouts import LayoutStore
+from .review_store import Review, Conflict
 from .workspace import read_json
 
 VIEWER = Path(__file__).resolve().parent.parent / "viewer"
@@ -61,6 +62,19 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
     def _send(self, status, body, content_type="text/plain; charset=utf-8"):
+        # Windows may reset a closing socket with unread POST data before its refusal reaches the client.
+        # Drain only a bounded, declared body; a slow or incomplete sender cannot hold a refusal open.
+        if status>=400 and self.command=='POST' and not getattr(self,'_body_consumed',False):
+            length=self.headers.get('Content-Length','')
+            if length.isdecimal() and int(length)<=1048576 and not self.headers.get('Transfer-Encoding'):
+                timeout=self.connection.gettimeout()
+                try:
+                    self.connection.settimeout(0.25)
+                    self._body(int(length))
+                except OSError:
+                    body+=b'\nRequest body was incomplete; connection closed.\n'
+                finally:
+                    self.connection.settimeout(timeout)
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
@@ -68,6 +82,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(body)
+
+    def _body(self, length):
+        self._body_consumed=True
+        return self.rfile.read(length)
 
     def _file(self, path, root):
         if not _inside(path, root) or not Path(path).is_file():
@@ -131,7 +149,7 @@ class Handler(BaseHTTPRequestHandler):
             path = unquote(urlsplit(self.path).path)
             if path.startswith('/map/'):
                 view = self._view(path)
-                if view is None or view[1]!='references':
+                if view is None or view[1] not in {'references','review'}:
                     return self._send(404,b'not found\n')
                 if self.headers.get('Content-Type','').split(';',1)[0]!='application/json':
                     return self._send(415,b'expected application/json\n')
@@ -139,7 +157,14 @@ class Handler(BaseHTTPRequestHandler):
                 if not length.isdecimal() or not 0<int(length)<=1048576 or self.headers.get('Transfer-Encoding'):
                     return self._send(413,b'expected a reference query no larger than 1 MiB\n')
                 try:
-                    return self._references(view[0],json.loads(self.rfile.read(int(length))))
+                    body=json.loads(self._body(int(length)))
+                    if view[1]=='review':
+                        owner=self.server.reviews[path.split('/')[2]]
+                        data=owner.update(body)
+                        return self._send(200,json.dumps(data).encode(),'application/json')
+                    return self._references(view[0],body)
+                except Conflict as error:
+                    return self._send(409,str(error).encode())
                 except (ValueError,UnicodeError) as error:
                     return self._send(400,str(error).encode())
             scope = self._layout_scope(unquote(urlsplit(self.path).path))
@@ -151,7 +176,7 @@ class Handler(BaseHTTPRequestHandler):
             if not length.isdecimal() or not 0 < int(length) <= 131072 or self.headers.get("Transfer-Encoding"):
                 return self._send(413, b"expected a JSON body no larger than 128 KiB\n")
             try:
-                patch = json.loads(self.rfile.read(int(length)))
+                patch = json.loads(self._body(int(length)))
                 self.server.layouts.update(*scope[:2], patch, scope[2])
             except (ValueError, UnicodeError) as error:
                 return self._send(400, str(error).encode())
@@ -170,6 +195,29 @@ class Handler(BaseHTTPRequestHandler):
             index,name = view
             if name == 'topology.json':
                 return self._file(index.root / name, index.root)
+            if name == 'review':
+                try:
+                    query=parse_qs(urlsplit(self.path).query,keep_blank_values=True)
+                    if any(len(v)!=1 for v in query.values()):
+                        raise ValueError('repeated review query')
+                    query={k:v[0] for k,v in query.items()}
+                    for key in ('cursor','limit'):
+                        if key in query:
+                            if not query[key].isdecimal():
+                                raise ValueError('invalid review cursor or limit')
+                            query[key]=int(query[key])
+                    if 'ack' in query:
+                        if query['ack'] not in {'true','false'}:
+                            raise ValueError('invalid acknowledged flag')
+                        query['ack']=query['ack']=='true'
+                    data=self.server.reviews[path.split('/')[2]].page(query)
+                    return self._send(200,json.dumps(data,separators=(',',':')).encode(),'application/json')
+                except Conflict as error:
+                    return self._send(409,str(error).encode())
+                except (ValueError,UnicodeError) as error:
+                    return self._send(400,str(error).encode())
+                except (OSError,LaniakeaError) as error:
+                    return self._send(500,str(error).encode())
             if name != 'references':
                 return self._send(404, b'not found\n')
             try:
@@ -231,7 +279,7 @@ def make_server(workspace, port=0):
         view = map_index.ensure(workspace, entry['id'], run)
         views[entry['id']] = view
         base = f"/map/{entry['id']}/{view.root.name}"
-        entry.update(map_url=base+'/topology.json', references_url=base+'/references')
+        entry.update(map_url=base+'/topology.json', references_url=base+'/references',review_url=base+'/review')
     try:
         server = _Server((HOST, port), partial(Handler, workspace=workspace, index=index))
     except OSError as error:
@@ -239,6 +287,8 @@ def make_server(workspace, port=0):
                             "or pass --port <n> (0 picks a free one)") from error
     server.index = index
     server.views = views
+    server.reviews = {entry['id']:Review(workspace,entry['id'],workspace.target_dir(entry['id'])/'runs'/entry['run'],
+                                       views[entry['id']]) for entry in index}
     server.layouts = LayoutStore(workspace)
     server.layout_node_ids = {}
     server.layout_ids_lock = threading.Lock()

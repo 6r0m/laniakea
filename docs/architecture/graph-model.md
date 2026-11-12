@@ -12,6 +12,7 @@ What graph schema v1 means. The shapes of graph, shard and manifest are owned by
 - [Continuous map](#continuous-map)
 - [Centered overview and configuration](#centered-overview-and-configuration)
 - [Viewport and memory lifetime](#viewport-and-memory-lifetime)
+- [Review presentation](#review-presentation)
 - [Scope addresses and generated shards](#scope-addresses-and-generated-shards)
 - [Runs and freshness](#runs-and-freshness)
 
@@ -373,6 +374,24 @@ The server's SQLite read index uses only Python's standard library and is regene
 identity. A validated staging directory is promoted before serving; corruption fails visibly without changing the run.
 Canonical runs, the read index and user positions have separate lifetimes. Cache files under `targets/<id>/views/` are
 disposable; positions under `layouts/` are user-owned and must not be evicted with presentation data.
+
+## Review presentation
+
+Review is an optional layer, off by default. It maps affected canonical module IDs onto the current visible
+representatives and decorates their native icons without new graph elements, geometry or pointer targets. Collapsed
+representatives deduplicate finding IDs; multiple participants in one cycle do not multiply the global issue count.
+The accessible Review list retains off-view findings. Map filters do not change rule results or triage.
+
+Clicking or keyboard-inspecting a marked entity places its findings before metadata/reference pages in Details.
+A single finding exposes its explanation and decision actions immediately. Exact evidence reuses current reference
+paging and validates original IDs before displaying rows. Closing inspection cancels its presentation; a late request
+cannot reopen Details. Hover and wheel input never trigger review analysis, fit or layout changes.
+Background review updates replace only the findings section, preserving the ordinary reader, paging and keyboard focus.
+
+Acknowledged visibility and semantics belong to the [review contract](review.md). The viewer retains one affected-entity
+index and at most eight detail pages/8 MiB of serialized page data; parsed-object overhead is additional.
+Report/target changes release pending requests and old pages. Review off has no
+reference scans per animation frame. Trace colors, graph counts and saved arrangements remain independent.
 
 ## Scope addresses and generated shards
 

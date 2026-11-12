@@ -2,6 +2,7 @@
 
 Explore an Unreal Engine C++ project like a star map, from plugin folders and modules to files, namespaces,
 classes and functions. Trace dependencies from public contracts into their implementations, with links to source.
+Optional architecture review highlights recorded concerns and checks the dependency boundaries you configure.
 
 Needs Windows, Python 3.9 or later, and an installed Unreal Engine 5. Clone this repository, then run:
 

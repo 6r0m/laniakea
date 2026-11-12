@@ -2,8 +2,9 @@
 
 ## Purpose
 
-Explore Unreal C++ structure progressively, with typed dependencies and source links. Views are generated from source
-and build rules; the analysed project needs no Laniakea installation, configuration or committed files.
+Explore Unreal C++ structure progressively, with typed dependencies, source links and optional review of recorded
+concerns against local constraints. Views are generated from source and build rules; the analysed project needs no
+Laniakea installation, configuration or committed files.
 
 ## Owns
 
@@ -49,6 +50,9 @@ and build rules; the analysed project needs no Laniakea installation, configurat
   [configuration context](graph-model.md#centered-overview-and-configuration).
 - **Layout store** (`laniakea/layouts.py`): validated user positions under each target's `layouts/` directory in the
   ignored workspace, separate from immutable runs. Updates merge moved pins; resetting affects one scope and mode.
+- **Architecture review** (`laniakea/review.py`, `review_policy.py`, `review_store.py`): optional indexed analysis,
+  report caching and local triage. Its [review contract](review.md) owns applicability and decision lifetimes;
+  `viewer/review.js` supplies the controls and passive badges.
 - **Sample, fixtures, tests** (`sample/`, `fixtures/`, `tests/`): a synthetic project with no engine code, its recorded
   UBT export, a hand-written non-Unreal graph, and the test suite.
 

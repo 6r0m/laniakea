@@ -196,6 +196,11 @@ declaration; runtime dispatch is not analysed. Engine classes/functions collapse
 toolchain declarations form provider boundaries. Cross-module calls without a direct build dependency carry a review note
 with transitive and public-exposure paths; this is not reported as a violation.
 
+The optional [review adapter](../../laniakea/unreal/review.py) consumes those published notes and declared public/private
+module dependencies. Its defaults exclude descriptors, include-only/dynamic-load relations, semantic call cycles and
+unrecorded boundary internals. Native-note absence does not establish exhaustive coverage. Review interpretation and
+decisions are owned by [architecture review](review.md); this adapter invokes neither UBT nor native tools.
+
 Native header-tool manifests map generated declarations back to their module, checked against JsonExport ownership.
 An unrendered field, local or macro-spelled method first retains its nearest recorded class/function ancestor.
 Only declarations without a retained semantic ancestor fall back to recorded module/provider ownership. Call-site and

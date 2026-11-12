@@ -8,6 +8,7 @@ not verify that path.
 ```text
 python -m unittest discover -s tests
 node --test tests/icons.test.cjs tests/sections.test.cjs tests/viewer.test.cjs tests/universe.test.cjs tests/references.test.cjs tests/traces.test.cjs
+node --test tests/review.test.cjs
 ```
 
 Python 3.9+ needs no extra packages. Viewer unit tests need Node.js 18+; Node is not a runtime requirement for Laniakea.
@@ -39,6 +40,7 @@ Source-file fixtures must use the normal pipeline/read index/server and real exa
 | [icons.browser.js](icons.browser.js) | Type glyphs, themes, pointer hits, title geometry and the keyboard-accessible key |
 | [source-surface.browser.js](source-surface.browser.js) | [Source-surface fixture](../fixtures/source-surface.graph.json): files, symbol identity, gradual/reversible zoom and local arrangement |
 | [namespace-files.browser.js](namespace-files.browser.js) | [Namespace fixture](../fixtures/namespace-files.graph.json): file contexts, exact references, navigation and pins |
+| [review.browser.js](review.browser.js) | [Review fixture](test_review.py): direct explanation, exact evidence, triage, refused writes, late close and pins |
 
 Other functions use the served [sample](../sample/SampleProject/SampleProject.uproject), with synthetic overlays.
 Keep real-project screenshots outside the clone and other observations in the ignored workspace.
