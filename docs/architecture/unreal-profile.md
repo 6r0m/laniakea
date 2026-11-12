@@ -139,8 +139,55 @@ writable copied source as an edited working-set file. This changes batching, not
 database or native build actions against the analysed checkout. The effective commands and tool identities stay in the run.
 
 `native_index.py` collects compiler identities, declarations, references, base classes and overridden methods. File-local
-identities include their logical source path, so equal basenames remain distinct. Macro scratch locations use the native
-expansion location. A declaration's definition replaces its header location when available.
+identities include their logical source path, so equal basenames remain distinct. Class/function IDs continue to derive
+from those identities when containment changes. A conflicting identity or parent aborts normalization rather than
+silently moving an existing symbol. Source files remain attributes, not canonical graph containers.
+Unindexed helper cursors such as aliases can reuse a compiler USR across local scopes. Normalization keeps those
+observations in their recorded file/parent context, retaining the original reference identity and declaration location;
+they do not become stars. Shared namespaces do not select a reference endpoint's module by an arbitrary observed
+namespace location. Published type/callable identities retain the strict collision guard.
+
+`source_context.py` annotates native declarations with optional source partitions. Recorded authored header locations
+take precedence over implementation locations; a public header keeps an out-of-line definition on the public surface.
+Public/Private here describe observed source organization, independently of C++ member access, DLL exports or runtime
+usage. Without a recorded header, an implementation uses its recorded source context; an unrecognized path remains
+unclassified. Generated paths outside the module source directory never determine its source partition. Source
+organization uses the short Public section label; the read index names exposed source roots from their recorded folder,
+including snapshots carrying an older descriptive partition label. This does not restrict that section to headers.
+Actual source subdirectories supply folder labels without interpreting names such as Tests or Verify. Only indexed declarations are
+represented, not an exhaustive filesystem tree. Namespace partitions aggregate only uniformly classified children;
+mixed or unknown namespaces remain visible. These annotations do not change semantic parents or reference identities.
+The selected authored header is retained as an optional root-relative file location, independently of a definition's
+implementation location. Equal basenames do not merge files. A namespace retains a common header hint only when all
+its recorded direct declarations share that header; this does not assert that every reopening or include occurs there.
+No association between a private helper and a public header is inferred from a matching basename or caller.
+The disposable read index additionally derives concrete implementation-file navigation from recorded definitions
+and reference locations. It uses source partition hints for visibility and can identify a definition in a different
+file as implementation context without inferring C++ access. A mixed namespace is not assigned wholesale to its first
+observed file. File exploration and its one-symbol definition links follow the generic
+[continuous-map contract](graph-model.md#continuous-map).
+
+Named, nested and reopened namespaces provide real owners between modules and their declarations. A namespace's new
+graph identity combines its compiler identity with the owning module; the same shared namespace cannot merge modules.
+Anonymous namespace identities also include the logical file containing that namespace declaration. This keeps equal
+basenames in different directories separate and remains stable across separate and unity compilation. Shared-header
+declarations retain their existing canonical identity: the map describes declarations, not separate runtime instances
+of header-local code in every translation unit. Observed namespace locations select a source within the owning module;
+if none was recorded, no namespace source link is invented. Engine-internal namespace trees are not expanded.
+
+Compiler metadata distinguishes structs, unions, classes, callable kinds and lambdas. Where the API supplies them,
+access, static/virtual/const properties and return/signature context are recorded. Defined types summarize observed
+fields and callables by access after compiler-identity deduplication; fields are not individual stars or part of the
+indexed child count. These summaries are observations, not a complete member inventory. Enum/value, local-variable and
+statement stars are not indexed. Missing metadata on older runs remains unknown.
+
+Definition promotion preserves the declaration location separately from the definition. Exact target declarations
+retain their own coordinates, independently of the referring call/reference location. Macro scratch locations use the
+native expansion location. A differing spelling/expansion location establishes macro expansion; otherwise origin is
+explicitly unknown. This is provenance, never a reason to suppress a declaration or infer that it is generated.
+Observed lambda closures retain compiler-derived IDs and callable ownership. Display labels use the initializer name
+when recorded, otherwise a file/line/column label; signatures replace known compiler closure spellings and local roots
+without changing identities or source coordinates. Unobserved initializer/unevaluated contexts are not complete coverage.
 
 Call edges require both LLVM's actual call role and a matching native evaluated call-expression range. Address-taking,
 `sizeof`, `noexcept`, requirements and type declarations remain references. Unsupported type/default-argument or initializer
@@ -150,7 +197,11 @@ toolchain declarations form provider boundaries. Cross-module calls without a di
 with transitive and public-exposure paths; this is not reported as a violation.
 
 Native header-tool manifests map generated declarations back to their module, checked against JsonExport ownership.
-Generated-only declarations do not become project stars; references to them keep their module endpoint.
+An unrendered field, local or macro-spelled method first retains its nearest recorded class/function ancestor.
+Only declarations without a retained semantic ancestor fall back to recorded module/provider ownership. Call-site and
+target-declaration provenance remain exact even when the displayed endpoint is an enclosing owner.
+References from distinct original source declarations remain distinct when their location and enclosing owner coincide.
+Generated-only declarations do not become project stars; their references retain the recorded enclosing owner.
 If normalization maps both ends of a reference or semantic relation to the same owner and at least one original
 symbol was not retained, it marks the reference internal to that owner. A retained class referencing its own type
 is also internal: aliases, own-type fields and macro-expanded definitions describe that class rather than another entity.
@@ -162,6 +213,8 @@ analysis. Execution, diagnostics and observed symbols do not establish complete 
 Native compilers run in disposable, hidden processes with bounded timeouts. Concurrency is capped by available memory.
 Each job retains compressed facts, diagnostics, elapsed time and peak working-set measurement. A worker failure, compiler
 error, changed tool identity or copy-fidelity failure aborts publication and retains the previous published run.
+Compressed batch files close before their consumers normalize them, so a rejected batch cannot hold a Windows file
+handle that prevents the run from being marked failed or masks the original diagnostic.
 Module-level exploration remains available without requesting symbols, with explicit missing-symbol coverage.
 
 Native acceptance distinguishes execution, diagnostics, symbol ownership and relationship correctness. Synthetic compiler

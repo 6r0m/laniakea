@@ -113,3 +113,22 @@ async function resetPositions() {
     $('reset-layout').disabled = false;
   }
 }
+
+function sourceArrangementOwner(){
+  const map=state.universe,scope=state.scopeShard?.scope;
+  if(!map||!scope)return null;
+  const owner=map.nodes.get(scope)?.attrs?.source_owner||scope;
+  return map.fileIds.some(id=>map.nodes.get(id).attrs.source_owner===owner)?owner:null;
+}
+
+async function arrangeSourceFiles(){
+  const id=sourceArrangementOwner(),map=state.universe,cache=state.positionCache,cy=state.cy,mode=$('layout').value;
+  if(!id||!cache||!cy)return;
+  if(!confirm(`Arrange source files in ${map.nodes.get(id).label}? Saved positions inside this scope will be replaced. Other scopes stay fixed.`))return;
+  $('arrange-files').disabled=true;cy.autoungrabify(true);
+  try{
+    const patch=map.arrangeSource(id);
+    cy.maxZoom(map.zoomLimit);refreshMap();frameNode(id);
+    await cache.moveMany(mode,patch);
+  }finally{cy.autoungrabify(false);$('arrange-files').disabled=false;}
+}

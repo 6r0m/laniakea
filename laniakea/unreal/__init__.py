@@ -84,7 +84,7 @@ def extract(target, run_dir, previous_manifest=None, tools_dir=None):
     start = perf_counter()
     built, counts = graph.build(project, root, exported)
     timings["graph"] = perf_counter() - start
-    compiler_result = {"enabled": False, "reason": "levels: class, function (not requested; pass --symbols)"}
+    compiler_result = {"enabled": False, "reason": "levels: namespace, class, function (not requested; pass --symbols)"}
     if tools_dir is not None:
         from . import compiler
         built, compiler_result = compiler.extract(target, run_dir, built, exported, chosen, tools_dir)
@@ -110,7 +110,7 @@ def extract(target, run_dir, previous_manifest=None, tools_dir=None):
     manifest = {
         "profile": NAME,
         "project": project.stem,
-        "levels": graph.LEVELS + (["class", "function"] if compiler_result["enabled"] else []),
+        "levels": graph.LEVELS + (["namespace", "class", "function"] if compiler_result["enabled"] else []),
         "edge_types": graph.EDGE_TYPES,
         "overview": {"anchor": graph.ENGINE_ID, "configuration_types": ["requires"]},
         "target": {**chosen, "platform": platform, "configuration": configuration},
@@ -129,9 +129,10 @@ def extract(target, run_dir, previous_manifest=None, tools_dir=None):
         manifest["sources"].append({"id": "compiler", "name": "LLVM libclang native semantic index", "version": tools.VERSION})
         manifest["inputs"].update(compiler_result["external_inputs"])
         manifest['roots'] = compiler_result.get('roots', {})
-        coverage["analysed"].append(f"authored C++ classes, functions and statically resolved references: {compiler_result['units']} native units")
+        coverage["analysed"].append(f"authored C++ namespace ownership, classes, functions and statically resolved references: {compiler_result['units']} native units")
         coverage["not_analysed"].extend(["Engine class/function internals and runtime/indirect dispatch",
-                                         "generated-only declarations without an authored source owner"])
+                                         "generated-only declarations without an authored source owner",
+                                         "individual fields, enumeration/value stars and exhaustive macro provenance; member summaries are observations"])
         unknown = compiler_result["unknown"]
         if any(unknown.values()):
             coverage["not_analysed"].append(f"unresolved compiler reference ownership: source={unknown['source']}, target={unknown['target']}")

@@ -77,6 +77,16 @@ def validate(value, definition=None):
         shown = "; ".join(problems[:5])
         more = f" (+{len(problems) - 5} more)" if len(problems) > 5 else ""
         raise LaniakeaError(f"{definition or 'graph'} does not match the schema: {shown}{more}")
+    if definition == 'map':
+        files, nodes = value.get('files', []), value['nodes']
+        for file in files:
+            memberships = [file['owner'], *file['declarations'], *file['definitions']]
+            if not file['root'] or not file['path'] or any(not 0 <= index < len(nodes) for index in memberships):
+                raise LaniakeaError('invalid source file catalog membership')
+        for row in value['references']:
+            for end in ('source_file', 'target_file'):
+                if end in row and not 0 <= row[end] < len(files):
+                    raise LaniakeaError('invalid reference file index')
     if definition in {"edge", "referenceGroup"}:
         edges = [value]
     elif definition == "map":

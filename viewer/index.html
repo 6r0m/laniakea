@@ -20,7 +20,10 @@
     </div>
     <button id="up" type="button" title="One level up (Backspace)" disabled>Up</button>
     <nav id="crumbs" aria-label="Scope"></nav>
-    <input id="find" name="find" type="search" placeholder="Find a node ( / )" aria-label="Find a node by name" autocomplete="off" spellcheck="false">
+    <div class="find-controls">
+      <input id="find" name="find" type="search" placeholder="Find a node ( / )" aria-label="Find a node by name or qualified signature" aria-controls="find-results" aria-expanded="false" autocomplete="off" spellcheck="false">
+      <div id="find-results" role="group" aria-label="Search matches" hidden></div>
+    </div>
     <span id="find-hint" aria-live="polite"></span>
     <label>Layout
       <select id="layout">
@@ -41,6 +44,7 @@
     <span id="layout-hint" role="status" hidden></span>
     <button id="fit" type="button">Fit map</button>
     <button id="reset-layout" type="button" title="Forget saved positions for this map and layout">Reset layout</button>
+    <button id="arrange-files" type="button" hidden title="Arrange interface and implementation files in this scope only">Arrange files</button>
     <span id="position-status" role="status"></span>
     <button id="clear" type="button">Clear selection</button>
     <button id="toggle-details" type="button" aria-controls="details" aria-expanded="false">Details</button>
@@ -49,8 +53,9 @@
     <aside id="filters" aria-label="Browse and filters" hidden></aside>
     <section id="map" tabindex="-1" aria-label="Dependency map">
       <div id="graph" tabindex="0" role="group" aria-label="Dependency graph" aria-describedby="map-help"></div>
-      <p id="map-legend">Rings: groups / Dots: stars / Diamonds: external / Idle colors: types in Browse &amp; filters<br>
-        Trace: <span class="trace-outgoing">-&gt; Outgoing</span> / <span class="trace-incoming">&lt;- Incoming</span> / <span class="trace-within">Within/self</span><span id="configuration-legend" hidden> / Outer outline: project-listed targets</span></p>
+      <div id="map-legend"><details id="type-key"><summary>Type icons</summary><div id="icon-key"></div></details>
+        Ring: expandable / Box: source / Diamond: external / Idle colors: reference types<br>
+        Trace: <span class="trace-outgoing">-&gt; Outgoing</span> / <span class="trace-incoming">&lt;- Incoming</span> / <span class="trace-within">Within/self</span><span id="configuration-legend" hidden> / Outer outline: project-listed targets</span></div>
       <p id="map-help">Wheel to explore. Drag space to fly; drag stars or constellation names to arrange. Hover to trace. Double-click expands.</p>
       <div id="map-tooltip" role="status" aria-live="polite" aria-atomic="true" tabindex="0" aria-label="Connection trace">Hover a star or connection to trace references in this view.</div>
       <div id="hover-card" role="tooltip" aria-hidden="true" hidden></div>
@@ -61,8 +66,11 @@
   <footer id="coverage"></footer>
   <script src="vendor/cytoscape.min.js"></script>
   <script src="vendor/flatbush.js"></script>
+  <script src="sections.js"></script>
   <script src="universe.js"></script>
   <script src="traces.js"></script>
+  <script src="context.js"></script>
+  <script src="icons.js"></script>
   <script src="map.js"></script>
   <script src="scene.js"></script>
   <script src="positions.js"></script>

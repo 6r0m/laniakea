@@ -35,13 +35,17 @@ nothing installed, configured or committed for it.
 - **Shards** (`laniakea/shards.py`): the drill-down scopes and their summaries, plus the index used to find nodes;
   language-neutral.
 - **Map read index** (`laniakea/map_index.py`): regenerable compact topology and indexed canonical reference pages;
-  language-neutral, separate from extraction authority and user positions.
+  language-neutral, separate from extraction authority and user positions. Its `source_files.py` helper derives file
+  membership and reference provenance from recorded source hints without reading or parsing source files.
 - **Schema** (`schema/graph.v1.schema.json`, validated by `laniakea/schema.py`): the shapes of graph, shard and
   manifest.
 - **Server** (`laniakea/server.py`) and **viewer** (`viewer/`, Cytoscape.js): presentation and saved user positions.
   The viewer's `app.js` owns startup and HTML controls; `universe.js` owns the canonical hierarchy, reference
-  projection and world positions; `traces.js` derives node/pair direction scopes from that projection for hover and
-  inspection; `map.js` owns canvas rendering and hover; `scene.js` owns camera gestures and
+    projection and world positions; `sections.js` derives optional source and header regions while retaining canonical ownership;
+    `traces.js` derives node/pair direction scopes from that projection for hover and
+  inspection; `context.js` shares recorded declaration context and bounded qualified lookup between hover, inspection
+  and search; `map.js` owns canvas rendering and hover; `icons.js` owns recorded-kind glyphs and their native image decoration;
+  `scene.js` owns camera gestures and
   navigation; `positions.js` owns loading and ordered saves of released pins; `references.js` owns bounded reference-page
   retention and cancellation. See [viewport and memory lifetime](graph-model.md#viewport-and-memory-lifetime).
   Project configuration uses existing inspection and projected-node annotations, as defined by

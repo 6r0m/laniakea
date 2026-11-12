@@ -62,13 +62,30 @@ a { color: var(--accent); text-underline-offset: 3px; }
 a:hover { text-decoration-thickness: 2px; }
 .skip { position: absolute; z-index: 10; top: -80px; padding: 10px; background: var(--panel); }
 .skip:focus { top: 4px; }
-#crumbs { flex: 1; min-width: 80px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+#crumbs { flex: 1; min-width: 80px; display: flex; align-items: center; gap: 6px; }
+#crumbs > a { flex-shrink: 2; max-width: 22ch; min-width: 0; }
+#crumbs > strong { min-width: 0; max-width: 38ch; }
+.crumb-name { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.crumb-ancestors { position: relative; flex-shrink: 0; }
+.crumb-links { position: absolute; z-index: 30; top: 100%; left: 0; min-width: 220px; max-width: min(440px,85vw);
+  max-height: 60vh; overflow: auto; padding: 10px; background: var(--panel); border: 1px solid var(--line); }
+.crumb-links a { display: flex; margin: 6px 0; max-width: 100%; }
+.crumb-links .crumb-name { white-space: normal; overflow-wrap: anywhere; }
+.find-controls { position: relative; }
+#find-results { position: absolute; z-index: 30; top: 100%; right: 0; width: min(480px,90vw); max-height: 60vh;
+  overflow: auto; padding: 8px; background: var(--panel); border: 1px solid var(--line); }
+#find-results button { display: block; text-align: left; width: 100%; margin: 4px 0; overflow-wrap: anywhere; }
+#find-results small { display: block; color: var(--muted); }
+#find-results button.active { border-color: var(--accent); }
+.declaration-owner { color: var(--muted); overflow-wrap: anywhere; }
+.declaration-signature { display: block; white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0; font-size: 12px; }
+#hover-card .declaration-signature { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 #crumbs strong { overflow-wrap: anywhere; font-weight: 600; }
 #crumbs span { color: var(--muted); }
 #crumbs a, #crumbs strong { display: inline-flex; flex-direction: column; }
 #crumbs small { color: var(--muted); font-size: 10px; font-weight: 400; text-decoration: none; }
 #find { width: 195px; }
-#find-hint { color: var(--muted); font-size: 12px; }
+#find-hint { color: var(--muted); font-size: 12px; max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #find-hint:empty { display: none; }
 #banner, #error { padding: 8px 20px; background: var(--warn-bg); color: var(--warn-fg); overflow-wrap: anywhere; }
 #banner { flex-shrink: 0; max-height: 26vh; overflow: auto; }
@@ -119,6 +136,14 @@ main { flex: 1; min-height: 280px; display: flex; position: relative; }
 #map-legend { position: absolute; top: 0; left: 16px; right: 16px; height: var(--legend-height); margin: 0;
   padding: 6px 0; pointer-events: none; color: var(--muted); font-size: 12px; line-height: 16px; text-align: center; }
 #map-empty { position: absolute; top: 45%; left: 10%; right: 10%; text-align: center; }
+#type-key { display: inline-block; position: relative; pointer-events: auto; margin-right: 10px; text-align: left; }
+#type-key summary { cursor: pointer; }
+#type-key[open] #icon-key { display: grid; }
+#icon-key { display: none; position: absolute; top: 24px; left: 0; width: 290px; max-width: calc(100vw - 40px);
+  grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 12px; background: var(--panel);
+  color: var(--fg); border: 1px solid var(--line); border-radius: 5px; box-shadow: 0 8px 24px #0003; }
+#icon-key > span { display: flex; align-items: center; gap: 8px; min-width: 0; }
+#icon-key img { flex: none; }
 .empty { margin: 40px; overflow-wrap: anywhere; }
 aside { flex: 0 0 296px; width: 296px; min-width: 0; overflow: auto; padding: 18px; background: var(--panel);
   border: 0 solid var(--line); scrollbar-gutter: stable; overscroll-behavior: contain; }
@@ -180,3 +205,6 @@ footer ul { margin: 8px 0; padding-left: 18px; }
   main, #map { min-height: 340px; }
   footer { padding: 8px 12px; }
 }
+.file-symbols { display:flex; flex-direction:column; align-items:stretch; gap:5px; margin:8px 0; }
+.file-symbols button { text-align:left; overflow-wrap:anywhere; }
+.file-symbols small { display:block; color:var(--muted); font-weight:normal; }

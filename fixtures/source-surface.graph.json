@@ -1,0 +1,27 @@
+{
+ "schema":"laniakea.graph/1",
+ "nodes":[
+  {"id":"root","parent":null,"level":"project","label":"Sample","status":"in-target","boundary":false},
+  {"id":"module","parent":"root","level":"module","label":"ReceiptModule","status":"in-target","boundary":false,
+   "source":{"root":"project","path":"Source/Sample/Sample.Build.cs","line":1},"attrs":{"source_sections":true}},
+  {"id":"class","parent":"module","level":"class","label":"ReceiptContract","status":"in-target","boundary":false,
+   "source":{"root":"project","path":"Source/Sample/Public/API.h","line":1},"attrs":{"source_partition":
+    {"id":"public","label":"Public headers","collapsed":false,"folders":[],"file":{"root":"project","path":"Source/Sample/Public/API.h"}}}},
+  {"id":"method","parent":"class","level":"function","label":"Build","status":"in-target","boundary":false,
+   "source":{"root":"project","path":"Source/Sample/Private/Producer.cpp","line":1},"attrs":{
+    "qualified":"ReceiptContract::Build","declaration":{"root":"project","path":"Source/Sample/Public/API.h","line":2},
+    "definition_location":{"root":"project","path":"Source/Sample/Private/Producer.cpp","line":1}}},
+  {"id":"helper","parent":"module","level":"function","label":"WriteReceipt","status":"in-target","boundary":false,
+   "source":{"root":"project","path":"Source/Sample/Private/Helpers.cpp","line":1},"attrs":{"definition":true,"source_partition":
+    {"id":"private","label":"Private implementation","collapsed":true,"folders":[]}}}
+ ],
+ "edges":[
+  {"id":"call-0","source":"method","target":"helper","type":"calls","status":"resolved","origin":"compiler","attrs":{
+    "location":{"root":"project","path":"Source/Sample/Private/Producer.cpp","line":2},
+    "target_declaration":{"id":"helper","location":{"root":"project","path":"Source/Sample/Private/Helpers.cpp","line":1}}}},
+  {"id":"call-1","source":"method","target":"helper","type":"calls","status":"resolved","origin":"compiler","attrs":{
+    "location":{"root":"project","path":"Source/Sample/Private/Other.cpp","line":2},
+    "target_declaration":{"id":"helper","location":{"root":"project","path":"Source/Sample/Private/Helpers.cpp","line":1}}}},
+  {"id":"build","source":"module","target":"root","type":"depends.private","status":"declared","origin":"rules"}
+ ]
+}

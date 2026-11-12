@@ -16,8 +16,11 @@ function viewer() {
   const source = fs.readFileSync(path.join(__dirname, '../viewer/app.js'), 'utf8');
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/vendor/cytoscape.min.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/vendor/flatbush.js'), 'utf8'), context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/sections.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/universe.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/traces.js'), 'utf8'), context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/context.js'), 'utf8'), context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/icons.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/map.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/scene.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/positions.js'), 'utf8'), context);
@@ -26,8 +29,9 @@ function viewer() {
   vm.runInContext(`
     globalThis.realRenderDetails = renderDetails;
     globalThis.realRenderBanner = renderBanner;
+    globalThis.realRenderCrumbs = renderCrumbs;
     globalThis.realRenderGraph=renderGraph;
-    for (const name of ['renderBanner','renderCoverage','renderCrumbs','renderFilters','renderGraph','renderDetails']) {
+    for (const name of ['renderBanner','renderCoverage','renderCrumbs','renderFilters','renderGraph','renderDetails','renderIconKey']) {
       globalThis[name] = () => {};
     }
     state.targets = [{id:'sample', project:'SampleProject'}];
@@ -58,10 +62,10 @@ function inspectionViewer(styleEnabled = false) {
 function treeElements(run) {
   run(`globalThis.el=(tag,text,attrs={})=>({tag,textContent:text||'',attrs,children:[],isConnected:true,
     append(...items){this.children.push(...items);},replaceChildren(...items){this.children=items;},
-    setAttribute(name,value){this.attrs[name]=value;},remove(){},
+    setAttribute(name,value){this.attrs[name]=value;},remove(){},scrollIntoView(){this.scrolled=true;},
     querySelector(selector){return this.children.flatMap(function walk(n){return[n,...(n.children||[]).flatMap(walk)];})
       .find(n=>selector==='[data-action="toggle-group"]'&&n.attrs?.['data-action']==='toggle-group')||null;}});
-    for(const id of ['details','banner']){const old=$(id);Object.assign(old,el('aside'));}
+    for(const id of ['details','banner','crumbs','find-results']){const old=$(id);Object.assign(old,el('aside'));}
   `);
 }
 

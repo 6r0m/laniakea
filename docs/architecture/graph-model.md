@@ -18,7 +18,7 @@ What graph schema v1 means. The shapes of graph, shard and manifest are owned by
 ## Levels
 
 A profile declares its levels in the manifest, and the viewer hardcodes none. The Unreal profile has `project`,
-`folder`, `plugin`, `module`, and optionally `class` and `function`: the folders between `Plugins/` and a plugin, such as a project's plugin categories,
+`folder`, `plugin`, `module`, and optionally `namespace`, `class` and `function`: the folders between `Plugins/` and a plugin, such as a project's plugin categories,
 group its plugins. A Rust profile could have workspace, crate, module, type and function; a Python profile could have
 project, package, module, class and function.
 
@@ -36,8 +36,8 @@ from leaves; it does not invent an extra owner to make them look uniform.
   - `in-target`: present in the analysed target;
   - `not-in-target`: declared on disk but absent from the target;
   - `not-analysed`: the analysis cannot tell, for example a plugin with no modules.
-- `source` is a root name plus a path relative to it; the absolute root lives only in the workspace. A file is an
-  attribute, never a node.
+- `source` is a root name plus a path relative to it; the absolute root lives only in the workspace. Files are
+  attributes of canonical declarations, not canonical ownership nodes. The viewer can derive source-file regions.
 
 ## Edges and statuses
 
@@ -74,7 +74,34 @@ exact canonical reference pages for inspection. Containment and directed referen
 independent: a group contains descendants but does not acquire their declared dependencies. Opening a group changes
 only the visible projection, not graph facts or the surrounding arrangement.
 
-Each reference endpoint maps to its first collapsed ancestor, or to itself when all its ancestors are expanded.
+Semantic detail maps an endpoint to its first collapsed ancestor, or to itself when all its ancestors are expanded.
+When a profile supplies source-organization hints, the disposable map index records authored file membership and
+reference call-site/target-declaration files. A coarse file frontier uses that recorded provenance; a visible semantic
+type or callable retains its own endpoint. Build declarations keep their structural endpoints. Each reference still
+belongs to one projected connection/internal/beyond/filtered count, including when one method has call sites in several files.
+File reference totals describe recorded file provenance, while type/callable totals describe semantic containment.
+Missing file provenance falls back to the recorded semantic representative, without guessing an include dependency.
+
+Semantic scopes spanning files remain intact; only uniformly observed files wrap an entire scope.
+Public headers form preferred file entry points. Implementation regions are organizational backgrounds, always open
+inside an open enclosing scope, and never wire endpoints. Concrete private headers, implementation files and actual
+source folders remain individually explorable. Source visibility and C++ access remain separate; restricted members
+have a subdued glyph and their recorded access in inspection. Enums, individual fields and statements retain the
+profile's explicit coverage limits.
+
+Declaration and implementation files provide alternative navigation routes to one symbol. File inspection lists
+bounded batches of recorded declarations/definitions and focuses the existing symbol in its semantic owner. It never
+creates a second method or moves a shared helper under a public header. File boxes are presentation representatives,
+not canonical C++ owners; their synthetic IDs never enter the pin store. Older maps without file provenance keep
+their recorded semantic grouping and expose coverage through existing inspection.
+Navigation-only files without contained symbols have no independent drag position; their definition links reach
+the existing, arrangeable symbols. Files containing real symbols retain subtree dragging through those canonical pins.
+Wheel zoom on a navigation-only file follows a single recorded definition, or its common type when all definitions
+belong to that type. Ambiguous multi-owner files retain their named definition links; no owner is inferred from callers.
+
+A reference directly owned by an expanded container meets its named top boundary, rather than an unmarked point
+inside its background. Descendant references meet their own visible representatives. The boundary endpoint and pointer
+geometry use the same rendered path; expansion neither duplicates references nor assigns container dependencies to a child.
 A projected reference retains reference groups whose complete original ids remain accessible through paging. Projected references of different
 families or directions remain separate. A reference with both endpoints hidden within one group contributes to
 that group's internal-reference count and remains available in its exact-reference list. Explicit self-references
@@ -83,9 +110,10 @@ visible connection, internal-reference count, or explicit count beyond the viewp
 Parallel exact references also share one connection, with every original call site retained in its reference list.
 
 A profile can classify an owner-local reference as internal to its normalized owner, including references whose endpoints
-collapse through abstraction. Such references contribute to internal counts even when the owner
-is visible or expanded; exact reference pages retain their status, location and classification. Authored recursion
-remains an explicit loop. Compact groups keep internal and explicit references separate. The schema validates
+collapse through abstraction. When both displayed endpoints represent that owner, these references contribute to
+internal counts even when the owner is expanded. A file frontier can expose their recorded cross-file relationship;
+it does not assert a class self-dependency. Exact reference pages retain status, location and classification. Authored
+recursion remains an explicit loop at function detail. Compact groups keep internal and explicit references separate. The schema validates
 the classification, including its identical-endpoint constraint. Unmarked older runs retain their original meaning;
 the viewer never guesses from names, levels, implicit-reference flags or generated-code spellings.
 
@@ -152,6 +180,63 @@ Exact-reference navigation retains its original identity. Hiding an inspected it
 of highlighting a different ancestor. Hover and wheel exploration do not require an inspected item.
 Node inspection keeps identity, source and analysis state visible; secondary metadata has a separate disclosure so
 references and navigation remain reachable. Constellation controls track expansion without resetting the reference reader.
+
+Profiles may annotate source partitions and owners that expose source sections. The viewer folds marked implementation
+branches into derived source regions, with their recorded subfolders inside. Public or unclassified branches stay
+visible. Shared semantic scopes retain their identity; their private branches can fold without assigning the scope to
+one public type. Regions use rounded boxes and inspection identifies them as source organization; dashed status
+continues to mean outside the analysed target.
+
+A recorded header location adds a file constellation between an existing owner and its declarations. Several types
+in one header fold together; class members remain inside their class, including definitions located in implementation
+files. Header links open the recorded file. Include and forward-reference relationships do not acquire ownership.
+File regions use owner-scoped root/path identities, so equal basenames remain distinct and a header shared by semantic
+owners can appear in each relevant scope without duplicating any symbol. A uniformly attributed scope can fold with
+its common header; its contents do not repeat that file wrapper. A namespace spanning headers keeps its identity and
+exposes header regions within its scope. Missing file annotations preserve the existing source-region presentation.
+`sections.js` derives the display tree without mutating canonical nodes, parents or edges. Canonical ownership remains
+the source of declaration context; the augmented paths add only display regions. Reference projection and incident
+indexes include these regions, while exact paging queries existing canonical reference groups. No duplicate symbol
+or additional authoritative graph is published. Bookmarks keep canonical scope addresses; browser scene state retains
+region expansion and navigation. Older runs without the optional annotations retain their original presentation.
+
+File catalogs expose named, always-open interface and implementation sections from their recorded partitions. Automatic
+placement gives each section a separate band and packs its files across the available width. The section is organization,
+not a dependency endpoint; references still resolve to concrete files or revealed C++ entities. Recorded partition labels
+remain authoritative: a source region is not proof that a declaration is an abstract interface.
+Sibling file captions may omit a long common identifier prefix at a word boundary. Full filenames, source paths and
+reference identities remain available in hover and inspection; the shortened caption is presentation only.
+Zooming in over a visible file glyph or its name enters its next recorded layer directly. Revealed code groups within
+the active detail scope follow the same rule, without the world-radius threshold used for broader constellations.
+Empty files with no unambiguous navigation target do not
+invent internals. Mixed-file namespaces retain their canonical scope and their namespace type icon beside file boxes.
+Implementation styling also follows a semantic entity's recorded source partition; its shape still identifies code,
+independently of the source-file box and of C++ member access.
+The active expanded navigation scope remains admitted while its camera fits spread-out saved children. Viewport detail
+must not immediately fold the scope the operator just entered because its original automatic radius is smaller.
+
+Regions have no saved IDs. Dragging one persists only its real descendant pins. Its center is derived from those pins
+when every direct branch has a saved anchor; partial pins never reposition automatic neighbours. Existing canonical
+pins remain authoritative in every layout mode. Source grouping neither edits nor migrates the layout store.
+The scoped Arrange files action explicitly confirms replacing the current source owner's contained positions. It leaves
+the owner anchor, other scopes, other layout modes and unavailable pins unchanged, and saves only canonical descendants.
+Cancel leaves both the displayed arrangement and saved positions unchanged. Save failures use the existing unsaved-position
+status and retry behavior.
+
+Recorded declaration kind, qualified owner, signature and source context appear in hover and primary inspection;
+access/properties and observed-member coverage appear when supplied by the profile. Names remain the canvas captions.
+An owner with no indexed children is not necessarily an empty source declaration. Missing context is left unknown;
+the Unreal profile owns [compiler metadata and its limits](unreal-profile.md#native-symbol-analysis).
+Inheritance/override hover counts come from the current projected reference groups, respect filters and direction,
+and count references rather than distinct base types. Exact declaration names remain in existing reference pages;
+hover neither fetches those pages nor creates a second relationship-summary store.
+
+Global search matches recorded labels, qualified names, signatures and source-file paths. It presents at most eight ranked choices with
+owner/signature/source context and discloses additional matches so a short ambiguous name does not silently choose an
+unqualified result. Arrow keys choose a result and Enter inspects it. Search uses the existing in-memory nodes.
+Deep scope breadcrumbs keep the immediate parent/current scope visible and place earlier ancestors in a bounded
+disclosure with ordinary navigation links. Long names truncate in the header while full names remain available there
+and through hover/inspection. Neither search nor breadcrumb navigation changes canonical ownership or saved positions.
 
 External-provider hover includes recorded ownership/coverage and a bounded breakdown of the currently shown reference
 types. Inspection lists the original consumers and labels target declarations separately from their referring locations.
@@ -221,10 +306,27 @@ context; distant detail leaves Cytoscape rather than accumulating across flights
 does not pull all its references into a deep view. Exact-reference navigation keeps its endpoints represented.
 Remote context endpoints do not recursively load their unrelated neighbours; approaching them reveals their own references.
 Spatial and visual container bounds include all descendants, including manually moved pins outside the automatic layout.
+An unrelated visible star inside an expanded enclosure gains an explicit owner caption and a neutral context outline.
+This identifies an overlap in the saved arrangement without changing containment or silently moving a user's pins.
+Wide-scope framing reserves room for names; bounded middle ellipses retain distinguishing
+suffixes when full captions collide. Deep camera reach derives from recorded group sizes rather than a fixed historical
+zoom ceiling. These are derived geometry and camera decisions, not graph facts or layout-store migrations.
 
 Containment remains in Universe. Expanded backgrounds are independent renderer shapes, avoiding native compound-node
 style propagation and preserving their world geometry when children leave the viewport. Dragging a background pans;
 dragging its visible label moves the constellation. Ordinary stars and their visible labels remain draggable.
+Node icons identify recorded kinds independently of grouping, access, external status and reference direction. Component
+blocks identify modules; puzzle pieces identify plugins; scope brackets with colons identify namespaces; C/S/U identify
+classes, structs and unions; callable, lambda and field glyphs distinguish code details. Files use document glyphs,
+folders use folder glyphs, and source sections use stacked layers. Unrecognized kinds retain a generic entity icon.
+These are Laniakea's programming conventions, not a claim of UML conformance. The keyboard-accessible Type icons key
+provides the complete vocabulary. Names, kinds and coverage remain available through inspection and the accessible list.
+
+Local vector backgrounds decorate existing native nodes without additional elements, external assets or pointer targets.
+At readable detail they sit inside markers; expanded containers retain the same icon beside the title. Distant overview
+markers omit unreadable icons. Title collision bounds reserve icon space while text hit boxes retain native text bounds.
+Icon geometry changes in the same renderer-unit batch as fonts and markers. A bounded kind/color image cache and weak
+native-node geometry caches release presentation data without retaining a previous graph or changing saved pins.
 Backgrounds occupy the native bottom layer so they cannot intercept stars during hover transitions. Canvas labels reserve
 space for names; secondary metadata belongs to hover and inspection. A bounded name/ellipsis fallback precedes hiding a label;
 the full name remains available through hover, search, inspection and the accessible list. Actual renderer metrics

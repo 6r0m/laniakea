@@ -22,6 +22,10 @@ class Range(c.Structure):
     _fields_ = [("data", P * 2), ("begin", U), ("end", U)]
 
 
+class Type(c.Structure):
+    _fields_ = [("kind", I), ("data", P * 2)]
+
+
 class Entity(c.Structure):
     _fields_ = [("kind", I), ("template", I), ("language", I), ("name", S), ("usr", S),
                 ("cursor", Cursor), ("attributes", P), ("num_attributes", U)]
@@ -80,6 +84,14 @@ class Library:
         self._bind("getCursorDisplayName", String, [Cursor])
         self._bind("getCursorLocation", Location, [Cursor])
         self._bind("getCursorSemanticParent", Cursor, [Cursor])
+        self._bind("getCursorLexicalParent", Cursor, [Cursor])
+        self._bind("getCursorType", Type, [Cursor])
+        self._bind("getCursorResultType", Type, [Cursor])
+        self._bind("getTypeDeclaration", Cursor, [Type])
+        self._bind("getTypeSpelling", String, [Type])
+        self._bind("getCXXAccessSpecifier", U, [Cursor])
+        for name in ("CXXMethod_isStatic", "CXXMethod_isVirtual", "CXXMethod_isConst"):
+            self._bind(name, U, [Cursor])
         self._bind("getCursorDefinition", Cursor, [Cursor])
         self._bind("Cursor_getVarDeclInitializer", Cursor, [Cursor])
         self._bind("getCursorExtent", Range, [Cursor])

@@ -2,6 +2,7 @@
 """Native semantic regressions on synthetic sources, never an analysed project's data."""
 
 import json
+import gzip
 import os
 import tempfile
 import unittest
@@ -15,6 +16,79 @@ from laniakea.unreal import compiler, graph, native_index, symbols, ubt
 
 
 class CompilerBoundary(unittest.TestCase):
+    def test_unrendered_members_keep_the_nearest_recorded_code_owner(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);directory=root/'Source/Sample';engine=root/'engine'
+            project=root/'Sample.uproject';project.write_text('{"Modules":[{"Name":"Sample"}]}')
+            exported={'Modules':{'Sample':{'Directory':str(directory),'Rules':str(directory/'Sample.Build.cs')}}}
+            built,_=graph.build(project,engine,exported)
+            def fact(usr,level,parent=None,file=None):
+                return {'usr':usr,'name':usr,'level':level,'parent':parent,'scope':'','signature':usr,
+                        'file':str(file or directory/'Sample.h'),'line':2,'column':1,'definition':True}
+            facts=[fact('Class','class'),fact('Method','function','Class'),fact('Peer','class'),
+                   fact('Field','member','Class'),fact('Local','other','Method'),
+                   fact('Generated','function','Class',engine/'Macros.h'),
+                   fact('GeneratedPeer','function','Peer',engine/'Macros.h'),
+                   fact('Unowned','function',file=root/'Intermediate/Generated.h')]
+            refs=[{'source':source,'target':target,'role':4,'file':str(directory/'Sample.cpp'),
+                   'line':n+10,'column':1,'implicit':False,'call_confirmed':False}
+                  for n,(source,target) in enumerate([('Field','Peer'),('Local','Peer'),('Generated','Peer'),
+                       ('Peer','Field'),('Peer','Generated'),('Unowned','Peer')])]
+            batch={'symbols':facts,'references':refs,'relations':[{'source':'Generated','target':'GeneratedPeer','type':'overrides'}],
+                   'diagnostics':[]}
+            result,unknown=symbols.merge(built,[batch],project,root,engine,exported,
+                                         {str(root/'Intermediate'):'Sample'})
+            uses=[e for e in result['edges'] if e['type']!='overrides']
+            self.assertEqual([(e['source'],e['target']) for e in uses],[
+                (symbols.node_id(a) if a!='module:Sample' else a,symbols.node_id(b))
+                for a,b in [('Class','Peer'),('Method','Peer'),('Class','Peer'),('Peer','Class'),('Peer','Class'),
+                            ('module:Sample','Peer')]])
+            relation=next(e for e in result['edges'] if e['type']=='overrides')
+            self.assertEqual((relation['source'],relation['target']),(symbols.node_id('Class'),symbols.node_id('Peer')))
+            self.assertEqual(unknown,{'source':0,'target':0})
+            self.assertEqual(len(uses),len(refs),'normalization must retain every distinct call site')
+            self.assertTrue(all(e['attrs']['target_declaration']['id'] for e in result['edges']))
+
+            # Separate macro bodies can share one expansion location and the same displayed owner.
+            batch['symbols'].append(fact('GeneratedSecond','function','Class',engine/'Macros.h'))
+            first={**refs[2],'call_confirmed':True}
+            second={**first,'source':'GeneratedSecond'}
+            batch['references']=[first,second,first]
+            result,_=symbols.merge(built,[batch],project,root,engine,exported)
+            calls=[e for e in result['edges'] if e['type']=='calls']
+            self.assertEqual(len(calls),2,'distinct source declarations must not deduplicate after owner collapse')
+
+    def test_batch_consumers_can_reject_a_run_without_an_open_file_blocking_rename(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            run=Path(temporary)/'run.partial';run.mkdir()
+            with gzip.open(run/'job-0000.json.gz','wt',encoding='utf8') as stream:
+                json.dump({'diagnostics':[]},stream)
+            batches=compiler.batches(run,1)
+            try:
+                self.assertEqual(next(batches),{'diagnostics':[]})
+                run.rename(run.with_name('run.failed'))
+            finally:
+                batches.close()
+
+    def test_exact_target_declaration_keeps_its_own_column(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary)
+            directory=root/'Source/Sample'
+            project=root/'Sample.uproject'
+            project.write_text('{"Modules":[{"Name":"Sample"}]}')
+            exported={'Modules':{'Sample':{'Directory':str(directory),'Rules':str(directory/'Sample.Build.cs')}}}
+            built,_=graph.build(project,root/'engine',exported)
+            fact={'usr':'record','name':'Record','level':'class','signature':'Record','parent':None,
+                  'scope':'','file':str(directory/'Record.cpp'),'line':5,'column':3,'definition':True,
+                  'declaration':{'file':str(directory/'Record.h'),'line':2,'column':17}}
+            ref={'source':'record','target':'record','role':4,'file':fact['file'],'line':6,
+                 'column':9,'implicit':False,'call_confirmed':False}
+            batch={'symbols':[fact],'references':[ref],'relations':[],'diagnostics':[]}
+            result,_=symbols.merge(built,[batch],project,root,root/'engine',exported)
+            target=result['edges'][0]['attrs']['target_declaration']
+            self.assertEqual(target['location']['path'],'Source/Sample/Record.h')
+            self.assertEqual((target['location']['line'],target['column']),(2,17))
+
     def test_generated_references_keep_native_module_ownership_without_generated_stars(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -73,6 +147,9 @@ class CompilerBoundary(unittest.TestCase):
             wrong = {**second,"symbols":[{**ctor,"level":"class"}]}
             with self.assertRaisesRegex(LaniakeaError,"identity collision"):
                 symbols.merge(built,[first,wrong],project,root,root / "engine",exported)
+            conflicting={**second,'symbols':[{**ctor,'parent':None}]}
+            with self.assertRaisesRegex(LaniakeaError,'containment collision.*SampleBox'):
+                symbols.merge(built,[first,conflicting],project,root,root/'engine',exported)
 
     def test_worker_timeout_and_nonzero_exit_are_failures(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -174,6 +251,135 @@ class NativeSymbols(unittest.TestCase):
         self.assertEqual(len(calls),1)
         self.assertEqual((calls[0]['source'],calls[0]['target']),(node['id'],node['id']))
         self.assertFalse(calls[0].get('internal_to_owner',False))
+
+    def test_macro_spelling_and_unrendered_fields_follow_semantic_class_ownership(self):
+        (self.core/'Macros.h').write_text('#define SAMPLE_BODY int Generated(){return SampleEngineCall();}\n')
+        self.source.write_text('#include "CoreType.h"\n#include "Macros.h"\n'
+            'struct SampleRecord {SAMPLE_BODY SampleEngineBase Field;};\n'
+            'int Read(SampleRecord& r){return r.Field.Run()+r.Generated();}\n')
+        batch=self.index();built=self.normalize([batch]);nodes={n['label']:n for n in built['nodes']}
+        record=nodes['SampleRecord']['id'];read=nodes['Read']['id']
+        self.assertNotIn('Generated',nodes,'Engine-spelled helpers stay abstracted, not new authored stars')
+        self.assertTrue(any(e['source']==record and e['attrs'].get('symbol','').startswith('SampleEngineCall')
+                            for e in built['edges']))
+        self.assertTrue(any(e['source']==read and e['target']==record for e in built['edges']))
+        self.assertFalse(any(e['source']=='module:Sample' for e in built['edges'] if e['origin']=='compiler'))
+
+    def test_namespace_owners_follow_modules_reopenings_and_nested_types(self):
+        self.source.write_text('namespace Sample {int First(){return 1;}}\n'
+            'namespace Sample {namespace Detail {struct Record {int Read(){return 1;}};}\n'
+            'int Second(){return First();}}\n')
+        other=self.other/'Other.cpp';other.write_text('namespace Sample {int Third(){return 3;}}\n')
+        batches=[self.index(),self.index(other)]
+        built=self.normalize(batches);nodes={n['id']:n for n in built['nodes']}
+        scopes=[n for n in built['nodes'] if n['level']=='namespace' and n['label']=='Sample']
+        self.assertEqual({n['parent'] for n in scopes},{'module:Sample','module:SampleUtility'})
+        first=next(n for n in built['nodes'] if n['label']=='First')
+        second=next(n for n in built['nodes'] if n['label']=='Second')
+        self.assertEqual(first['parent'],second['parent'])
+        record=next(n for n in built['nodes'] if n['label']=='Record')
+        read=next(n for n in built['nodes'] if n['label']=='Read')
+        self.assertEqual(nodes[record['parent']]['label'],'Detail')
+        self.assertEqual(read['parent'],record['id'])
+        original_ids={symbols.node_id(s['usr']) for batch in batches for s in batch['symbols']
+                      if s['level'] in {'class','function'}}
+        self.assertTrue(original_ids<={n['id'] for n in built['nodes']})
+        reversed_run=self.normalize(list(reversed(batches)))
+        self.assertEqual({n['id']:n['parent'] for n in built['nodes']},
+                         {n['id']:n['parent'] for n in reversed_run['nodes']})
+
+    def test_anonymous_namespaces_keep_source_context_through_shared_headers_and_unity(self):
+        header=self.directory/'Shared.h'
+        header.write_text('#pragma once\nnamespace {inline int HeaderLocal(){return 1;}}\n')
+        sources=[]
+        for sub,name in [('one','FirstLocal'),('two','SecondLocal')]:
+            source=self.directory/sub/'Unit.cpp';source.parent.mkdir();sources.append(source)
+            source.write_text('#include "Shared.h"\nnamespace {int '+name+'(){return HeaderLocal();}}\n')
+        separate=self.normalize([self.index(source) for source in sources])
+        unity=self.directory/'Unity.cpp';unity.write_text('#include "one/Unit.cpp"\n#include "two/Unit.cpp"\n')
+        together=self.normalize([self.index(unity)])
+        for built in (separate,together):
+            nodes={n['id']:n for n in built['nodes']}
+            local=[n for n in built['nodes'] if n['label'] in {'HeaderLocal','FirstLocal','SecondLocal'}]
+            self.assertEqual(len(local),3)
+            self.assertEqual(len({n['parent'] for n in local}),3)
+            self.assertTrue(all(nodes[n['parent']]['level']=='namespace' for n in local))
+        self.assertEqual({n['id']:n['parent'] for n in separate['nodes']},
+                         {n['id']:n['parent'] for n in together['nodes']})
+
+    def test_unindexed_alias_helpers_do_not_collide_across_anonymous_scopes(self):
+        sources=[]
+        for sub,name in [('one','First'),('two','Second')]:
+            source=self.directory/sub/'Unit.cpp';source.parent.mkdir();sources.append(source)
+            source.write_text('#include "CoreType.h"\nnamespace {using E=SampleEngineBase;struct '+name+'Type:E {};E '+name+'(){return E{};}}\n')
+        batches=[self.index(source) for source in sources]
+        aliases=[fact for batch in batches for fact in batch['symbols'] if fact['name']=='E']
+        self.assertEqual(len(aliases),2)
+        self.assertEqual(aliases[0]['usr'],aliases[1]['usr'])
+        self.assertNotEqual(aliases[0]['parent'],aliases[1]['parent'])
+        built=self.normalize(batches)
+        self.assertEqual({n['label'] for n in built['nodes'] if n['level']=='function'},{'First','Second'})
+        self.assertFalse(any(n['label']=='E' for n in built['nodes']))
+        self.assertTrue(any(e['type']=='uses.type' for e in built['edges']))
+        self.assertEqual(len([e for e in built['edges'] if e['type']=='inherits']),2)
+
+    def test_shared_namespace_alias_endpoints_follow_their_declaring_module(self):
+        self.source.write_text('#include "CoreType.h"\nnamespace Sample {using E=SampleEngineBase;struct FirstType:E {};}\n')
+        other=self.other/'Other.cpp'
+        other.write_text('#include "CoreType.h"\nnamespace Sample {using E=SampleEngineBase;struct SecondType:E {};}\n')
+        batches=[self.index(),self.index(other)]
+        expected={'FirstType':'module:Sample','SecondType':'module:SampleUtility'}
+        for order in (batches,list(reversed(batches))):
+            built=self.normalize(order);nodes={n['id']:n for n in built['nodes']}
+            self.assertEqual({nodes[e['source']]['label']:e['target'] for e in built['edges'] if e['type']=='inherits'},expected)
+
+    def test_declaration_context_retains_access_fields_sources_and_macro_evidence(self):
+        header=self.directory/'Context.h'
+        header.write_text('namespace Sample {\nstruct Base {virtual int Read() const;};\n'
+            'class Record:public Base {public:static int Get();int Read() const override;\n'
+            'private:Record();int Stored;};\nstruct Data {int Value;};\n}\n')
+        self.source.write_text('#include "Context.h"\nnamespace Sample {\n'
+            'int Record::Get(){return 1;}\nint Record::Read() const{return Stored;}\nRecord::Record():Stored(0){}\n}\n'
+            '#define SAMPLE_RECORD(Name) struct Name {int Value;};\nSAMPLE_RECORD(MacroRecord)\n')
+        batch=self.index();built=self.normalize([batch,batch]);nodes={n['label']:n for n in built['nodes']}
+        self.assertEqual(nodes['Data']['attrs'].get('declaration_kind'),'struct')
+        self.assertEqual(nodes['Get']['attrs']['access'],'public')
+        self.assertTrue(nodes['Get']['attrs']['static'])
+        read=next(n for n in built['nodes'] if n.get('attrs',{}).get('qualified')=='Sample::Record::Read')
+        self.assertTrue(read['attrs']['const'] and read['attrs']['virtual'])
+        self.assertIn('int',read['attrs']['type_signature'])
+        ctor=next(n for n in built['nodes'] if n.get('attrs',{}).get('declaration_kind')=='constructor')
+        self.assertEqual(ctor['attrs']['access'],'private')
+        self.assertTrue(read['attrs']['declaration']['path'].endswith('Context.h'))
+        self.assertEqual(read['attrs']['declaration']['line'],3)
+        self.assertEqual(read['source']['path'],'Source/Sample/Calls.cpp')
+        record=next(n for n in built['nodes'] if n['label']=='Record' and n['level']=='class')
+        self.assertEqual(record['attrs']['member_counts'],{'fields':{'private':1},'callables':{'public':2,'private':1}})
+        self.assertEqual(nodes['Data']['attrs']['member_counts']['fields'],{'public':1})
+        self.assertEqual(nodes['MacroRecord']['attrs']['declaration_origin'],'macro expansion')
+        self.assertEqual(nodes['Data']['attrs']['declaration_origin'],'unknown')
+        self.assertEqual(len([n for n in built['nodes'] if n['label']=='Value']),0)
+
+    def test_lambda_names_keep_compiler_ids_and_nested_callable_ownership(self):
+        self.source.write_text('namespace Sample {int Target(){return 1;}\n'
+            'int Host(){auto work=[](){auto nested=[](){return Target();};return nested();};return work();}}\n')
+        batch=self.index();built=self.normalize([batch]);nodes={n['id']:n for n in built['nodes']}
+        closures=[n for n in built['nodes'] if n.get('attrs',{}).get('declaration_kind')=='lambda']
+        self.assertEqual(len(closures),2)
+        self.assertEqual({n['label'] for n in closures},{'lambda work','lambda nested'})
+        self.assertTrue(all('lambda at' not in n['label'] and str(self.root) not in n['attrs']['qualified'] for n in closures))
+        nested=next(n for n in closures if n['label']=='lambda nested')
+        self.assertEqual(nodes[nested['parent']]['label'],'operator()')
+        self.assertEqual(nodes[nodes[nested['parent']]['parent']]['label'],'lambda work')
+        expected={symbols.node_id(s['usr']) for s in batch['symbols'] if s['level'] in {'class','function'}}
+        self.assertTrue(expected<=nodes.keys())
+
+    def test_lambda_return_signatures_do_not_expose_compiler_copy_paths(self):
+        self.source.write_text('auto Make(){return [](){return 1;};}\nint Call(){return Make()();}\n')
+        built=self.normalize([self.index()])
+        make=next(n for n in built['nodes'] if n['label']=='Make')
+        self.assertNotIn(str(self.root),make['attrs']['type_signature'])
+        self.assertTrue(any(n.get('attrs',{}).get('declaration_kind')=='lambda' for n in built['nodes']))
 
     def test_external_bases_and_call_target_keep_native_declaration_coordinates(self):
         sdk = self.root / 'sdk'; sdk.mkdir()

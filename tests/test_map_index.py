@@ -13,6 +13,43 @@ from laniakea.workspace import Workspace, read_json, write_json
 
 
 class MapIndex(unittest.TestCase):
+    def test_file_provenance_splits_compact_groups_without_splitting_symbols(self):
+        self.graph=read_json(Path(__file__).resolve().parent.parent/'fixtures/source-surface.graph.json')
+        before=json.dumps(self.graph);index=self.build();topology=index.topology();files=topology['files']
+        self.assertEqual(json.dumps(self.graph),before)
+        calls=[r for r in topology['references'] if r['type']=='calls']
+        self.assertEqual(len(calls),2,'call sites in different files must remain separately pageable groups')
+        self.assertEqual({files[r['source_file']]['path'] for r in calls},
+                         {'Source/Sample/Private/Producer.cpp','Source/Sample/Private/Other.cpp'})
+        producer=next(f for f in files if f['path'].endswith('Producer.cpp'))
+        public=next(f for f in files if f['path'].endswith('Public/API.h'))
+        self.assertEqual(public['partition']['label'],'Public')
+        self.assertEqual(producer['definitions'],[3]);self.assertEqual(producer['partition']['id'],'private')
+        self.assertEqual(files[calls[0]['target_file']]['path'],'Source/Sample/Private/Helpers.cpp')
+        self.assertNotIn('source_file',next(r for r in topology['references'] if r['type']=='depends.private'))
+        self.assertEqual(sum(r['count'] for r in topology['references']),3)
+        for group,row in enumerate(topology['references'],1):
+            page=index.references({'groups':[group]})
+            self.assertEqual(page['total'],row['count'])
+            self.assertEqual(page['items'][0]['reference']['source'],'module' if row['type']=='depends.private' else 'method')
+
+        for key,value in [('owner',100),('definitions',[100])]:
+            broken=json.loads(json.dumps(topology));broken['files'][0][key]=value
+            with self.assertRaisesRegex(LaniakeaError,'membership'):schema.validate(broken,'map')
+        broken=json.loads(json.dumps(topology));broken['references'][0]['source_file']=-1
+        with self.assertRaisesRegex(LaniakeaError,'file index'):schema.validate(broken,'map')
+
+    def test_generated_declaration_falls_back_to_authored_file_without_inventing_build_file_targets(self):
+        self.graph=read_json(Path(__file__).resolve().parent.parent/'fixtures/source-surface.graph.json')
+        self.graph['nodes'][2]['attrs']['declaration']={'root':'project','path':'Intermediate/API.generated.h','line':1}
+        self.graph['edges'][0]['target']='module'
+        self.graph['edges'][0]['attrs']['target_declaration']['location']={'root':'project','path':'Intermediate/Generated.h','line':1}
+        topology=self.build().topology()
+        api=next(f for f in topology['files'] if f['path'].endswith('Public/API.h'))
+        self.assertIn(2,api['declarations'])
+        self.assertFalse(any(f['path'].endswith('.Build.cs') for f in topology['files']))
+        self.assertNotIn('target_file',topology['references'][0])
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)

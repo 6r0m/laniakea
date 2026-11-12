@@ -17,6 +17,7 @@
       "properties": {
         "schema": {"const": "laniakea.map/1"},
         "nodes": {"type": "array", "items": {"$ref": "#/$defs/node"}},
+        "files": {"type": "array", "items": {"$ref": "#/$defs/sourceFile"}},
         "references": {"type": "array", "items": {"$ref": "#/$defs/referenceGroup"}}
       }
     },
@@ -25,7 +26,14 @@
       "description": "One endpoint/type/internal-classification group. Source and target index map.nodes; its page-query group id is its array index plus one.",
       "properties": {"source": {"type": "integer"}, "target": {"type": "integer"},
                      "type": {"type": "string"}, "count": {"type": "integer"},
+                     "source_file": {"type": "integer"}, "target_file": {"type": "integer"},
                      "internal_to_owner": {"type": "boolean", "description": "An owner-local reference, not an explicit self-relationship."}}
+    },
+    "sourceFile": {
+      "type": "object", "required": ["owner", "root", "path", "declarations", "definitions"], "additionalProperties": false,
+      "properties": {"owner": {"type": "integer"}, "root": {"type": "string"}, "path": {"type": "string"},
+        "declarations": {"type": "array", "items": {"type": "integer"}},
+        "definitions": {"type": "array", "items": {"type": "integer"}}, "partition": {"type": "object"}}
     },
     "referencePage": {
       "type": "object", "required": ["items", "total", "next_cursor"], "additionalProperties": false,

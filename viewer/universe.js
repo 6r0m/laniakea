@@ -2,6 +2,7 @@
 // Canonical containment and references stay independent of the visible, folded map.
 'use strict';
 const SpatialIndex = typeof Flatbush !== 'undefined' ? Flatbush : require('./vendor/flatbush.js');
+const Sections = typeof SourceSections !== 'undefined' ? SourceSections : require('./sections.js').SourceSections;
 
 function referenceCount(edge) { return edge.count === undefined ? 1 : edge.count; }
 function referenceTotal(edges) { return edges.reduce((sum,edge)=>sum+referenceCount(edge),0); }
@@ -11,13 +12,17 @@ class Universe {
     this.paged = graph.schema === 'laniakea.map/1';
     if (this.paged) {
       const nodes = graph.nodes;
-      graph = {schema:'laniakea.graph/1',nodes,edges:graph.references.map((row,index)=>{
+      const files=graph.files||[];
+      graph = {schema:'laniakea.graph/1',nodes,files,edges:graph.references.map((row,index)=>{
         if (!Number.isInteger(row.source) || !Number.isInteger(row.target) || row.source<0 || row.target<0 ||
           !nodes[row.source] || !nodes[row.target] || !Number.isSafeInteger(row.count) || row.count<1 || typeof row.type!=='string') {
           throw new Error('Invalid map reference group');
         }
+        for(const end of ['source','target'])if(row[end+'_file']!==undefined&&
+          (!Number.isInteger(row[end+'_file'])||row[end+'_file']<0||!files[row[end+'_file']]))throw Error('Invalid reference file');
         return {id:'group:'+(index+1),group:index+1,source:nodes[row.source].id,target:nodes[row.target].id,
           type:row.type,count:row.count,status:'derived',origin:'rollup',
+          sourceFile:row.source_file,targetFile:row.target_file,
           ...(row.internal_to_owner !== undefined ? {internal_to_owner:row.internal_to_owner} : {})};
       })};
     }
@@ -60,14 +65,20 @@ class Universe {
       }
       this.paths.set(n.id, path.reverse());
     }
+    const sections=Sections.build(graph);
+    this.canonicalPaths=this.paths;
+    Object.assign(this,{nodes:sections.nodes,children:sections.children,paths:sections.paths,viewParents:sections.parents});
+    this.fileIds=sections.fileIds;
+    this.regions=new Set([...this.nodes.values()].filter(n=>n.attrs?.source_region).map(n=>n.id));
+    this.viewNodes=[...this.nodes.values()];
     const edgeIds = new Set();
     this.typeCounts = new Map();
-    this.referenceStats = new Map(graph.nodes.map(n=>[n.id,{outgoing:0,incoming:0,within:0}]));
-    this.configurationStats = new Map(graph.nodes.map(n=>[n.id,{outgoing:0,incoming:0,within:0}]));
+    this.referenceStats = new Map(this.viewNodes.map(n=>[n.id,{outgoing:0,incoming:0,within:0}]));
+    this.configurationStats = new Map(this.viewNodes.map(n=>[n.id,{outgoing:0,incoming:0,within:0}]));
     this.configurationReferences = [];
     this.configurationTargets = new Set();
-    this.directReferences = new Map(graph.nodes.map(n=>[n.id,[]]));
-    this.referenceIndex = new Map(graph.nodes.map(n => [n.id, []]));
+    this.directReferences = new Map(this.viewNodes.map(n=>[n.id,[]]));
+    this.referenceIndex = new Map(this.viewNodes.map(n => [n.id, []]));
     for (const e of graph.edges) {
       if (!this.nodes.has(e.source) || !this.nodes.has(e.target)) throw new Error('Unknown reference endpoint');
       if (e.internal_to_owner !== undefined && (typeof e.internal_to_owner!=='boolean' || e.internal_to_owner && e.source!==e.target)) {
@@ -75,7 +86,7 @@ class Universe {
       }
       if (edgeIds.has(e.id)) throw new Error('Duplicate reference id');
       edgeIds.add(e.id);
-      const count = referenceCount(e), targetPath = this.paths.get(e.target);
+      const count = referenceCount(e), targetPath = this.referencePath(e,'target');
       const configuration = this.isConfiguration(e);
       if (configuration) {
         this.configurationCount += count;
@@ -84,7 +95,7 @@ class Universe {
       }
       this.typeCounts.set(e.type, (this.typeCounts.get(e.type) || 0) + count);
       for (const id of new Set([e.source,e.target])) this.directReferences.get(id).push(e);
-      const sourcePath = this.paths.get(e.source);
+      const sourcePath = this.referencePath(e,'source');
       for (const id of sourcePath) {
         this.referenceIndex.get(id).push(e);
         const direction=targetPath.includes(id)?'within':'outgoing';
@@ -103,17 +114,44 @@ class Universe {
     this.renderPrefix = 'edge:';
     while ([...this.nodes.keys()].some(id => id.startsWith(this.renderPrefix))) this.renderPrefix = '@' + this.renderPrefix;
     this.expanded = new Set([this.root]);
-    this.containmentOrder=graph.nodes.slice().sort((a,b)=>this.paths.get(a.id).length-this.paths.get(b.id).length);
+    this.containmentOrder=this.viewNodes.slice().sort((a,b)=>this.paths.get(a.id).length-this.paths.get(b.id).length);
     this.filteredTotals = new Map();
   }
 
   childIds(id) { return this.children.get(id) || []; }
   isGroup(id) { return this.childIds(id).length > 0; }
+  definitionTarget(id){
+    const ids=this.nodes.get(id)?.attrs?.source_definitions||[];
+    if(this.isGroup(id)||!ids.length)return null;
+    if(ids.length===1)return ids[0];
+    const parent=this.nodes.get(ids[0]).parent;
+    return parent!==this.root&&!this.nodes.get(parent)?.attrs?.source_sections&&
+      ids.every(id=>this.nodes.get(id).parent===parent)?parent:null;
+  }
   contains(parent, id) { return this.paths.get(id).includes(parent); }
+
+  referencePath(edge,end){
+    const path=this.paths.get(edge[end]),file=this.fileIds[edge[end+'File']];
+    if(!file)return path;
+    return [...new Set([...path.filter(id=>!this.nodes.get(id).attrs?.presentation_group),...this.paths.get(file)])];
+  }
+
+  referenceInside(id,edge,end){
+    const file=this.fileIds[edge[end+'File']];
+    return this.nodes.get(id)?.attrs?.presentation_group&&file?this.contains(id,file):this.contains(id,edge[end]);
+  }
+
+  endpoint(edge,end,expanded){
+    const base=this.representative(edge[end],expanded),file=this.fileIds[edge[end+'File']];
+    if(!file)return base;
+    const owner=this.nodes.get(file).attrs.source_owner;
+    if(!this.nodes.get(base).attrs?.presentation_group&&base!==owner&&this.canonicalPaths.get(base)?.includes(owner))return base;
+    return this.representative(file,expanded);
+  }
 
   representative(id, expanded = this.expanded) {
     const path = this.paths.get(id);
-    return path.find(a => a !== id && !expanded.has(a)) || id;
+    return path.find(a => a !== id && !this.regions.has(a) && !expanded.has(a)) || id;
   }
 
   reveal(id) {
@@ -131,10 +169,10 @@ class Universe {
     const endpoints = new Set(camera.force || []),forced = new Set(endpoints);
     for (const id of [...forced]) for (const parent of this.paths.get(id) || []) forced.add(parent);
     const near = new Set(this.spatial.search(camera.x1,camera.y1,camera.x2,camera.y2).map(i=>this.spatialIds[i]));
-    for (const id of [...this.expanded].sort((a,b)=>this.paths.get(a).length-this.paths.get(b).length)) {
+    for (const id of [...new Set([...this.expanded,...this.regions])].sort((a,b)=>this.paths.get(a).length-this.paths.get(b).length)) {
       const node=this.nodes.get(id);
-      if ((node.parent===null || expanded.has(node.parent)) &&
-        (forced.has(node.id) || near.has(node.id) && this.radii.get(node.id)*camera.zoom>90)) expanded.add(node.id);
+      if ((this.viewParents.get(node.id)===null || expanded.has(this.viewParents.get(node.id))) &&
+        (this.regions.has(id)||forced.has(node.id) || near.has(node.id) && this.radii.get(node.id)*camera.zoom>90)) expanded.add(node.id);
     }
     // Canonical input order is not a containment-order contract.
     for (const id of forced) if (this.expanded.has(id)) expanded.add(id);
@@ -154,11 +192,12 @@ class Universe {
   indexPositions() {
     this.spatialIds = [...this.positions.keys()];
     this.bounds=new Map(this.spatialIds.map(id=>{
-      const p=this.positions.get(id),r=this.isGroup(id)?this.radii.get(id):0;
-      return [id,{x1:p.x-r,y1:p.y-r,x2:p.x+r,y2:p.y+r}];
+      const p=this.positions.get(id),r=this.isGroup(id)||this.definitionTarget(id)?this.radii.get(id):0,area=this.areas?.get(id);
+      const rx=area?area.width/2:r,ry=area?area.height/2:r;
+      return [id,{x1:p.x-rx,y1:p.y-ry,x2:p.x+rx,y2:p.y+ry}];
     }));
     for(let i=this.containmentOrder.length-1;i>=0;i--){
-      const node=this.containmentOrder[i],parent=this.bounds.get(node.parent),box=this.bounds.get(node.id);
+      const node=this.containmentOrder[i],parent=this.bounds.get(this.viewParents.get(node.id)),box=this.bounds.get(node.id);
       if(parent){parent.x1=Math.min(parent.x1,box.x1);parent.y1=Math.min(parent.y1,box.y1);
         parent.x2=Math.max(parent.x2,box.x2);parent.y2=Math.max(parent.y2,box.y2);}
     }
@@ -173,7 +212,7 @@ class Universe {
   project(hiddenTypes = new Set(), boundary = true, camera = null) {
     const internal = new Map(), bundles = new Map(), edges = [];
     const cut = camera && this.spatial ? this.viewportCut(camera) : null;
-    const expanded = cut ? cut.expanded : this.expanded;
+    const expanded = cut ? cut.expanded : new Set([...this.expanded,...this.regions]);
     const shown = new Map(), representative = id => {
       if (!shown.has(id)) shown.set(id,this.representative(id,expanded));
       return shown.get(id);
@@ -191,7 +230,7 @@ class Universe {
     for (const edge of cut ? cut.references : this.graph.edges) {
       if (excluded(edge)) continue;
       represented+=referenceCount(edge);
-      const source = representative(edge.source), target = representative(edge.target);
+      const source = this.endpoint(edge,'source',expanded), target = this.endpoint(edge,'target',expanded);
       const exact = source === edge.source && target === edge.target;
       if (source === target && (!exact || edge.internal_to_owner)) {
         if (!internal.has(source)) internal.set(source, []);
@@ -218,7 +257,7 @@ class Universe {
     const endpoints = new Set(edges.flatMap(e => [e.source, e.target]));
     const admitted = cut && new Set([...cut.seeds,...endpoints,...internal.keys()]);
     if (admitted) for (const id of [...admitted]) for (const parent of this.paths.get(id)) if(expanded.has(parent)) admitted.add(parent);
-    const nodes = this.graph.nodes.filter(n => (boundary || !n.boundary) && (!admitted || admitted.has(n.id)) && representative(n.id) === n.id &&
+    const nodes = this.viewNodes.filter(n => (boundary || !n.boundary) && (!admitted || admitted.has(n.id)) && representative(n.id) === n.id &&
       (n.id !== this.root || !this.isGroup(n.id) || endpoints.has(n.id) || internal.has(n.id)));
     const total=[...this.typeCounts.values()].reduce((a,b)=>a+b,0);
     const visible=new Set(nodes.map(n=>n.id)),configurationMarks=new Map();
@@ -246,29 +285,57 @@ class Universe {
     });
     this.positions.set(this.root, { ...savedPoint(this.root) || topPositions && topPositions.get(this.root) ||
       { x: -radius * 1.1, y: -radius * 0.85 } });
-    const placeChildren = (id, r) => {
-      this.radii.set(id, r);
-      const children = this.childIds(id), p = this.positions.get(id);
-      const columns = Math.ceil(Math.sqrt(children.length));
-      const rows = Math.ceil(children.length / columns);
-      const spacing = 2 * r / Math.max(columns, rows, 2);
-      children.forEach((child, i) => {
-        const row = Math.floor(i / columns), col = i % columns;
-        const count = Math.min(columns, children.length - row * columns);
-        this.positions.set(child, { ...savedPoint(child) || { x: p.x + (col - (count - 1) / 2) * spacing,
-          y: p.y + (row - (rows - 1) / 2) * spacing } });
-        placeChildren(child, children.length === 1 ? r * 0.7 : Math.min(r * 0.4, spacing * 0.3));
-      });
-    };
+    this.zoomLimit=20000;
+    this.areas=new Map();
+    const pinned=new Set();
     for (const id of top) {
       const p = this.positions.get(id);
       const distance = Math.min(...top.filter(other => other !== id).map(other => {
         const q = this.positions.get(other); return Math.hypot(q.x - p.x, q.y - p.y);
       }));
-      placeChildren(id, Math.max(30, Math.min(130, distance * 0.34)));
+      this.placeBranch(id, Math.max(30, Math.min(130, distance * 0.34)),savedPoint,pinned);
     }
     this.radii.set(this.root, radius);
     this.indexPositions();
+  }
+
+  placeBranch(id,r,savedPoint,pinned,area=null){
+    this.radii.set(id,r);
+    if(area)this.areas.set(id,area);else this.areas.delete(id);
+    const children=this.childIds(id),p=this.positions.get(id),attrs=this.nodes.get(id).attrs;
+    if(children.length)this.zoomLimit=Math.max(this.zoomLimit,180/r);
+    const bands=attrs?.source_sections&&children.length>0&&children.every(child=>this.regions.has(child));
+    if(bands){
+      const weights=children.map(child=>Math.max(1,Math.ceil(this.childIds(child).length/3))),sum=weights.reduce((a,b)=>a+b,0);
+      const gap=Math.min(r*0.3,r*0.5/Math.max(1,children.length-1)),height=(1.7*r-gap*(children.length-1))/sum;
+      let y=p.y-r*0.85;
+      children.forEach((child,i)=>{
+        const h=weights[i]*height;
+        this.positions.set(child,{...savedPoint(child)||{x:p.x,y:y+h/2}});
+        this.placeBranch(child,Math.min(r*0.9,h/2),savedPoint,pinned,{width:r*1.8,height:h});y+=h+gap;
+      });
+    }else{
+      const width=area?.width||2*r,height=area?.height||2*r;
+      const columns=Math.max(1,Math.min(children.length,Math.ceil(Math.sqrt(children.length*(area?width/height*0.3:1)))));
+      const rows=Math.ceil(children.length/columns),dx=width/Math.max(columns,2),dy=height/Math.max(rows,2);
+      children.forEach((child,i)=>{
+        const row=Math.floor(i/columns),col=i%columns,count=Math.min(columns,children.length-row*columns);
+        this.positions.set(child,{...savedPoint(child)||{x:p.x+(col-(count-1)/2)*dx,y:p.y+(row-(rows-1)/2)*dy}});
+        this.placeBranch(child,children.length===1?r*0.7:Math.min(r*0.4,Math.min(dx,dy)*0.3),savedPoint,pinned);
+      });
+    }
+    if(savedPoint(id))pinned.add(id);
+    if(attrs?.presentation_group&&children.length&&children.every(child=>pinned.has(child))){
+      const points=children.map(child=>this.positions.get(child));
+      this.positions.set(id,{x:(Math.min(...points.map(p=>p.x))+Math.max(...points.map(p=>p.x)))/2,
+        y:(Math.min(...points.map(p=>p.y))+Math.max(...points.map(p=>p.y)))/2});pinned.add(id);
+    }
+  }
+
+  arrangeSource(id){
+    if(!this.nodes.get(id)?.attrs?.source_sections)throw Error('Expected a source-section owner');
+    this.placeBranch(id,this.radii.get(id),()=>null,new Set());this.indexPositions();
+    return Object.fromEntries(this.graph.nodes.filter(n=>n.id!==id&&this.contains(id,n.id)).map(n=>[n.id,{...this.positions.get(n.id)}]));
   }
 
   translate(id, dx, dy, descendants = true) {
@@ -276,7 +343,8 @@ class Universe {
     for (const [child, p] of this.positions) {
       if (descendants ? !this.contains(id, child) : child !== id) continue;
       const point = { x: p.x + dx, y: p.y + dy };
-      this.positions.set(child, point); patch[child] = point;
+      this.positions.set(child, point);
+      if(!this.nodes.get(child).attrs?.presentation_group)patch[child] = point;
     }
     this.indexPositions();
     return patch;
@@ -285,16 +353,17 @@ class Universe {
   zoomStep(zoom, point, direction) {
     if (direction > 0) {
       const nearby=this.spatial?this.spatial.search(point.x,point.y,point.x,point.y).map(i=>this.spatialIds[i]):[...this.nodes.keys()];
-      const candidates = nearby.filter(id => id !== this.root && this.isGroup(id) &&
-        !this.expanded.has(id) && this.representative(id) === id && 2 * this.radii.get(id) * zoom >= 300 &&
+      const candidates = nearby.filter(id => id !== this.root && (this.isGroup(id)||this.definitionTarget(id)) &&
+        !this.regions.has(id) && !this.expanded.has(id) && this.representative(id) === id && 2 * this.radii.get(id) * zoom >= 300 &&
         Math.hypot(point.x - this.positions.get(id).x, point.y - this.positions.get(id).y) <= this.radii.get(id));
       candidates.sort((a, b) => Math.hypot(point.x - this.positions.get(a).x, point.y - this.positions.get(a).y) -
         Math.hypot(point.x - this.positions.get(b).x, point.y - this.positions.get(b).y));
       if (candidates.length) {
-        this.expanded.add(candidates[0]); return { action: 'expand', id: candidates[0] };
+        const id=candidates[0],target=this.definitionTarget(id);
+        this.expanded.add(id);return { action: target?'definition':'expand', id:target||id };
       }
     } else if (direction < 0) {
-      const closing = [...this.expanded].filter(id => id !== this.root && 2 * this.radii.get(id) * zoom < 190);
+      const closing = [...this.expanded].filter(id => id !== this.root && !this.regions.has(id) && 2 * this.radii.get(id) * zoom < 190);
       closing.sort((a, b) => this.paths.get(b).length - this.paths.get(a).length);
       if (closing.length) {
         this.expanded.delete(closing[0]); return { action: 'collapse', id: closing[0] };

@@ -62,17 +62,19 @@ const ConnectionTrace = {
     if(!view.nodes?.some(node=>node.id===id))return null;
     const trace={kind:'node',key:JSON.stringify(['node',id]),source:id,
       groups:{outgoing:[],incoming:[],within:[]},roles:new Map()};
-    const seen=new Set();
+    const seen=new Set(),relevant=new Set(map.references?map.references(id).map(ref=>ref.id):[]);
     const add=ref=>{
       if(seen.has(ref.id))return null;
-      const source=map.contains(id,ref.source),target=map.contains(id,ref.target);
+      const inside=end=>map.referenceInside?map.referenceInside(id,ref,end):map.contains(id,ref[end]);
+      const source=inside('source'),target=inside('target');
       if(!source&&!target)return null;
       seen.add(ref.id);
       const role=source&&target?'within':source?'outgoing':'incoming';
       trace.groups[role].push(ref);return role;
     };
     for(const edge of view.edges||[]) {
-      if(!map.contains(id,edge.source)&&!map.contains(id,edge.target))continue;
+      if(!map.contains(id,edge.source)&&!map.contains(id,edge.target)&&
+        !(edge.refs||[edge]).some(ref=>relevant.has(ref.id)))continue;
       const roles=new Set((edge.refs||[edge]).map(add).filter(Boolean));
       if(roles.size)trace.roles.set(edge.id,roles.size===1?[...roles][0]:'both');
     }

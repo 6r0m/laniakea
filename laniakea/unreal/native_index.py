@@ -12,6 +12,10 @@ from .native_api import Callbacks, Cursor, Declaration, I, Library, Location, P,
 
 CLASSES = {2, 3, 4, 31, 32}
 FUNCTIONS = {8, 21, 24, 25, 26, 30}
+CONTAINERS = CLASSES | FUNCTIONS | {22}
+KINDS = {2:"struct",3:"union",4:"class",8:"function",21:"method",22:"namespace",
+         24:"constructor",25:"destructor",26:"conversion function",30:"function template",
+         31:"class template",32:"class template specialization",6:"field",9:"variable"}
 DECL_CALLBACK = c.CFUNCTYPE(None, P, c.POINTER(Declaration))
 REF_CALLBACK = c.CFUNCTYPE(None, P, c.POINTER(Reference))
 ABORT_CALLBACK = c.CFUNCTYPE(I, P, P)
@@ -40,20 +44,37 @@ def extract(library, command, project):
     def is_project(file):
         return file and os.path.normcase(os.path.abspath(file)).startswith(project)
 
-    def metadata(cursor, definition=False):
+    def logical(file):
+        return os.path.normcase(os.path.relpath(file, project) if is_project(file) else file).replace("\\", "/")
+
+    def metadata(cursor, definition=None):
         usr = api.string(api.getCursorUSR(cursor))
         if not usr:
             return None
         file, line, column, _ = location(api.getCursorLocation(cursor))
         # Clang's file-local USRs can contain only a basename. Keep equal basenames in different files distinct.
         if usr.startswith("c:") and not usr.startswith("c:@"):
-            logical = os.path.relpath(file, project) if is_project(file) else os.path.abspath(file) if file else ""
-            usr = os.path.normcase(logical).replace("\\", "/") + "|" + usr
-        if usr in symbols and not definition:
+            usr = logical(file) + "|" + usr
+        if cursor.kind == 22:
+            current=cursor
+            for _ in range(64):
+                if current.kind==22 and not api.string(api.getCursorSpelling(current)):
+                    usr="scope:"+logical(file)+"|"+usr
+                    break
+                current=api.getCursorSemanticParent(current)
+                if not current.kind or current.kind==350:
+                    break
+        old=symbols.get(usr)
+        here={"file":file,"line":line,"column":column}
+        if old is not None and cursor.kind==22:
+            if here not in old['locations']:
+                old['locations'].append(here)
+        if old is not None and definition is False:
+            old.setdefault('declaration',here)
+        if old is not None and not definition:
             return usr
-        level = "class" if cursor.kind in CLASSES else "function" if cursor.kind in FUNCTIONS else "other"
+        level = "class" if cursor.kind in CLASSES else "function" if cursor.kind in FUNCTIONS else "namespace" if cursor.kind==22 else "other"
         parent = api.getCursorSemanticParent(cursor)
-        # Namespaces remain qualified metadata; they do not create an invented containment level.
         qualified = []
         immediate = None
         for _ in range(64):
@@ -62,7 +83,7 @@ def extract(library, command, project):
             name = api.string(api.getCursorSpelling(parent))
             if name:
                 qualified.append(name)
-            if immediate is None and parent.kind in CLASSES | FUNCTIONS:
+            if immediate is None and parent.kind in CONTAINERS:
                 immediate = metadata(parent)
             next_parent = api.getCursorSemanticParent(parent)
             if next_parent.kind == parent.kind and tuple(next_parent.data) == tuple(parent.data):
@@ -72,14 +93,47 @@ def extract(library, command, project):
                  "signature": api.string(api.getCursorDisplayName(cursor)), "parent": immediate,
                  "scope": "::".join(reversed(qualified)), "file": file, "line": line,
                  "column": column, "definition": bool(definition)}
-        old = symbols.get(usr)
+        value['declaration_kind']=KINDS.get(cursor.kind,'declaration')
+        access=api.getCXXAccessSpecifier(cursor)
+        if access in {1,2,3}:
+            value['access']={1:'public',2:'protected',3:'private'}[access]
+        if cursor.kind in {21,30}:
+            for name,method in [('static',api.CXXMethod_isStatic),('virtual',api.CXXMethod_isVirtual),('const',api.CXXMethod_isConst)]:
+                value[name]=bool(method(cursor))
+        if cursor.kind in FUNCTIONS:
+            result=api.string(api.getTypeSpelling(api.getCursorResultType(cursor))) if cursor.kind not in {24,25} else ''
+            value['type_signature']=((result+' ') if result else '')+value['signature']+(' const' if value.get('const') else '')
+        loc=api.getCursorLocation(cursor)
+        value['declaration_origin']='macro expansion' if location(loc)!=location_expansion(loc) else 'unknown'
+        if definition is False:
+            value['declaration']=here
+        if cursor.kind==22:
+            value['locations']=old['locations'] if old else [here]
+        if old:
+            for name in ('declaration','lambda_name'):
+                if name in old:
+                    value[name]=old[name]
+            if old.get('declaration_kind')=='lambda':
+                value['declaration_kind']='lambda'
         if old is None or definition or not old.get("file"):
             symbols[usr] = value
         return usr
 
+    def location_expansion(loc):
+        file,line,column,offset=P(),U(),U(),U()
+        api.getExpansionLocation(loc,c.byref(file),c.byref(line),c.byref(column),c.byref(offset))
+        return (api.string(api.getFileName(file)) if file else '',line.value,column.value,offset.value)
+
     @VISITOR
     def unevaluated(cursor, _parent, _data):
         try:
+            if cursor.kind==144:
+                closure=api.getTypeDeclaration(api.getCursorType(cursor))
+                identity=metadata(closure)
+                if identity:
+                    symbols[identity]['declaration_kind']='lambda'
+                    if _parent.kind in {6,9}:
+                        symbols[identity]['lambda_name']=api.string(api.getCursorSpelling(_parent))
             if cursor.kind in {20, 36, 136, 154}:  # Type declarations, sizeof/alignof/noexcept, requires.
                 extent = api.getCursorExtent(cursor)
                 file, _, _, begin = location(api.getRangeStart(extent))
@@ -116,16 +170,19 @@ def extract(library, command, project):
             file, _, _, _ = location(item.location, indexed=True)
             if not is_project(file) or item.implicit:
                 return
-            if item.cursor.kind == 9:
+            if item.cursor.kind in {6,9}:
                 initializer = api.Cursor_getVarDeclInitializer(item.cursor)
                 if initializer.kind:
                     unevaluated(initializer, item.cursor, None)
                     api.visitChildren(initializer, c.cast(unevaluated, P), None)
-            if item.cursor.kind not in CLASSES | FUNCTIONS:
+            member=item.cursor.kind in {6,9} and api.getCursorSemanticParent(item.cursor).kind in CLASSES
+            if item.cursor.kind not in CONTAINERS and not member:
                 return
-            identity = metadata(item.cursor, item.definition)
+            identity = metadata(item.cursor, bool(item.definition))
             if not identity:
                 return
+            if member:
+                symbols[identity]['level']='member'
             if item.definition and item.cursor.kind in FUNCTIONS:
                 api.visitChildren(item.cursor, c.cast(function_body, P), None)
             info = api.index_getCXXClassDeclInfo(pointer)
@@ -160,7 +217,7 @@ def extract(library, command, project):
                 return
             target = metadata(item.target.contents.cursor)
             source = metadata(item.parent.contents.cursor) if item.parent else None
-            if source and symbols[source]["level"] == "other":
+            while source and symbols[source]["level"] in {"other","member","namespace"}:
                 source = symbols[source]["parent"]
             if not source and item.container:
                 source = metadata(item.container.contents.cursor)

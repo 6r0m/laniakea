@@ -4,6 +4,157 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const {viewer,inspectionViewer,treeElements}=require('./viewer-support.cjs');
 
+test('header search distinguishes recorded file paths without losing equal-basename choices',()=>{
+  const {run}=viewer();
+  run(`globalThis.files=['One','Two'].map(name=>({id:name,label:'API.h',level:'source-group',attrs:{source_file:true},
+    source:{root:'project',path:'Source/Sample/Public/'+name+'/API.h'}}));`);
+  assert.equal(run("DeclarationContext.search('API.h',files).count"),2);
+  assert.equal(run("DeclarationContext.search('One/API.h',files).items[0].id"),'One');
+});
+
+test('a file under the wheel pointer enters its next layer without a large world-radius threshold',()=>{
+  const {run,context}=inspectionViewer(true);
+  context.surface=JSON.parse(require('node:fs').readFileSync(require.resolve('../fixtures/source-surface.graph.json'),'utf8'));
+  try{
+    run(`state.universe=new Universe(surface);state.universe.place({},'auto');
+      globalThis.file=[...state.universe.nodes.values()].find(n=>n.attrs?.source_file&&n.label==='API.h').id;
+      state.universe.reveal(file);refreshMap();
+      const p=state.cy.getElementById(file).renderedPosition();state.pointer={x:p.x+3,y:p.y+3};
+      globalThis.requestAnimationFrame=fn=>{fn();return 1;};globalThis.cancelAnimationFrame=()=>{};
+      globalThis.setSceneScope=id=>state.scopeShard.scope=id;globalThis.frameNode=id=>globalThis.framed=id;
+      globalThis.rememberView=()=>{};globalThis.unfocus=()=>{};semanticZoom(1);`);
+    assert.equal(run('state.universe.expanded.has(file)'),true);
+    assert.equal(run('state.scopeShard.scope'),run('file'));assert.equal(run('framed'),run('file'));
+    run(`{const p=state.cy.getElementById('class').renderedPosition();state.pointer={x:p.x+3,y:p.y+3};semanticZoom(1);}`);
+    assert.equal(run("state.universe.expanded.has('class')"),true);
+    assert.equal(run('state.scopeShard.scope'),'class');
+  }finally{run('state.cy.destroy()');}
+});
+
+test('the active expanded navigation scope survives a fit around spread-out saved children',()=>{
+  const {run,context}=viewer();
+  context.surface=JSON.parse(require('node:fs').readFileSync(require.resolve('../fixtures/source-surface.graph.json'),'utf8'));
+  run(`state.universe=new Universe(surface);state.universe.place({},'auto');
+    globalThis.file=[...state.universe.nodes.values()].find(n=>n.attrs?.source_file&&n.label==='API.h').id;
+    state.universe.reveal('class');state.universe.expanded.add(file);state.universe.translate('class',1000,500);
+    state.scopeShard={scope:file};state.cy=cytoscape({headless:true,elements:[]});`);
+  try{
+    assert.ok(run('viewportCamera(0).force.includes(file)'));
+    run('state.universe.expanded.delete(file)');
+    assert.ok(!run('viewportCamera(0).force.includes(file)'),'closed scopes must still release their details');
+  }finally{run('state.cy.destroy()');}
+});
+
+test('qualified search resolves recorded owners and signatures without guessing from labels',()=>{
+  const {run}=viewer();
+  run(`globalThis.index={nodes:[
+    {id:'a',label:'Run',level:'function',attrs:{qualified:'Sample::First::Run',signature:'Run(int)'}},
+    {id:'b',label:'Run',level:'function',attrs:{qualified:'Sample::Second::Run',signature:'Run(float)'}}]};
+    state.manifest.levels=['module','class','function'];`);
+  assert.equal(run("elsewhere('sample::second::run',index)?.id"),'b');
+  assert.equal(run("elsewhere('Run(float)',index)?.id"),'b');
+  assert.equal(run("elsewhere('not present',index)"),null);
+});
+
+test('ambiguous search offers bounded owner-qualified choices rather than one silent global winner',async t=>{
+  const {run}=inspectionViewer();treeElements(run);t.after(()=>run('state.cy.destroy()'));
+  run(`state.manifest.levels=['project','folder','module','class','function'];
+    state.universe.nodes.get('app.core.db').label='Run';state.universe.nodes.get('app.core.db').attrs={qualified:'Sample::First::Run',signature:'Run(int)'};
+    state.universe.nodes.get('app.web.views').label='Run';state.universe.nodes.get('app.web.views').attrs={qualified:'Sample::Second::Run',signature:'Run(float)'};
+    $('find').value='Run';`);
+  await run('find()');
+  assert.equal(run("$('find-results').hidden"),false);
+  assert.equal(run("$('find-results').children.filter(n=>n.tag==='button').length"),2);
+  assert.match(run("$('find-results').children.map(n=>n.textContent).join(' ')"),/First.*Second/);
+});
+
+test('search choices retain the matched name when qualified metadata is absent',async t=>{
+  const {run}=inspectionViewer();treeElements(run);t.after(()=>run('state.cy.destroy()'));
+  run(`state.universe.nodes.get('app.core.db').label='SampleLegacy';$('find').value='SampleLegacy';`);
+  await run('find()');
+  assert.match(run("$('find-results').children.find(n=>n.tag==='button').textContent"),/SampleLegacy/);
+});
+
+test('equal qualified names and source basenames remain distinguishable in search',async t=>{
+  const {run}=inspectionViewer();treeElements(run);t.after(()=>run('state.cy.destroy()'));
+  run(`for(const [id,path] of [['app.core.db','one/Unit.cpp'],['app.web.views','two/Unit.cpp']]){
+    const node=state.universe.nodes.get(id);node.label='Run';node.attrs={qualified:'Sample::Run',signature:'Run()'};
+    node.source={root:'project',path,line:1};
+  }$('find').value='Sample::Run';`);
+  await run('find()');
+  assert.match(run("$('find-results').children.map(n=>n.children.map(c=>c.textContent).join(' ')).join(' ')"),/one\/Unit.cpp.*two\/Unit.cpp/);
+});
+
+test('recorded signatures and nearest owner context appear in hover and primary inspection without fetching',t=>{
+  const {run,context}=inspectionViewer();treeElements(run);t.after(()=>run('state.cy.destroy()'));
+  context.fetch=()=>{throw new Error('hover must not fetch exact pages');};
+  run(`const node=state.universe.nodes.get('app.core.db');node.attrs={signature:'Run(int value)',qualified:'Sample::Owner::Run'};
+    state.universe.reveal(node.id);refreshMap();globalThis.summary=traceSummary(ConnectionTrace.node(state.universe,state.shard,node.id));
+    globalThis.renderConnections=()=>{};renderDetails(node);`);
+  assert.equal(run('summary.signature'),'Run(int value)');
+  assert.match(run('summary.path'),/Sample::Owner::Run/);
+  assert.equal(run("$('details').children.some(n=>n.tag==='code'&&n.textContent==='Run(int value)')"),true);
+});
+
+test('inheritance readout counts filtered projected references without inventing base names',t=>{
+  const {run}=inspectionViewer();t.after(()=>run('state.cy.destroy()'));
+  run(`fixture.edges=[{id:'base',source:'app.core.db',target:'stdlib.sqlite3',type:'inherits',count:2,status:'resolved',origin:'compiler'},
+    {id:'override',source:'app.web.views',target:'app.core.db',type:'overrides',count:3,status:'resolved',origin:'compiler'}];
+    state.universe=new Universe(fixture);state.universe.place({},'auto');refreshMap();
+    globalThis.summary=traceSummary(ConnectionTrace.node(state.universe,state.shard,'app.core'));`);
+  assert.match(run('summary.structure'),/2.*outgoing.*inheritance.*3.*incoming.*override/i);
+  run("state.hidden.add('inherits');refreshMap();summary=traceSummary(ConnectionTrace.node(state.universe,state.shard,'app.core'));");
+  assert.doesNotMatch(run('summary.structure'),/inheritance/i);
+});
+
+test('deep breadcrumbs fold older ancestors while retaining real links and the immediate parent',t=>{
+  const {run}=inspectionViewer();treeElements(run);t.after(()=>run('state.cy.destroy()'));
+  run(`state.target.id='sample';state.shard.parents=Array.from({length:8},(_,i)=>({title:'Owner'+i,file:'owner'+i+'.json'}));
+    state.index.nodes=state.shard.parents.map((p,i)=>({id:'owner'+i,label:p.title,level:'scope',file:p.file}));
+    state.shard.title='Current';realRenderCrumbs();
+    globalThis.walk=n=>[n,...(n.children||[]).flatMap(walk)];`);
+  assert.equal(run("$('crumbs').children.filter(n=>n.tag==='details').length"),1);
+  assert.equal(run("walk($('crumbs')).filter(n=>n.tag==='a').length"),8);
+  assert.equal(run("$('crumbs').children.some(n=>n.tag==='a'&&n.attrs.title==='Open Owner7')"),true);
+  assert.equal(run("$('crumbs').children.find(n=>n.tag==='strong').attrs['aria-current']"),'page');
+});
+
+test('framing a wide recorded scope reserves readable cell spacing rather than a tiny grid',()=>{
+  const {run}=viewer();
+  run(`state.universe.place({},'auto');
+    const children=state.universe.childIds.bind(state.universe);
+    state.universe.childIds=id=>id==='app.core'?Array.from({length:81},(_,i)=>'child'+i):children(id);
+    globalThis.frame=(bounds,padding,maxZoom)=>globalThis.camera={bounds,padding,maxZoom};frameNode('app.core');`);
+  assert.ok(run('camera.maxZoom*state.universe.radii.get("app.core")')>=350,'wide scopes need room for names');
+  assert.ok(run('(700-2*camera.padding)/9')>=60,'desktop framing must leave a glyph-and-caption gap between rows');
+});
+
+test('a compact public surface reserves room for complete declaration names',()=>{
+  const {run}=viewer();
+  run(`state.universe.nodes.get('app.core').attrs={source_sections:true};state.universe.place({},'auto');
+    globalThis.frame=(bounds,padding,maxZoom)=>globalThis.camera={maxZoom};frameNode('app.core');`);
+  assert.ok(run('camera.maxZoom*state.universe.radii.get("app.core")')>=300,'public names still collide in a tiny frame');
+});
+
+test('compiler declaration context exposes kind access qualifiers and honest data-only coverage',t=>{
+  const {run}=inspectionViewer();treeElements(run);t.after(()=>run('state.cy.destroy()'));
+  run(`const node=state.universe.nodes.get('app.core.db');node.level='function';node.attrs={signature:'Read()',type_signature:'int Read() const',
+    declaration_kind:'method',access:'private',const:true,virtual:true,declaration_origin:'unknown'};
+    state.universe.reveal(node.id);refreshMap();globalThis.renderConnections=()=>{};
+    globalThis.summary=traceSummary(ConnectionTrace.node(state.universe,state.shard,node.id));renderDetails(node);`);
+  assert.match(run('summary.description'),/^method/);
+  assert.match(run('summary.context.join(" ")'),/private.*virtual.*const/i);
+  assert.match(run('summary.context.join(" ")'),/origin.*unknown/i);
+  run(`node.attrs={declaration_kind:'struct',member_counts:{fields:{public:9},callables:{}},declaration_origin:'macro expansion'};
+    summary=traceSummary(ConnectionTrace.node(state.universe,state.shard,node.id));`);
+  assert.match(run('summary.context.join(" ")'),/9 observed fields/);
+  assert.match(run('summary.context.join(" ")'),/fields.*not.*stars/i);
+  run('delete node.attrs.member_counts;summary=traceSummary(ConnectionTrace.node(state.universe,state.shard,node.id));');
+  assert.doesNotMatch(run('summary.context.join(" ")'),/0 observed fields/);
+  run('node.attrs.definition=false;summary=traceSummary(ConnectionTrace.node(state.universe,state.shard,node.id));');
+  assert.match(run('summary.context.join(" ")'),/declaration only.*definition.*not recorded/i);
+});
+
 test('canonical exact inspection retains both remote endpoints after pending navigation clears',t=>{
   const {run}=viewer();t.after(()=>run('state.cy.destroy()'));
   run(`state.cy=cytoscape({headless:true});state.universe.place({},'auto');
@@ -585,6 +736,7 @@ test('wheel scale changes keep stars, fonts and expanded backgrounds in the same
     renderer.notify=function(...args){
       const star=state.cy.getElementById('app.core.db'),group=state.cy.getElementById('app.core'),z=state.cy.zoom();
       paints.push({font:parseFloat(star.style('font-size'))*z,glyph:star.width()*z,
+        icon:parseFloat(star.style('background-width'))*z,
         background:group.width()*z,padding:parseFloat(group.style('padding'))*z,
         outline:parseFloat(star.style('outline-width'))*z,offset:parseFloat(star.style('outline-offset'))*z});
       return notify.apply(this,args);
@@ -595,7 +747,8 @@ test('wheel scale changes keep stars, fonts and expanded backgrounds in the same
     assert.ok(run('paints.length')>0);
     for(const paint of run('paints')) {
       assert.ok(Math.abs(paint.font-13)<0.001,`font flashed at ${from} -> ${to}: ${paint.font}px`);
-      assert.ok(Math.abs(paint.glyph-15)<0.001,`star flashed at ${from} -> ${to}: ${paint.glyph}px`);
+      assert.ok(Math.abs(paint.glyph-26)<0.001,`star flashed at ${from} -> ${to}: ${paint.glyph}px`);
+      assert.ok(Math.abs(paint.icon-26*0.58)<0.001,`type icon flashed at ${from} -> ${to}: ${paint.icon}px`);
       const span=run("state.universe.bounds.get('app.core').x2-state.universe.bounds.get('app.core').x1");
       assert.ok(Math.abs(paint.background-span*to)<0.001,'background retained its old renderer scale');
       assert.ok(Math.abs(paint.padding-26)<0.001,'background padding retained its old renderer scale');
@@ -856,6 +1009,9 @@ test('visible label hit boxes use renderer font metrics rather than estimated ch
     state.cy.width=()=>800;state.cy.height=()=>600;state.scopeShard={scope:'a'};
     state.cy.nodes()[0].renderedBoundingBox=()=>({x1:150,y1:120,x2:270,y2:180,w:120,h:60});declutterLabels();`);
   assert.deepEqual(JSON.parse(run("JSON.stringify(state.labelBoxes.get('a'))")),{x1:150,y1:120,x2:270,y2:180,w:120,h:60});
+  run("globalThis.css=()=>'#888888';state.cy.nodes()[0].addClass('expanded').data('iconKind','module');declutterLabels();");
+  assert.deepEqual(JSON.parse(run("JSON.stringify(state.labelBoxes.get('a'))")),{x1:150,y1:120,x2:270,y2:180,w:120,h:60},
+    'a decorative title icon must not shift the native text hit target');
   run('state.cy.destroy()');
 });
 
@@ -1025,6 +1181,9 @@ test('map names stay clean while grouping follows canonical kinds and direct chi
   assert.ok(!leaf.classes.split(' ').includes('group'));
   assert.equal(leaf.data.id, 'leaf', 'presentation must retain saved-position identity');
   assert.equal(run("nodeDescription({id:'external',level:'library',boundary:true})"),'library / external');
+  assert.equal(run("mapNode({id:'scope',label:'Producer',level:'namespace',attrs:{source_sections:true}},new Set(),{}).data.iconKind"),'namespace');
+  assert.equal(run("mapNode({id:'scope',label:'Producer',level:'namespace',attrs:{source_sections:true}},new Set(),{}).data.caption"),'Producer');
+  assert.ok(run("mapNode({id:'scope',label:'Producer',level:'namespace',attrs:{source_sections:true,source_partition:{collapsed:true}}},new Set(),{}).classes.includes('implementation')"));
   const neighbour=run("mapNode({id:'leaf',label:'Neighbour',level:'module'},new Set(),{},true)");
   assert.equal(neighbour.data.caption,'Neighbour');
   const container=run("mapNode({id:'group',label:'Sample',level:'package'},new Set(),{},true)");
@@ -1051,4 +1210,61 @@ test('a reference id matching a node id cannot hide a rendered connection', () =
     state.index={nodes:[]};state.manifest.edge_types=[];globalThis.readableLabels=()=>{};refreshMap();`);
   assert.equal(run('state.cy.edges().length'),run('state.shard.edges.length'));
   run('state.cy.destroy()');
+});
+
+test('direct references to expanded owners attach to the labelled boundary, not an empty centre',()=>{
+  const {run}=inspectionViewer(true);
+  try{
+    run(`fixture.edges.push({id:'direct',source:'app.core',target:'app.web',type:'imports',status:'declared'},
+      {id:'reverse',source:'app.web',target:'app.core',type:'imports',status:'declared'});
+      state.universe=new Universe(fixture);state.universe.place({},'auto');
+      state.universe.expanded.add('app.core');refreshMap();`);
+    for(const end of ['source','target']){
+      const direct=run("state.cy.edges().filter(e=>e.data('"+end+"')==='app.core')");
+      assert.ok(direct.length,'fixture needs a genuine direct owner reference');
+      for(const edge of direct){
+        assert.ok(edge.hasClass(end+'-expanded'));
+        assert.equal(edge.style(end+'-endpoint'),'0% -50%');
+      }
+    }
+    run(`state.universe.expanded.delete('app.core');refreshMap();`);
+    assert.equal(run("state.cy.edges('.source-expanded,.target-expanded').length"),0);
+  }finally{run('state.cy.destroy()');}
+});
+
+test('saved spatial overlap labels a foreign sibling without changing ownership or positions',()=>{
+  const {run}=inspectionViewer(true);
+  try{
+    run(`state.universe.reveal('app.core.db');state.universe.expanded.add('app.core');
+      const p=state.universe.positions.get('app.core.db');state.universe.positions.set('app.web',{...p});
+      state.universe.indexPositions();globalThis.before=JSON.stringify([...state.universe.positions]);refreshMap();`);
+    assert.equal(run("state.cy.getElementById('app.web').hasClass('overlapping-context')"),true);
+    assert.match(run("state.cy.getElementById('app.web').data('displayName')"),/From /);
+    assert.equal(run("state.universe.contains('app.core','app.web')"),false);
+    assert.equal(run('JSON.stringify([...state.universe.positions])'),run('before'));
+    run(`state.universe.positions.set('app.web',{x:9999,y:9999});state.universe.indexPositions();refreshMap();`);
+    assert.equal(run("state.cy.getElementById('app.web').hasClass('overlapping-context')"),false);
+  }finally{run('state.cy.destroy()');}
+});
+
+test('scoped file arrangement requires confirmation and persists only real contained pins',async()=>{
+  const {run,context}=inspectionViewer();
+  context.surface=JSON.parse(require('node:fs').readFileSync(require.resolve('../fixtures/source-surface.graph.json'),'utf8'));
+  context.surface.files=[{owner:context.surface.nodes.findIndex(n=>n.id==='module'),root:'project',path:'Source/Sample/Public/API.h',
+    declarations:[],definitions:[],partition:{id:'public',label:'Public headers',collapsed:false,folders:[]}}];
+  const writes=[];context.fetch=async(url,options)=>{writes.push(JSON.parse(options.body));return{ok:true,text:async()=>''};};
+  try{
+    run(`state.universe=new Universe(surface);state.universe.place({},'auto');
+      state.scopeShard={scope:'module',title:'Module',parents:[]};
+      state.positionCache=new PositionCache('/layout/sample/entry.json',{auto:{unavailable:{x:5,y:6},peer:{x:400,y:500}}});
+      globalThis.confirm=()=>false;globalThis.before=JSON.stringify([...state.universe.positions]);`);
+    await run('arrangeSourceFiles()');
+    assert.equal(writes.length,0);assert.equal(run('JSON.stringify([...state.universe.positions])'),run('before'));
+    run('globalThis.confirm=()=>true;globalThis.frameNode=()=>{};');
+    await run('arrangeSourceFiles()');
+    assert.equal(writes.length,1);
+    assert.ok(Object.keys(writes[0].positions).every(id=>context.surface.nodes.some(n=>n.id===id)&&id!=='module'&&id!=='peer'));
+    assert.equal(run('state.positionCache.layouts.auto.unavailable.x'),5);
+    assert.equal(run('state.positionCache.layouts.auto.peer.x'),400);
+  }finally{run('state.cy.destroy()');}
 });

@@ -69,15 +69,22 @@ async function start() {
   $('fit').onclick = fitOverview;
   $('inspect-project').onclick = () => renderDetails({...state.universe.nodes.get(state.universe.root),projectContext:true});
   $('reset-layout').onclick = resetPositions;
+  $('arrange-files').onclick = arrangeSourceFiles;
   $('toggle-configuration').onclick = () => { setConfiguration(!configurationVisible()); applyFilters(); };
   $('clear').onclick = () => { unfocus(true); renderDetails(null); };
   $('up').onclick = up;
   $('find').oninput = () => find().catch(reportError);
+  document.addEventListener('pointerdown',event=>{if(!event.target.closest('.find-controls'))closeFindResults();});
   $('find').onkeydown = (event) => {
     if (event.key === 'Escape') { $('find').value = ''; find(); $('find').blur(); }
+    if (['ArrowDown','ArrowUp'].includes(event.key)&&state.findCandidates?.length) {
+      event.preventDefault();
+      state.findChoice=((state.findChoice||0)+(event.key==='ArrowDown'?1:-1)+state.findCandidates.length)%state.findCandidates.length;
+      renderFindResults();
+    }
     if (event.key === 'Enter') {
-      const id = state.elsewhere && state.elsewhere.id || (findHits().first() || {}).id?.();
-      if (id) flyToNode(id);
+      const id = state.findCandidates?.[state.findChoice||0]?.id || state.elsewhere?.id;
+      if (id) { closeFindResults();$('find').blur();flyToNode(id); }
     }
   };
   window.addEventListener('hashchange', () => { const r = route(); show(known(r.target), r.file, 'none'); });
@@ -101,7 +108,7 @@ async function start() {
   });
   $('graph').addEventListener('pointerleave', () => { state.pointer = null; unfocus(); });
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-    if (state.cy) { state.cy.style(style()); readableLabels(); }
+    if (state.cy) { state.cy.style(style()); readableLabels();renderIconKey(); }
   });
   document.addEventListener('keydown', onKey);
   const wanted = route();
@@ -143,7 +150,8 @@ async function show(id, file, mode) {
       }
       const byId=new Map(index.nodes.map(n=>[n.id,n]));
       shard={scope:entry.id,title:entry.label,nodes:[],edges:[],members:[],drill:{},
-        parents:universe.paths.get(entry.id).slice(0,-1).map(id=>({title:universe.nodes.get(id).label,file:byId.get(id)?.file})).filter(p=>p.file)};
+        parents:universe.paths.get(entry.id).slice(0,-1).map(id=>({id,title:universe.nodes.get(id).label,
+          file:(byId.get(id)||byId.get(universe.nodes.get(id).attrs?.source_owner))?.file})).filter(p=>p.file)};
     } else {
       try {
         shard = await getJson(`/data/${encodeURIComponent(id)}/scopes/${encodeURIComponent(wanted)}`);
@@ -224,6 +232,10 @@ async function up() {
   if (!state.shard) return;
   const universe = state.universe, scope = state.scopeShard.scope;
   const parents = state.shard.parents;
+  const parent=parents[parents.length-1];
+  if(parent?.id&&(universe.nodes.get(scope)?.attrs?.presentation_group||universe.nodes.get(parent.id)?.attrs?.presentation_group)){
+    universe.expanded.delete(scope);flyToNode(parent.id,false);return;
+  }
   if (parents.length && await openScope(parents[parents.length - 1].file) && state.universe === universe) {
     if (scope !== universe.root) universe.expanded.delete(scope);
     refreshMap();
@@ -235,7 +247,7 @@ function onKey(event) {
   if (typing || event.altKey || event.ctrlKey || event.metaKey) return;
   if (event.key === 'Backspace') { event.preventDefault(); up(); }
   if (event.key === '/') { event.preventDefault(); $('find').focus(); }
-  if (event.key === 'Escape') { unfocus(true); renderDetails(null); }
+  if (event.key === 'Escape') { $('type-key').open=false;unfocus(true); renderDetails(null); }
   if (event.target === $('graph') && state.cy && ['+', '=', '-'].includes(event.key)) {
     event.preventDefault();
     state.pointer = {x:state.cy.width()/2,y:state.cy.height()/2};
@@ -275,14 +287,28 @@ function renderBanner() {
 function renderCrumbs() {
   const crumbs = $('crumbs');
   crumbs.replaceChildren();
-  for (const parent of state.shard.parents) {
-    const level = (state.index.nodes.find(n => n.file === parent.file) || {}).level;
-    const link = el('a', parent.title, { href: hashFor(state.target.id, parent.file), title: `Open ${parent.title}` });
+  const append=(container,parent)=>{
+    const level = parent.id?state.universe.nodes.get(parent.id)?.level:(state.index.nodes.find(n => n.file === parent.file) || {}).level;
+    const link = el('a', null, { href: hashFor(state.target.id, parent.file), title: `Open ${parent.title}` });
+    link.append(el('span',parent.title,{class:'crumb-name'}));
+    if(parent.id&&state.universe.nodes.get(parent.id)?.attrs?.presentation_group)link.onclick=event=>{
+      if(!event.ctrlKey&&!event.metaKey&&!event.shiftKey&&!event.altKey){event.preventDefault();flyToNode(parent.id,false);}
+    };
     if (level) link.append(el('small', level));
-    crumbs.append(link,
-      el('span', '/', { 'aria-hidden': 'true' }));
+    container.append(link);
+  };
+  let parents=state.shard.parents;
+  if(parents.length>3){
+    const older=el('details',null,{class:'crumb-ancestors'}),links=el('div',null,{class:'crumb-links'});
+    older.append(el('summary','...', {title:'Show earlier ancestors','aria-label':'Show earlier ancestors'}));
+    for(const parent of parents.slice(0,-1))append(links,parent);
+    older.append(links);crumbs.append(older,el('span','/',{'aria-hidden':'true'}));parents=parents.slice(-1);
   }
-  const current = el('strong', state.shard.title, { 'aria-current': 'page' });
+  for (const parent of parents) {
+    append(crumbs,parent);crumbs.append(el('span', '/', { 'aria-hidden': 'true' }));
+  }
+  const current = el('strong', null, { 'aria-current': 'page',title:state.shard.title });
+  current.append(el('span',state.shard.title,{class:'crumb-name'}));
   const scope = state.index.nodes.find(n => n.id === state.shard.scope);
   if (scope) current.append(el('small', scope.level));
   crumbs.append(current);
@@ -339,6 +365,7 @@ function renderFilters() {
     'Esc': 'clear the highlight',
     'connection': 'references; hover for direction, type and count',
     'dashed star': 'outside the analysed target',
+    'source box': 'recorded source grouping; compiler ownership is unchanged',
     'diamond': 'outside the project',
   });
   panel.append(keys);
@@ -368,7 +395,7 @@ function renderConfiguration() {
 function findHits() {
   const query = $('find').value.trim().toLowerCase();
   if (!query || !state.cy) return state.cy ? state.cy.collection() : [];
-  return state.cy.nodes(':visible').filter((n) => n.data('label').toLowerCase().includes(query));
+  return state.cy.nodes(':visible').filter(n=>DeclarationContext.rank(state.universe.nodes.get(n.id()),query,state.manifest.levels||[])!==null);
 }
 
 // Search leaves the camera in place until Enter flies to the best canonical match.
@@ -379,12 +406,37 @@ async function find() {
   $('find-hint').textContent = '';
   if (hits.length) hits.addClass('match');
   const query = $('find').value.trim().toLowerCase();
-  if (!query) { unfocus(); return; }
-  const index = {nodes:[...state.universe.nodes.values()]};
-  const best = elsewhere(query, index);
+  if (!query) { state.findCandidates=[];state.findCount=0;closeFindResults();unfocus();return; }
+  const matches=DeclarationContext.search(query,state.universe.nodes.values(),state.manifest.levels||[]);
+  state.findCandidates=matches.items;state.findCount=matches.count;state.findChoice=0;
+  const best = matches.items[0];
   state.elsewhere = best;
-  $('find-hint').textContent = best ? `Enter: fly to ${best.label} (${best.level})` : 'no match';
+  renderFindResults();
   readableLabels();
+}
+
+function closeFindResults() {
+  $('find-results').hidden=true;$('find').setAttribute('aria-expanded','false');
+}
+
+function renderFindResults() {
+  const panel=$('find-results');panel.replaceChildren();
+  const candidates=state.findCandidates||[],choice=state.findChoice||0;
+  if(!$('find').value.trim()||!candidates.length){closeFindResults();$('find-hint').textContent=$('find').value.trim()?'no match':'';return;}
+  $('find-hint').textContent=`${state.findCount} match${state.findCount===1?'':'es'}; Enter: ${candidates[choice].attrs?.qualified||candidates[choice].label}`;
+  let active;
+  for(const [i,node] of candidates.entries()){
+    const context=DeclarationContext.describe(node,state.universe);
+    const name=node.attrs?.qualified||[context.path,node.label].filter(Boolean).join(' / ');
+    const button=el('button',name,{type:'button',class:i===choice?'active':'',title:context.signature||node.label});
+    const source=node.source?node.source.path+(node.source.line?':'+node.source.line:''):'';
+    button.append(el('small',[node.level,context.signature,source].filter(Boolean).join(' / ')));
+    button.onclick=()=>{closeFindResults();$('find').blur();flyToNode(node.id);};panel.append(button);
+    if(i===choice)active=button;
+  }
+  if(state.findCount>candidates.length)panel.append(el('small',`Showing ${candidates.length} of ${state.findCount}; refine the name or owner.`));
+  panel.hidden=false;$('find').setAttribute('aria-expanded','true');
+  active?.scrollIntoView({block:'nearest',inline:'nearest'});
 }
 
 async function projectIndex(target = state.target) {
@@ -396,20 +448,7 @@ async function projectIndex(target = state.target) {
 
 // Exact names first, then names that start with the text, then names that contain it; higher levels before lower.
 function elsewhere(query, index) {
-  const levels = state.manifest.levels;
-  const rank = (entry) => {
-    const name = entry.label.toLowerCase();
-    const fit = name === query ? 0 : name.startsWith(query) ? 1 : name.includes(query) ? 2 : -1;
-    return fit < 0 ? null : [fit, levels.indexOf(entry.level), name.length];
-  };
-  const earlier = (a, b) => (a[0] - b[0] || a[1] - b[1] || a[2] - b[2]) < 0;
-  let best = null;
-  let bestRank = null;
-  for (const entry of index.nodes) {
-    const r = rank(entry);
-    if (r && (!bestRank || earlier(r, bestRank))) { best = entry; bestRank = r; }
-  }
-  return best;
+  return DeclarationContext.search(query,index.nodes,state.manifest.levels||[],1).items[0]||null;
 }
 
 function sourceLink(location) {
@@ -519,17 +558,23 @@ function renderDetails(item) {
   const list = el('dl');
   if (item.level !== undefined) {
     panel.append(el('h2', item.label), el('p', nodeDescription(item), {class:'muted'}));
+    const context=DeclarationContext.describe(item,state.universe);
+    if(context.path)panel.append(el('p',context.path,{class:'declaration-owner'}));
+    if(context.signature)panel.append(el('code',context.signature,{class:'declaration-signature'}));
+    for(const note of context.context)panel.append(el('p',note,{class:'muted declaration-context'}));
     const hint=analysisHint(item);if(hint)panel.append(el('p',hint,{class:'muted'}));
     attributes(list, {status:item.status, parent:item.parent ? label(item.parent) : 'root'});
     if (item.boundary) panel.append(el('p', 'Only recorded references are shown. Further external dependencies were not analysed.', {class:'muted'}));
     if (item.source) {
       const link = sourceLink(item.source);
-      if (link) { const dd = el('dd'); dd.append(link); list.append(el('dt', 'source'), dd); }
+      if (link) { const dd = el('dd'); dd.append(link); list.append(el('dt', item.attrs?.definition_location?'definition':'source'), dd); }
     }
+    if(item.attrs?.declaration)attributes(list,{declaration:item.attrs.declaration});
     const entries = Object.entries(item.attrs || {}), isAnalysis = ([name]) => name === 'analysis' || name === 'ownership' || name.endsWith('_analysis');
     attributes(list, Object.fromEntries(entries.filter(isAnalysis)));
     panel.append(list);
-    if (state.universe.isGroup(item.id) && item.id !== state.universe.root) {
+    if(item.attrs?.source_file)renderFileSymbols(panel,item);
+    if (state.universe.isGroup(item.id) && !item.attrs?.source_region && item.id !== state.universe.root) {
       const button = el('button', null, {type:'button','data-action':'toggle-group'});
       updateGroupControl(button, item.id);
       button.onclick = () => toggleGroup(item.id);
@@ -538,7 +583,11 @@ function renderDetails(item) {
     const fly = el('button', 'Fly to star', {type:'button'});
     fly.onclick = () => flyToNode(item.id);
     panel.append(fly);
-    const secondary = Object.fromEntries(entries.filter(entry => !isAnalysis(entry)));
+    const primary=new Set(['signature','type_signature','qualified','declaration','definition_location','declaration_kind',
+      'access','static','virtual','const','member_counts','declaration_origin','source_partition','source_sections',
+      'presentation_group','source_owner','source_context','source_file','source_private','source_region',
+      'source_definitions','source_declarations','source_caption']);
+    const secondary = Object.fromEntries(entries.filter(entry => !isAnalysis(entry)&&!primary.has(entry[0])));
     if (Object.keys(secondary).length) {
       const metadata = el('details', null, {class:'node-metadata'}), fields = el('dl');
       attributes(fields, secondary); metadata.append(el('summary', 'Metadata'), fields); panel.append(metadata);
@@ -560,6 +609,30 @@ function renderDetails(item) {
   if (state.universe.paged && !item.referenceGroup) {
     appendReferencePage(panel,{groups:item.refs.map(r=>r.group)},referenceTotal(item.refs));
   } else appendReferences(panel, item.refs || [item]);
+}
+
+function renderFileSymbols(panel,item){
+  const definitions=item.attrs.source_definitions||[],declarations=item.attrs.source_declarations||[];
+  panel.append(el('p','Open a definition to explore its existing class or function.',{class:'muted'}));
+  for(const [name,ids] of [['Definitions in this file',definitions],['Declarations in this file',declarations]]){
+    if(!ids.length)continue;
+    panel.append(el('h3',`${name} (${ids.length})`));
+    const entries=el('div',null,{class:'file-symbols'});let offset=0;
+    const more=el('button','Show more symbols',{type:'button'});
+    const append=()=>{
+      const limit=Math.min(ids.length,offset+40);
+      for(;offset<limit;offset++){
+        const id=ids[offset],node=state.universe.nodes.get(id);
+        if(!node)continue;
+        const qualified=node.attrs?.qualified||node.label,owner=state.universe.nodes.get(node.parent);
+        const button=el('button',null,{type:'button','data-symbol':id,title:qualified,'aria-label':qualified});
+        button.append(el('strong',node.label));if(owner)button.append(el('small',owner.label));
+        button.onclick=()=>flyToNode(id);entries.append(button);
+      }
+      more.hidden=offset>=ids.length;
+    };
+    more.onclick=append;append();panel.append(entries,more);
+  }
 }
 
 function renderProjectDetails(panel,node) {
@@ -763,16 +836,22 @@ function renderConnections(panel, node) {
     for(const [heading,direction] of [['Outgoing','outgoing'],['Incoming','incoming'],['Within','within']]){
       const count=stats[direction];panel.append(el('h3',`${heading} references recorded (${count})`));
       appendConfigurationSubset(panel,node.id,direction);
-      if(count)appendReferencePage(panel,{node:node.id,direction},count);
+      if(count){
+        const query=node.attrs?.presentation_group?{groups:map.references(node.id).filter(ref=>{
+          const source=map.referenceInside(node.id,ref,'source'),target=map.referenceInside(node.id,ref,'target');
+          return direction==='within'?source&&target:direction==='outgoing'?source&&!target:target&&!source;
+        }).map(ref=>ref.group)}:{node:node.id,direction};
+        appendReferencePage(panel,query,count);
+      }
       else panel.append(el('p',node.boundary?'No further references were analysed.':'No recorded references.',{class:'muted'}));
     }
     return;
   }
   const references = map.references(node.id);
   for (const [heading, match] of [
-    ['Outgoing', e => map.contains(node.id,e.source) && !map.contains(node.id,e.target)],
-    ['Incoming', e => map.contains(node.id,e.target) && !map.contains(node.id,e.source)],
-    ['Within', e => map.contains(node.id,e.source) && map.contains(node.id,e.target)],
+    ['Outgoing', e => map.referenceInside(node.id,e,'source') && !map.referenceInside(node.id,e,'target')],
+    ['Incoming', e => map.referenceInside(node.id,e,'target') && !map.referenceInside(node.id,e,'source')],
+    ['Within', e => map.referenceInside(node.id,e,'source') && map.referenceInside(node.id,e,'target')],
   ]) {
     const edges = references.filter(match);
     panel.append(el('h3', `${heading} references recorded (${referenceTotal(edges)})`));

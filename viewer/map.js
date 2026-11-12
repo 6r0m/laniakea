@@ -6,7 +6,8 @@ const TRACE_SELECTOR=TRACE_CLASSES.split(' ').map(name=>'.'+name).join(',');
 
 function nodeMetadata(id) {
   const entry = state.indexLookup ? state.indexLookup.get(id) : state.index && state.index.nodes.find(n => n.id === id);
-  if (entry) return entry;
+  if (entry) return state.universe.nodes.get(id)?.attrs?.source_sections?
+    {...entry,child_count:state.universe.childIds(id).length}:entry;
   const n = state.universe && state.universe.nodes.get(id);
   return n && { ...n, child_count: state.universe.childIds(id).length };
 }
@@ -22,7 +23,8 @@ function analysisHint(node) {
 
 function nodeDescription(node) {
   const externalGroup=node.boundary&&node.level==='project';
-  const entry = nodeMetadata(node.id), parts = [externalGroup?'external dependency group':node.level];
+  const entry = nodeMetadata(node.id), parts = [node.attrs?.source_file?'source file':node.attrs?.presentation_group?'source region':
+    externalGroup?'external dependency group':node.attrs?.declaration_kind||node.level];
   if (node.parent === null && !node.boundary) parts.push('root');
   else if (entry && entry.child_count) parts.push(`${entry.child_count} inside`);
   if (node.boundary&&!externalGroup) parts.push('external');
@@ -33,8 +35,13 @@ function nodeDescription(node) {
 function mapNode(node, members, drill) {
   const entry = nodeMetadata(node.id), group = entry && entry.child_count > 0 &&
     !(node.parent === null && !node.boundary);
-  return { group: 'nodes', data: { id: node.id, label: node.label, caption:node.label },
+  const caption=node.attrs?.source_caption||node.label;
+  return { group: 'nodes', data: { id: node.id, label: node.label, caption,iconKind:NodeIcons.kind(node),
+    ...(caption!==node.label?{displayName:caption}:{}) },
     classes: [members.has(node.id) && 'member', group && 'group', Object.hasOwn(drill,node.id) && 'openable',
+      node.attrs?.presentation_group && 'source-region',(node.attrs?.source_private||node.attrs?.source_partition?.collapsed)&&'implementation',
+      node.attrs?.source_file&&'source-file',
+      ['private','protected'].includes(node.attrs?.access)&&'restricted-member',node.attrs?.source_region&&'organizational',
       node.boundary && 'boundary', node.status].filter(Boolean).join(' ') };
 }
 
@@ -69,6 +76,9 @@ function style() {
       label: '', color: css('--muted'), 'font-size': 11, 'text-background-color': css('--bg'),
       'text-background-opacity': 0.9, 'text-background-padding': 2 } },
     { selector: 'edge.derived.hovered, edge.derived:selected', style: { label: 'data(count)','target-arrow-shape':'triangle' } },
+    // Direct owner references meet the named top boundary of an expanded container.
+    {selector:'edge.source-expanded',style:{'source-endpoint':'0% -50%'}},
+    {selector:'edge.target-expanded',style:{'target-endpoint':'0% -50%'}},
     { selector:'edge.loop',style:{'curve-style':'bezier','source-endpoint':'outside-to-node','target-endpoint':'outside-to-node',
       'control-point-step-size':'data(loopDistance)'} },
     { selector:'edge.arranging',style:{display:'none'} },
@@ -84,11 +94,18 @@ function style() {
     {selector:'node.trace-anchor',style:{'border-color':css('--fg'),'underlay-color':css('--fg'),
       'underlay-opacity':0.16,'font-weight':600}},
     {selector:'edge.pair-inspected',style:{label:''}},
+    { selector: 'node.source-region', style: {shape:'roundrectangle','background-opacity':0.08} },
+    { selector: 'node.implementation', style: {'border-color':css('--context'),'background-color':css('--context')} },
+    { selector: 'node.restricted-member', style: {'border-color':css('--muted'),'background-color':css('--context')} },
+    { selector: 'node.organizational', style: {'background-opacity':0.015,'border-opacity':0.18,'font-weight':400} },
+    { selector: 'node.overlapping-context', style: {'text-background-opacity':1,'border-width':2,
+      'border-color':css('--context'),'underlay-color':css('--bg'),'underlay-opacity':1,'underlay-padding':8} },
     { selector: 'node:selected', style: { 'border-color': css('--selection'), 'border-width': 3 } },
   ];
 }
 
 function renderGraph() {
+  renderIconKey();
   clearTimeout(state.inspectTimer);
   clearTimeout(state.gestureTimer);state.gestureActive=false;
   for (const key of ['zoomFrame', 'wheelFrame','viewportFrame','hoverFrame']) {
@@ -170,6 +187,8 @@ function viewportCamera(padding = 220) {
   const cy=state.cy,zoom=worldZoom(),pan=cy.pan();
   if(!cy.width() || !cy.height()) return null;
   const force=[];
+  const scope=state.scopeShard?.scope;
+  if(scope&&scope!==state.universe.root&&state.universe.expanded.has(scope))force.push(scope);
   const inspection=state.selection;
   const exact=inspection?.referenceGroup || inspection?.refs?.length===1&&inspection.id===inspection.refs[0].id;
   const selected=state.pendingReference || (exact ? inspection : null);
@@ -200,14 +219,24 @@ function refreshMap() {
   state.viewportCut=viewportCamera();
   const view = universe.project(state.hidden, state.boundary,state.viewportCut);
   const members = new Set(view.nodes.filter(n => !n.boundary).map(n => n.id));
+  const enclosures=new Set(view.nodes.filter(n=>n.id!==universe.root&&view.expanded.has(n.id)&&universe.isGroup(n.id)).map(n=>n.id));
   const drill = Object.fromEntries(state.index.nodes.map(n => [n.id, n.file]));
   state.shard = { ...state.scopeShard, ...view, members: [...members], drill };
   const nodes = view.nodes.map(n => {
     const item = mapNode(n, members, drill);
+    const p=universe.positions.get(n.id);
+    if(!view.expanded.has(n.id)&&universe.spatial.search(p.x,p.y,p.x,p.y).some(i=>{
+      const owner=universe.spatialIds[i];return enclosures.has(owner)&&!universe.contains(owner,n.id)&&!universe.contains(n.id,owner);
+    })){
+      const parent=universe.nodes.get(universe.viewParents.get(n.id));
+      item.classes+=' overlapping-context';item.data.displayName=n.label+'\nFrom '+(parent?.label||'external context');
+      item.data.caption=item.data.displayName;
+    }
+    if(n.attrs?.source_file&&!universe.childIds(n.id).length){item.grabbable=false;item.pannable=true;}
     if(configurationVisible()&&view.configurationMarks.has(n.id))item.classes+=' configured';
     const expanded = view.expanded.has(n.id) && n.id !== universe.root && universe.isGroup(n.id);
     const {position,...size}=nodeGeometry(n.id,expanded);
-    item.pannable=expanded;
+    if(item.pannable===undefined)item.pannable=expanded;
     if (expanded) {
       item.classes += ' expanded';
       Object.assign(item.data,size);
@@ -222,7 +251,8 @@ function refreshMap() {
     type: e.type, color: colorOf(e.type, e.refs), weight: referenceTotal(e.refs),
     count: referenceTotal(e.refs) > 1 ? String(referenceTotal(e.refs)) : '',
     ...(e.source===e.target?{loopDistance:Math.max(200/cy.zoom(),2*spans.get(e.source))}:{}) },
-    classes: e.status+(e.source===e.target?' loop':'') }));
+    classes: [e.status,e.source===e.target&&'loop',
+      spans.get(e.source)>0&&'source-expanded',spans.get(e.target)>0&&'target-expanded'].filter(Boolean).join(' ') }));
   const elements = [...nodes, ...edges];
   const previous = state.renderedMap?.cy === cy ? state.renderedMap.elements : new Map();
   const definitions = new Map(elements.map(item => [item.data.id, JSON.stringify(item)]));
@@ -305,10 +335,10 @@ function connectionAt(pointer,fallback=null) {
     };
     for(const edge of cy.edges()){
       if(!edge.visible())continue;
-      // Summary styles use straight, centre-to-centre paths; loops and exact curves keep native geometry.
+      // Folded summary endpoints reuse node positions; boundary anchors and curves use native geometry.
       const straight=edge.hasClass('derived')&&!edge.hasClass('loop');
-      const a=straight?position(edge.data('source')):edge.renderedSourceEndpoint(),
-        b=straight?position(edge.data('target')):edge.renderedTargetEndpoint();
+      const a=straight&&!edge.hasClass('source-expanded')?position(edge.data('source')):edge.renderedSourceEndpoint(),
+        b=straight&&!edge.hasClass('target-expanded')?position(edge.data('target')):edge.renderedTargetEndpoint();
       if(!a||!b||![a.x,a.y,b.x,b.y].every(Number.isFinite))continue;
       const controls=straight?[]:(edge.controlPoints()||[]).map(p=>({x:p.x*cy.zoom()+pan.x,y:p.y*cy.zoom()+pan.y})),points=[a];
       for(let i=0;i<controls.length;i++)curve(points,points[points.length-1],controls[i],
@@ -359,7 +389,7 @@ function preview(element, pointer = state.pointer, explicitTrace = null) {
     if(!background)element.addClass('hovered');
     if (trace.kind==='node') {
       const family = cy.nodes().filter(n => state.universe.contains(element.id(), n.id()));
-      const edges = family.connectedEdges();
+      const edges = family.connectedEdges().union(cy.edges().filter(e=>trace.roles.has(e.data('referenceId'))));
       focus(family.union(edges).union(edges.connectedNodes()));
     } else {
       const family=cy.edges().filter(e=>state.trace.roles.has(e.data('referenceId')));
@@ -436,7 +466,13 @@ function traceSummary(trace) {
       'Lines overlap on screen; this is not an architectural junction.','Click to choose a connection.'].filter(Boolean)};
   if(trace.kind==='node') {
     const node=state.universe.nodes.get(trace.source),totals=state.universe.referenceStats.get(node.id);
-    return {title:node.label,description:nodeDescription(node),path:traceName(node.id),
+    const context=DeclarationContext.describe(node,state.universe),structure=[];
+    for(const [type,name] of [['inherits','inheritance'],['overrides','override']])for(const role of ['outgoing','incoming','within']){
+      const count=ConnectionTrace.total((trace.groups[role]||[]).filter(ref=>ref.type===type));
+      if(count)structure.push(`${count} ${role} ${name} refs`);
+    }
+    return {title:node.label,description:nodeDescription(node),path:context.path||traceName(node.id),signature:context.signature,
+      structure:structure.length?'In this view: '+structure.join(' / '):'',source:context.source,context:context.context,
       scope:node.id===state.universe.root?'Project/subtree statistics: all recorded references':'All recorded references in this snapshot',
       rows:[['Outgoing references recorded',totals.outgoing,'outgoing'],['Incoming references recorded',totals.incoming,'incoming'],
         ['Within / self references recorded',totals.within,'within']].map(row=>[...row,state.universe.configurationStats.get(node.id)[row[2]]]),
@@ -497,6 +533,10 @@ function showHoverCard(trace,point) {
   }
   card.replaceChildren(el('strong',summary.title,{class:'hover-name'}),el('small',summary.description,{class:'hover-context'}));
   if(summary.path)card.append(el('small',summary.path,{class:'hover-context hover-path'}));
+  if(summary.signature)card.append(el('code',summary.signature,{class:'declaration-signature'}));
+  for(const note of summary.context||[])card.append(el('small',note,{class:'hover-context'}));
+  if(summary.source)card.append(el('small',summary.source,{class:'hover-context'}));
+  if(summary.structure)card.append(el('small',summary.structure,{class:'hover-context'}));
   if(summary.scope)card.append(el('small',summary.scope,{class:'hover-context'}));
   card.append(rows,...(summary.columns?[el('small',summary.notes.join(' '),{class:'hover-context'})]:
     summary.notes.map(note=>el('small',note,{class:'hover-context'}))));
@@ -590,7 +630,7 @@ function readableLabels(geometryOnly = false) {
   });
   cy.batch(() => {
     if (changed) {
-      cy.nodes().style({ 'font-size': 13 / zoom, 'text-max-width': 150 / zoom,
+      cy.nodes().style({ 'font-size': 13 / zoom, 'text-max-width': n=>(n.hasClass('source-file')?180:150)/zoom,
         'text-background-padding': 3 / zoom, 'border-width': border,
         'outline-width':n=>n.hasClass('configured')?2/zoom:0,'outline-offset':4/zoom });
       const diameter = n => n.hasClass('group') ?
@@ -608,6 +648,7 @@ function readableLabels(geometryOnly = false) {
         n.style('text-halign', align); state.labelAlign.set(n.id(), align);
       }
     }
+    NodeIcons.update(cy,state.universe,state.scopeShard.scope,worldZoom(),zoom,{fg:css('--fg'),bg:css('--bg')});
   });
   state.labelGeometry = {cy, zoom:styleZoom};
   if (!geometryOnly) declutterLabels();
@@ -680,7 +721,7 @@ function measureLabelVariants(items, textOf) {
     for(const item of group.items){
       const variants=item.metrics.variants;variants.delete(item.text);variants.set(item.text,group.offset);
       if(variants.size>4)variants.delete(variants.keys().next().value);
-      item.box=boxAt(item,group.offset);
+      item.textBox=boxAt(item,group.offset);item.box=NodeIcons.titleBox(item.node,item.textBox);
     }
   }
 }
@@ -692,9 +733,10 @@ function declutterLabels() {
   const traced = new Set(cy.edges('.focus').connectedNodes().map(n => n.id()));
   const all = cy.nodes().map(n => {
     const expanded = n.hasClass('expanded');
-    return { id: n.id(), node:n, name:n.data('label') || (n.data('caption') || '').split('\n')[0],
+    return { id: n.id(), node:n, name:n.data('displayName') || n.data('label') || (n.data('caption') || '').split('\n')[0],
       priority: n.hasClass('hovered') || n.selected() ? 8 : inspected.has(n.id()) ? 7 :
-        n.hasClass('match') || n.id() === state.scopeShard.scope ? 6 : traced.has(n.id()) ? 5 : expanded ? 2 : 1 };
+        n.hasClass('match') || n.id() === state.scopeShard.scope ? 6 : traced.has(n.id()) ? 5 :
+          n.hasClass('overlapping-context')?4:expanded ? 2 : 1 };
   }).sort((a,b)=>b.priority-a.priority);
   const glyphs = cy.nodes().not('.expanded').map(n => ({id:n.id(),box:n.renderedBoundingBox({includeLabels:false,
     includeOverlays:false,includeUnderlays:false})}));
@@ -716,9 +758,12 @@ function declutterLabels() {
   // Reserve readable primary names before allowing any secondary metadata to occupy space.
   measureLabelVariants(candidates,item=>item.name);
   kept=choose();
-  for(const limit of [32,18]) {
+  for(const limit of [32,12]) {
     const shorter=candidates.filter(item=>!kept.has(item.id)&&item.name.length>limit);
-    measureLabelVariants(shorter,item=>item.name.slice(0,limit-3)+'...');
+    measureLabelVariants(shorter,item=>{
+      const head=Math.ceil((limit-3)/3);
+      return item.name.slice(0,head)+'...'+item.name.slice(-(limit-3-head));
+    });
     if(shorter.length)kept=choose();
   }
   const fullCandidates=[...kept.values()].filter(item=>{
@@ -741,7 +786,23 @@ function declutterLabels() {
     });
   });
   state.visibleLabels = names;
-  state.labelBoxes=new Map([...kept.values()].map(n=>[n.id,n.box]));
+  state.labelBoxes=new Map([...kept.values()].map(n=>[n.id,n.textBox||n.box]));
+  const titled=cy.nodes('.expanded').filter(node=>node.data('iconKind'));
+  if(titled.length){
+    const palette={fg:css('--fg'),bg:css('--bg')};
+    cy.batch(()=>titled.forEach(node=>NodeIcons.title(node,kept.get(node.id())?.textBox,cy.zoom(),palette)));
+  }
+}
+
+function renderIconKey(){
+  const entries=[['project','Project'],['plugin','Plugin'],['module','Module'],['namespace','Namespace'],
+    ['class','Class'],['struct','Struct'],['union','Union'],['enum','Enum'],['interface','Interface'],
+    ['function','Function / method'],['lambda','Lambda'],['field','Field'],['variable','Variable'],
+    ['file','Source file'],['folder','Folder'],['section','Source section'],['entity','Other entity']];
+  const ink=css('--fg');
+  $('icon-key').replaceChildren(...entries.map(([kind,label])=>{
+    const item=el('span');item.append(el('img',null,{src:NodeIcons.image(kind,ink),alt:'',width:20,height:20,'aria-hidden':'true'}),el('span',label));return item;
+  }));
 }
 
 function grabConstellationLabel(event) {
@@ -805,11 +866,29 @@ function updateScopeSummary() {
     (state.universe.configurationCount?` / ${state.universe.configurationCount} project configuration`:'')+
     (view.hidden>state.universe.configurationCount?` / ${view.hidden-state.universe.configurationCount} filtered`:'');
   renderConfiguration();
+  $('arrange-files').hidden=!sourceArrangementOwner();
   $('map-empty').hidden = view.nodes.length > 0;
   $('map-empty').textContent = 'No stars in this area. Use Fit map to return to the overview.';
 }
 
 function worldZoom() { return state.cy.zoom() * (state.renderScale || 1); }
+
+function detailAtPointer(pointer){
+  const map=state.universe;
+  const scope=map.nodes.get(state.scopeShard?.scope),local=scope&&(scope.attrs?.source_sections||scope.attrs?.presentation_group||
+    ['class','namespace','function'].includes(scope.level));
+  let nearest=null,distance=Infinity;
+  for(const node of state.cy.nodes().not('.expanded')){
+    if(!node.hasClass('source-file')&&(!local||!map.contains(scope.id,node.id())))continue;
+    if(map.regions.has(node.id())||map.expanded.has(node.id())||!map.isGroup(node.id())&&!map.definitionTarget(node.id()))continue;
+    const p=node.renderedPosition(),dx=pointer.x-p.x,dy=pointer.y-p.y,box=state.labelBoxes?.get(node.id());
+    const glyph=Math.abs(dx)<=node.renderedWidth()/2+4&&Math.abs(dy)<=node.renderedHeight()/2+4;
+    const caption=box&&pointer.x>=box.x1&&pointer.x<=box.x2&&pointer.y>=box.y1&&pointer.y<=box.y2;
+    const d=dx*dx+dy*dy;
+    if((glyph||caption)&&d<distance){nearest=node.id();distance=d;}
+  }
+  return nearest;
+}
 
 function nodeGeometry(id,expanded,scale=state.renderScale||1) {
   const box=expanded&&state.universe.bounds.get(id);
@@ -881,8 +960,11 @@ function fitMap() {
 function frameNode(id) {
   if (id === state.universe.root) { fitMap(); return; }
   const map = state.universe, p = map.positions.get(id), r = map.isGroup(id) ? map.radii.get(id) :
-    (map.radii.get(map.nodes.get(id).parent) || 80) * 0.5;
-  frame(map.isGroup(id)?map.bounds.get(id):{x1:p.x-r,y1:p.y-r,x2:p.x+r,y2:p.y+r},110,160/r);
+    (map.radii.get(map.viewParents.get(id)) || 80) * 0.5;
+  const sourceSurface=Boolean(map.nodes.get(id).attrs?.source_sections||map.nodes.get(id).attrs?.source_file);
+  const screenRadius=Math.max(sourceSurface?300:160,
+    50*Math.ceil(Math.sqrt(map.childIds(id).length)));
+  frame(map.isGroup(id)?map.bounds.get(id):{x1:p.x-r,y1:p.y-r,x2:p.x+r,y2:p.y+r},sourceSurface?40:75,screenRadius/r);
   if(state.cy)refreshMap();
 }
 
@@ -903,5 +985,6 @@ function layout() {
     positions = new Map(temp.nodes().map(n=>[n.id(),{...n.position()}])); temp.destroy();
   }
   map.place(state.positionCache.layouts, mode, positions);
+  state.cy.maxZoom(map.zoomLimit);
   refreshMap(); fitMap(); state.positionCache.status();
 }

@@ -276,6 +276,28 @@ test('local placement preserves saved world pins and moving a group moves its co
   assert.ok(patch['app.core.db']&&patch['app.core.nested.leaf']);
 });
 
+test('partial saved arrangements do not reposition automatic neighbours on reload',()=>{
+  const node=(id,parent)=>({id,label:id,parent,level:parent===null?'project':'scope',boundary:false,status:'in-target'});
+  const map=new Universe({nodes:[node('root',null),node('module','root'),node('namespace','module'),
+    node('first','namespace'),node('second','namespace')],edges:[]});
+  map.place({},'auto');const untouched={...map.positions.get('second')};
+  const pins={first:{x:10000,y:4000}},before=JSON.stringify(pins);
+  map.place({auto:pins},'auto');
+  assert.deepEqual(map.positions.get('first'),pins.first);
+  assert.deepEqual(map.positions.get('second'),untouched,'one moved pin must not relocate automatic neighbours on reload');
+  assert.equal(JSON.stringify(pins),before);
+});
+
+test('the camera budget admits recorded groups below the former fixed zoom ceiling',()=>{
+  const node=(id,parent)=>({id,label:id,parent,level:'scope',boundary:false,status:'in-target'});
+  const nodes=[{...node('root',null),level:'project'}];
+  for(let depth=0;depth<12;depth++)for(let i=0;i<4;i++)nodes.push(node(depth+':'+i,depth?depth-1+':0':'root'));
+  const map=new Universe({nodes,edges:[]});map.place({},'auto');
+  const deepest='10:0';map.reveal(deepest);
+  assert.ok(map.zoomLimit>20000,'real added depth must not stop at the historical camera cap');
+  assert.deepEqual(map.zoomStep(map.zoomLimit,map.positions.get(deepest),1),{action:'expand',id:deepest});
+});
+
 test('semantic zoom opens the pointed constellation only and has a separate closing threshold',()=>{
   const map=new Universe(fixture());map.place({},'auto');
   const p=map.positions.get('app.core'),r=map.radii.get('app.core');

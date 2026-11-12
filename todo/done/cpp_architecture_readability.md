@@ -1,12 +1,26 @@
 # C++ architecture readability and encapsulation
 
-**Status:** REVIEW REQUIRED  
+**Status:** DONE - archived execution plan  
 **Scope:** Native C++ ownership/metadata and generic map exploration, hover, search and navigation  
-**Stable documentation owners:** [Unreal profile](../docs/architecture/unreal-profile.md) and
-[graph/viewer semantics](../docs/architecture/graph-model.md)
+**Stable documentation owners:** [Unreal profile](../../docs/architecture/unreal-profile.md) and
+[graph/viewer semantics](../../docs/architecture/graph-model.md)
+
+## Closure record
+
+Archived on 2026-11-12 after implementation. The implementation and subsequent approved presentation refinements
+remain in the working tree. Current contracts belong to the stable documentation owners above, and regressions
+belong to the repository tests.
+
+Implementation verification included JavaScript regressions and browser acceptance. This archive restoration
+reruns documentation and privacy checks only; it does not repeat native extraction or broaden coverage claims.
+
+The original plan below preserves investigation evidence, decisions and review history. Its original unchecked
+planning boxes and approval-era statements are historical, not pending tasks or current standing instructions.
+Later approved changes may supersede those planning assumptions; consult the stable owners for current behavior.
 
 ## Contents
 
+- [Closure record](#closure-record)
 - [Goal](#goal)
 - [Authority register](#authority-register)
 - [Non-goals](#non-goals)
@@ -81,12 +95,12 @@ project. Do not hide test code or macro-generated declarations by spelling or so
 
 ### Facts
 
-- [Native metadata](../laniakea/unreal/native_index.py), `metadata()`, retains semantic parents only when their
+- [Native metadata](../../laniakea/unreal/native_index.py), `metadata()`, retains semantic parents only when their
   cursor kind is in `CLASSES | FUNCTIONS`. Namespaces contribute qualified text but no ownership node.
   The declaration callback also excludes namespace cursors.
-- [Normalization](../laniakea/unreal/symbols.py), `merge()`, retains only class/function facts, initially assigns
+- [Normalization](../../laniakea/unreal/symbols.py), `merge()`, retains only class/function facts, initially assigns
   a module parent, then reparents when the compiler parent is also retained. Class methods already nest.
-- [Native API](../laniakea/unreal/native_api.py) already binds semantic-parent lookup. The installed pinned LLVM
+- [Native API](../../laniakea/unreal/native_api.py) already binds semantic-parent lookup. The installed pinned LLVM
   also exposes lexical-parent lookup; it is not currently bound by the adapter.
 - A local synthetic native diagnostic with named/reopened and anonymous namespaces, nested records,
   an out-of-line method, a local class, a class template, a union and three nested/generic lambda expressions
@@ -100,17 +114,17 @@ project. Do not hide test code or macro-generated declarations by spelling or so
 - Read-only inspection of the reported private module confirmed both named-namespace and anonymous-namespace
   helpers among its direct function children, alongside correctly grouped class methods. Its identifying
   evidence remains only in the ignored workspace.
-- [Profile publication](../laniakea/unreal/__init__.py) advertises class/function levels;
-  [compiler coverage](../laniakea/unreal/compiler.py) counts those levels explicitly.
-- [Universe](../viewer/universe.js) constructs containment from generic `parent` links, checks cycles and does
-  not restrict child levels. [The graph contract](../docs/architecture/graph-model.md#nodes) makes a file an
+- [Profile publication](../../laniakea/unreal/__init__.py) advertises class/function levels;
+  [compiler coverage](../../laniakea/unreal/compiler.py) counts those levels explicitly.
+- [Universe](../../viewer/universe.js) constructs containment from generic `parent` links, checks cycles and does
+  not restrict child levels. [The graph contract](../../docs/architecture/graph-model.md#nodes) makes a file an
   attribute, never an ownership node.
-- [Native cache preparation](../laniakea/unreal/symbol_cache.py) includes native adapter code digests in its key.
+- [Native cache preparation](../../laniakea/unreal/symbol_cache.py) includes native adapter code digests in its key.
   An extraction change must not reuse facts which never recorded the missing owners.
-- [Map index construction](../laniakea/map_index.py), `build()`, retains canonical node labels/attributes but
+- [Map index construction](../../laniakea/map_index.py), `build()`, retains canonical node labels/attributes but
   reduces references to endpoint/type/count groups. Individual external declaration names remain in exact
   reference payloads, not those groups. The existing
-  [external-declaration paging regression](../tests/test_map_index.py) proves that distinct declarations can
+  [external-declaration paging regression](../../tests/test_map_index.py) proves that distinct declarations can
   share one compact group and still be recovered through paging.
 - A synthetic probe against the installed LLVM 21.1.8 verified access, static/virtual/const method properties
   and semantic versus lexical parents on out-of-line definitions without compiler errors. Its macro cases
@@ -137,13 +151,13 @@ has been proved. The regression matrix below closes those specific gaps before i
 
 ## Current architecture and source of truth
 
-[Graph semantics](../docs/architecture/graph-model.md) own generic containment and continuous projection.
-[Unreal profile](../docs/architecture/unreal-profile.md) owns compiler integration and coverage limitations.
+[Graph semantics](../../docs/architecture/graph-model.md) own generic containment and continuous projection.
+[Unreal profile](../../docs/architecture/unreal-profile.md) owns compiler integration and coverage limitations.
 Native compiler facts flow through `native_index.py`, `symbols.merge()`, profile publication, shards and the
 disposable map index into `Universe`. The extraction adapter owns C++ meaning; the viewer must not infer it
 from qualified names, paths or a list of Unreal class spellings.
-The viewer's [scene navigation](../viewer/scene.js), [labels/hover](../viewer/map.js),
-[search/inspection](../viewer/app.js) and [layout](../viewer/app.css) own presentation of those facts.
+The viewer's [scene navigation](../../viewer/scene.js), [labels/hover](../../viewer/map.js),
+[search/inspection](../../viewer/app.js) and [layout](../../viewer/app.css) own presentation of those facts.
 
 ## Problem and root cause
 
@@ -372,7 +386,7 @@ not universal attribution; F8/zoom corrections are conditional on remaining repr
 The missing-namespace assertions must reject current output. Identity tests use a relevant merged-owner bad control
 where current behavior is already sound. Existing correct nesting is a preservation control, not a fabricated
 failing test. Use the existing synthetic project infrastructure in
-[native tests](../tests/test_native_symbols.py); add focused cases for distinct failure modes, not one per spelling.
+[native tests](../../tests/test_native_symbols.py); add focused cases for distinct failure modes, not one per spelling.
 
 ### Green evidence
 
@@ -385,15 +399,15 @@ failing test. Use the existing synthetic project infrastructure in
 - Run the same native cases with `LANIAKEA_TEST_LIBCLANG` pointing to the local pinned library. Validate canonical
   graph, manifest levels, shards and map-index reference queries; IDs and exact pre-existing reference identities
   must survive added containment. Validate reordered batches and rejected ownership collisions.
-- Run focused [cache tests](../tests/test_symbol_cache.py) for stale facts and the module-only isolation cases in
-  [input tests](../tests/test_symbol_inputs.py). Then `python -m unittest discover -s tests` in the supported Windows
+- Run focused [cache tests](../../tests/test_symbol_cache.py) for stale facts and the module-only isolation cases in
+  [input tests](../../tests/test_symbol_inputs.py). Then `python -m unittest discover -s tests` in the supported Windows
   environment, with diagnostic/temp output directed into the ignored workspace.
 - Check native fact/map payload size and extraction timings with the added member metadata. Keep member summaries
   compact; no native input boundary, publication failure behavior or cache-validation requirement may be weakened.
 - Run `node --test tests/viewer.test.cjs tests/universe.test.cjs tests/references.test.cjs tests/traces.test.cjs`.
   Extend generic containment/projection tests only for newly exposed owner-chain behavior.
-- Run the existing trusted-pointer functions in [viewer browser acceptance](../tests/viewer.browser.js) and
-  [trace browser acceptance](../tests/traces.browser.js) using their documented local browser route.
+- Run the existing trusted-pointer functions in [viewer browser acceptance](../../tests/viewer.browser.js) and
+  [trace browser acceptance](../../tests/traces.browser.js) using their documented local browser route.
 - Before native extraction, hash saved layout files and capture the published run ID. Request one fresh native
   extraction using the existing selected target/configuration policy. Record cache hits/misses, per-unit diagnostics,
   wall time, peak memory and artifact sizes. Adapter code changes can require a cold fact pass; do not promise cheap

@@ -11,6 +11,7 @@ from pathlib import Path
 
 from . import LaniakeaError, schema
 from .workspace import read_json, write_json, writer_lock
+from .source_files import SourceFiles
 
 
 def _digest(path):
@@ -62,7 +63,8 @@ def build(graph, destination, source_hash=None, generator_hash=None):
     destination = Path(destination)
     destination.mkdir(parents=True, exist_ok=False)
     groups = {}
-    topology = {'schema': 'laniakea.map/1', 'nodes': graph['nodes'], 'references': []}
+    files = SourceFiles(graph)
+    topology = {'schema': 'laniakea.map/1', 'nodes': graph['nodes'], 'references': [], 'files': files.files}
     database = destination / 'references.sqlite'
     with closing(sqlite3.connect(database)) as db:
         db.execute('PRAGMA temp_store=MEMORY')
@@ -76,12 +78,17 @@ def build(graph, destination, source_hash=None, generator_hash=None):
         db.executemany('INSERT INTO nodes VALUES (?,?,?)', ((identity, *interval) for identity, interval in bounds.items()))
         def rows():
             for number, edge in enumerate(graph['edges'], 1):
-                key = (indices[edge['source']], indices[edge['target']], edge['type'], bool(edge.get('internal_to_owner')))
+                source_file, target_file = files.endpoints(edge)
+                key = (indices[edge['source']], indices[edge['target']], edge['type'], bool(edge.get('internal_to_owner')),
+                       source_file, target_file)
                 if key not in groups:
                     groups[key] = len(groups)+1
                     topology['references'].append({'source': key[0], 'target': key[1], 'type': key[2], 'count': 0})
                     if key[3]:
                         topology['references'][-1]['internal_to_owner'] = True
+                    for name, value in (('source_file', source_file), ('target_file', target_file)):
+                        if value is not None:
+                            topology['references'][-1][name] = value
                 group = groups[key]
                 topology['references'][group-1]['count'] += 1
                 yield (number, group, bounds[edge['source']][0], bounds[edge['target']][0],
@@ -112,7 +119,8 @@ def ensure(workspace, target, run):
     source = Path(run) / 'graph.json'
     raw = source.read_bytes()
     source_hash = hashlib.sha256(raw).hexdigest()
-    generator_hash = hashlib.sha256(Path(__file__).read_bytes()+schema.SCHEMA_FILE.read_bytes()).hexdigest()
+    generator_hash = hashlib.sha256(Path(__file__).read_bytes()+schema.SCHEMA_FILE.read_bytes()+
+                                    Path(__file__).with_name('source_files.py').read_bytes()).hexdigest()
     root = workspace.target_dir(target) / 'views'
     final = root / (source_hash+'-'+generator_hash[:16])
     if final.is_dir():

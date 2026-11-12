@@ -32,8 +32,10 @@ explicitly listed targets; project configuration stays out of the architecture w
 Select the other layout modes to return to existing arrangements.
 Runs without presentation hints use orbits until extracted again.
 
-Browse & filters provides a keyboard-accessible node list and typed reference filters. `/` finds any recorded node;
-Enter flies to it. Double-click a group, or focus it with arrow keys and press Enter, to expand or collapse it.
+Browse & filters provides a keyboard-accessible node list and typed reference filters. `/` finds recorded names,
+qualified names, signatures and recorded header paths. The bounded result list shows owners to distinguish shared short names; use arrow
+keys to choose and Enter to fly there. Deep breadcrumbs keep earlier ancestors in a disclosure beside the current scope.
+Double-click a group, or focus it with arrow keys and press Enter, to expand or collapse it.
 `+` and `-` zoom when the map has focus; Ctrl+wheel remains browser zoom. Existing scope bookmarks fly to that part
 of the same map. Drag a star or its visible name to arrange it; dragging a constellation moves its contents too.
 Positions save once on release, shared across hierarchy addresses within each project and layout mode. Fit map
@@ -61,16 +63,33 @@ previous published map; omit `--symbols` for module exploration. Engine symbols 
 module/plugin boundaries. Referenced Engine ThirdParty libraries keep their owner context; compiler and SDK providers
 are identified from recorded build roots. Unknown suppliers stay explicit. Calls are statically resolved; other callable
 references remain visible as function references.
+Real namespaces group their types and helpers; classes and callable owners retain methods and observed nested lambdas.
+Native module views expose public-header constellations first. Expand a header to its recorded types, then a type
+to its members. Private implementation, source folders and recorded private headers remain folded until approached.
+Wheel or double-click reveals them; reference navigation can reveal a private endpoint directly. Source regions
+organize the view without assigning shared helpers to a public class or changing namespace ownership.
+Hover or inspect to see declaration kind, signature, access/properties and distinct declaration/definition sources
+when recorded. Types summarize observed fields and callable access without pretending that fields are individual
+stars or that the member inventory is exhaustive. Enum/value and local-variable stars are not indexed. Older runs
+remain readable; extract again with `--symbols` to collect the added compiler context.
 The optional compiler argument enables preprocessing-validated reuse on subsequent extractions. Cold symbol analysis can
 be expensive; `serve` opens a published run without extracting again, checking input freshness at startup.
 
 Checks: `python -m unittest discover -s tests`. Viewer regressions also run with
-`node --test tests/viewer.test.cjs tests/universe.test.cjs tests/references.test.cjs tests/traces.test.cjs` when Node.js 18 or later is available; it is not needed to run Laniakea.
+`node --test tests/viewer.test.cjs tests/universe.test.cjs tests/sections.test.cjs tests/references.test.cjs tests/traces.test.cjs` when Node.js 18 or later is available; it is not needed to run Laniakea.
 The Playwright function in `tests/viewer.browser.js` checks wheel expansion and folding, hover tracing, exact
 reference navigation, centered layout/configuration, constellation and label dragging, saved positions in a fresh browser, and a narrow viewport
 against a served synthetic sample.
 `tests/traces.browser.js` checks trusted pointer movement on reciprocal, mixed-type, crossing, one-way and recursive
 connections, both-direction inspection, filters, theme contrast and the keyboard-accessible narrow readout on that sample.
+`tests/readability.browser.js` checks qualified search, ambiguous keyboard choices, declaration context, data-only coverage
+and deep wheel/breadcrumb navigation using an in-memory synthetic hierarchy on that sample.
+`tests/sections.browser.js` checks folded source/header regions, source links, exact-reference paging, wheel/folder
+navigation, reload, dragging through real symbol pins and narrow inspection on the disposable sample.
+`tests/endpoints.browser.js` checks visible boundary endpoints, reference accounting across expanded layers,
+and trusted wire interaction against the former empty-centre regression on that sample.
+`tests/source-surface.browser.js` checks concrete implementation files, exact file counts and declaration/definition
+navigation to one class-owned symbol, using `fixtures/source-surface.graph.json` through the normal read index/server.
 `tests/viewer.performance.js` measures trusted mouse/wheel input, frame intervals, main-thread work and heap through
 Playwright/CDP on the current map, then restores its camera. Compare the same scope and expansion state; frame times
 depend on hardware and local load. It checks that zooming changes no world positions or saved pins.

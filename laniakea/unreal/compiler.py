@@ -77,7 +77,8 @@ def worker_count():
 def batches(out, count):
     for n in range(count):
         with gzip.open(Path(out) / f"job-{n:04d}.json.gz", "rt", encoding="utf-8") as stream:
-            yield json.load(stream)
+            batch=json.load(stream)
+        yield batch
 
 
 def extract(target, run_dir, built, exported, chosen, tools_dir):
@@ -140,13 +141,13 @@ def extract(target, run_dir, built, exported, chosen, tools_dir):
         if module:
             units["module:" + module] = units.get("module:" + module, 0) + 1
     for node in result["nodes"]:
-        if node["level"] not in {"class", "function"}:
+        if node["level"] not in {"namespace", "class", "function"}:
             continue
         parent = node["parent"]
         while parent and nodes[parent]["level"] != "module":
             parent = nodes[parent]["parent"]
         if parent:
-            values = counts.setdefault(parent, {"class": 0, "function": 0})
+            values = counts.setdefault(parent, {"namespace": 0, "class": 0, "function": 0})
             values[node["level"]] += 1
     for node in result["nodes"]:
         if node["level"] == "module" and not node["boundary"]:
@@ -154,6 +155,7 @@ def extract(target, run_dir, built, exported, chosen, tools_dir):
             values = counts.get(node["id"], {})
             attrs["indexed_classes"] = values.get("class", 0)
             attrs["indexed_functions"] = values.get("function", 0)
+            attrs["indexed_namespaces"] = values.get("namespace", 0)
             attrs["compiler_units"] = units.get(node["id"], 0)
             attrs["compiler_analysis"] = ("outside current target" if node["status"] != "in-target" else
                 "declarations reached by native target compilation" if attrs["compiler_units"] else

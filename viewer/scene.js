@@ -38,6 +38,7 @@ function fitOverview() {
 function rememberView() {
   if (!state.cy || !state.universe || state.framing) return;
   const scene = { target: state.target.id, run: state.target.run, expanded: [...state.universe.expanded],
+    scope:state.scopeShard.scope,
     layout:$('layout').value,configuration:{...state.configuration},
     pan: { ...state.cy.pan() }, zoom: worldZoom(), size:{width:state.cy.width(),height:state.cy.height()} };
   history.replaceState({ scene }, '', hashFor(state.target.id, state.file));
@@ -57,6 +58,7 @@ function restoreView(scene) {
     $('layout').value=scene.layout;layout();
   }
   refreshMap();
+  if(scene.scope&&map.nodes.has(scene.scope))setSceneScope(scene.scope);
   const size = scene.size && Number.isFinite(scene.size.width) && Number.isFinite(scene.size.height) ? scene.size :
     {width:state.cy.width(),height:state.cy.height()};
   setWorldViewport(scene.zoom,{x:scene.pan.x+(state.cy.width()-size.width)/2,
@@ -67,7 +69,9 @@ function restoreView(scene) {
 }
 
 function scopeFor(id) {
-  return state.indexLookup ? state.indexLookup.get(id) : state.index.nodes.find(n => n.id === id);
+  const lookup=identity=>state.indexLookup ? state.indexLookup.get(identity) : state.index.nodes.find(n => n.id === identity);
+  return lookup(id)||(state.universe.nodes.get(id)?.attrs?.presentation_group?
+    lookup(state.universe.nodes.get(id).attrs.source_owner):null);
 }
 
 function setSceneScope(id) {
@@ -76,7 +80,7 @@ function setSceneScope(id) {
   const n = map.nodes.get(id);
   state.file = entry.file;
   state.scopeShard = {scope:id,title:n.label,parents:map.paths.get(id).slice(0,-1).map(a => {
-    const entry = scopeFor(a); return entry && {title:map.nodes.get(a).label,file:entry.file};
+    const entry = scopeFor(a); return entry && {id:a,title:map.nodes.get(a).label,file:entry.file};
   }).filter(Boolean)};
   if (state.shard) Object.assign(state.shard, state.scopeShard);
   document.title = `${n.label} - Laniakea`;
@@ -89,15 +93,25 @@ function semanticZoom(direction) {
     state.zoomFrame = null;
     if (!state.pointer || !state.cy || state.drag) return;
     const map = state.universe, cy = state.cy, zoom = worldZoom(), pan = cy.pan();
+    const detail=direction>0&&detailAtPointer(state.pointer);
+    if(detail){
+      const id=map.definitionTarget(detail)||detail;
+      map.reveal(id);if(map.isGroup(id))map.expanded.add(id);
+      setSceneScope(id);unfocus();refreshMap();frameNode(id);rememberView();return;
+    }
     const point = {x:(state.pointer.x-pan.x)/zoom,y:(state.pointer.y-pan.y)/zoom};
     let change, changed = false;
     for (let i = 0; i < map.nodes.size; i++) {
       change = map.zoomStep(zoom, point, direction);
       if (!change) break;
       changed = true;
+      if(change.action==='definition'){
+        map.reveal(change.id);if(map.isGroup(change.id))map.expanded.add(change.id);
+        setSceneScope(change.id);refreshMap();frameNode(change.id);break;
+      }
       if (change.action === 'expand') setSceneScope(change.id);
       else if (map.contains(change.id, state.scopeShard.scope)) {
-        setSceneScope(map.nodes.get(change.id).parent || map.root);
+        setSceneScope(map.viewParents.get(change.id) || map.root);
       }
     }
     if (changed) { unfocus(); refreshMap(); }
@@ -107,11 +121,12 @@ function semanticZoom(direction) {
 
 function toggleGroup(id) {
   const map = state.universe;
+  if(map.regions.has(id)){selectNode(id);return;}
   if (!map.isGroup(id)) { selectNode(id); return; }
   rememberView();
   if (map.expanded.has(id) && id !== map.root) {
     map.expanded.delete(id);
-    setSceneScope(map.nodes.get(id).parent || map.root);
+    setSceneScope(map.viewParents.get(id) || map.root);
     refreshMap();
   } else {
     map.reveal(id); map.expanded.add(id);
