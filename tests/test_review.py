@@ -74,6 +74,68 @@ class ReviewTests(unittest.TestCase):
                 self.assertEqual(row['id'], witness['id'])
         self.assertTrue(any(c['status'] == 'partial' for c in report['checks']))
 
+    def test_empty_forbidden_selectors_are_unavailable_not_implicit_all(self):
+        self.graph['nodes'].append({'id':'D','level':'module','label':'SampleExternal','parent':'project',
+                                    'boundary':True,'status':'not-analysed'})
+        for source,target in [({},{}),({}, {'ids':['B']}),({'ids':['A']},{}),({}, {'ids':['D']})]:
+            with self.subTest(source=source,target=target):
+                self.policy([{'id':'boundary','kind':'forbidden','source':source,'target':target}])
+                page=self.service().page({})
+                self.assertEqual(page['total'],0)
+                self.assertEqual(page['checks'][0]['status'],'unavailable')
+        self.policy([{'id':'explicit-all','kind':'forbidden','source':{'label_glob':'*'},
+                      'target':{'label_glob':'*'}}])
+        self.assertEqual(self.service().page({})['total'],2)
+
+    def test_unrelated_dependency_preserves_native_triage_but_pair_context_changes_reopen(self):
+        self.graph['nodes'].append({'id':'D','level':'module','label':'SampleOther','parent':'project',
+                                    'boundary':False,'status':'in-target'})
+        service=self.service();page=service.page({})
+        finding=next(f for f in page['items'] if f['kind']=='native')
+        service.update({'action':'triage','report':page['report'],'revision':0,'finding':finding['id'],
+                        'state':'accepted','reason':'Reviewed module pair'})
+        before=service.triage.path.read_bytes()
+        call=self.graph['edges'][-1]
+        self.graph['edges'].append({'id':'AD','source':'A','target':'D','type':'depends.private',
+                                    'status':'declared','origin':'ubt'})
+        unchanged=next(f for f in self.service().page({'ack':True})['items'] if f['kind']=='native')
+        self.assertEqual(unchanged['fingerprint'],finding['fingerprint'])
+        self.assertEqual(unchanged['triage'],'accepted')
+        self.assertEqual(service.triage.path.read_bytes(),before)
+        call['attrs']['public_exposure_path']=['A','B','C']
+        changed=next(f for f in self.service().page({})['items'] if f['kind']=='native')
+        self.assertEqual(changed['id'],finding['id']);self.assertEqual(changed['triage'],'active')
+        call['attrs']['public_exposure_path']=[]
+        self.graph['edges'].append({'id':'AC','source':'A','target':'C','type':'depends.public',
+                                    'status':'declared','origin':'ubt'})
+        changed=next(f for f in self.service().page({})['items'] if f['kind']=='native')
+        self.assertEqual(changed['id'],finding['id']);self.assertEqual(changed['triage'],'active')
+
+    def test_profile_rejects_unsupported_dependency_families_and_generic_imports_work(self):
+        self.manifest['edge_types']=[{'id':kind} for kind in ('calls','requires','depends.private')]
+        write_json(self.run/'manifest.json',self.manifest)
+        for kind in ('cycles','forbidden'):
+            selectors={'source':{'ids':['A']},'target':{'ids':['B']}} if kind=='forbidden' else {}
+            for family in (['calls'],['requires'],['depends.private','requires']):
+                with self.subTest(kind=kind,family=family):
+                    self.policy([{'id':'family','kind':kind,'types':family,**selectors}])
+                    page=self.service().page({})
+                    self.assertEqual(page['total'],0)
+                    self.assertEqual(page['checks'][0]['status'],'unavailable')
+                    self.assertIn('family',page['checks'][0]['detail'])
+            self.policy([{'id':'family','kind':kind,'types':['depends.private'],**selectors}])
+            page=self.service().page({})
+            self.assertEqual(page['total'],1)
+            self.assertEqual(page['checks'][0]['status'],'evaluated-on-recorded-scope')
+        self.graph,self.manifest=fixture(False)
+        self.manifest.update(profile='generic',edge_types=[{'id':'imports'}])
+        write_json(self.run/'manifest.json',self.manifest)
+        for edge in self.graph['edges']:edge['type']='imports'
+        self.policy([{'id':'imports-cycle','kind':'cycles','types':['imports']}])
+        page=self.service().page({})
+        self.assertEqual(page['total'],1)
+        self.assertEqual(page['checks'][0]['status'],'evaluated-on-recorded-scope')
+
     def test_explicit_policy_is_required_for_red_and_resolves_scope(self):
         self.policy([{'id': 'domain-no-ui', 'kind': 'forbidden', 'source': {'ids': ['A']},
                       'target': {'ids': ['B']}, 'reason': 'Keep the sample boundary',
@@ -135,7 +197,7 @@ class ReviewTests(unittest.TestCase):
         for witness in current['witnesses']:
             self.assertEqual(moved_service.index.references(witness['query'])['items'][0]['reference']['source'],
                              'lambda-at-11')
-        self.graph['edges'].append({'id': 'new-context', 'source': 'A', 'target': 'B',
+        self.graph['edges'].append({'id': 'new-context', 'source': 'A', 'target': 'C',
                                     'type': 'depends.public', 'status': 'declared', 'origin': 'ubt'})
         changed = next(f for f in self.service().page({})['items'] if f['kind'] == 'native')
         self.assertEqual(changed['triage'], 'active')

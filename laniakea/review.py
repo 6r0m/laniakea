@@ -8,6 +8,7 @@ from collections import defaultdict, deque
 from . import review_policy
 
 VERSION = 1
+NATIVE_FINGERPRINT_VERSION = 2
 MAX_FINDINGS = 20000
 WITNESSES = 8
 
@@ -69,9 +70,10 @@ def evaluate(nodes, rows, manifest, policy, adapter=None):
     eligible={i:n for i,n in modules.items() if not n['boundary'] and n['status']=='in-target'}
     facts=adapter.inputs(manifest) if adapter else {'version': 1, 'types': (), 'native': False,
                                                  'limits': ['No profile review defaults; configure explicit edge types.']}
+    supported_types=set(facts['types']) if adapter else {t['id'] for t in manifest.get('edge_types',[])}
     types=set(facts['types'])
     for rule in policy['rules']:
-        types.update(rule.get('types', []))
+        types.update(set(rule.get('types', []))&supported_types)
     owners={}
     def owner(identity):
         if identity not in owners:
@@ -118,7 +120,8 @@ def evaluate(nodes, rows, manifest, policy, adapter=None):
                     if key in spec:spec[key]=sorted(set(spec[key]))
                 if 'path_prefix' in spec:spec['path_prefix']=spec['path_prefix'].rstrip('/')
                 semantic_rule[role]=spec
-        fingerprint=digest([VERSION, semantic_rule, subjects, sorted(relationships), context])
+        version=NATIVE_FINGERPRINT_VERSION if rule['kind']=='native' else VERSION
+        fingerprint=digest([version, semantic_rule, subjects, sorted(relationships), context])
         findings.append({'id':identity, 'fingerprint':fingerprint, 'rule':rule['id'], 'kind':rule['kind'],
                          'subjects':subjects, 'severity':severity, 'title':title, 'reason':rule.get('reason',''),
                          'guidance':guidance, 'count':count, 'witnesses':witnesses[:WITNESSES],
@@ -134,21 +137,20 @@ def evaluate(nodes, rows, manifest, policy, adapter=None):
         if any(manifest.get('target',{}).get(k)!=v for k,v in rule.get('context',{}).items()):
             check.update(status='unavailable', detail='Policy context does not match this run.'); continue
         family=set(rule.get('types', facts['types']))
-        known_types=set(facts['types'])|{t['id'] for t in manifest.get('edge_types',[])}
-        if rule['kind']!='native' and family-known_types:
-            check.update(status='unavailable',detail='Dependency edge family is not declared by this profile/run.');continue
+        if rule['kind']!='native' and family-supported_types:
+            check.update(status='unavailable',detail='Unsupported module dependency edge family for this profile/run.');continue
         for name in ('source','target','scope'):
             if name in rule or name=='scope' and rule['kind']!='forbidden':
                 spec=rule.get(name,{})
                 pool=modules if 'ids' in spec else eligible
-                selected=review_policy.match(pool,spec)
+                selected=[] if rule['kind']=='forbidden' and not spec else review_policy.match(pool,spec)
                 check['matched'][name]=selected
                 missing=sorted(set(spec.get('ids',[]))-set(selected))
                 if missing:
                     check['unmatched']=missing
                 if not selected or missing:
                     check.update(status='unavailable', detail='No applicable modules or unmatched explicit module IDs.')
-                elif any(i not in eligible for i in selected):
+                elif check['status']!='unavailable' and any(i not in eligible for i in selected):
                     check.update(status='partial',detail='Selected scope includes external or unanalysed modules; only recorded relations can be checked.')
         if check['status']=='unavailable':
             continue
@@ -160,7 +162,7 @@ def evaluate(nodes, rows, manifest, policy, adapter=None):
             for (a,b), entry in sorted(native.items()):
                 if a not in scope:
                     continue
-                relationships=[k for k in build if k[0]==a and k[2] in facts['types']]
+                relationships=[(a,b,kind) for kind in facts['types'] if (a,b,kind) in build]
                 relationships.extend(('native-context',value) for value in sorted(entry['contexts']))
                 finding(rule,[a,b],relationships,entry['witnesses'],entry['count'],'candidate',
                         'Possible missing direct build dependency',

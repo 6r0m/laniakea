@@ -50,6 +50,21 @@ class Server(unittest.TestCase):
         self.assertEqual(self.get(target['review_url'].replace('/review','/triage.json'))[0],404)
         self.assertEqual(self.get('/layout/sample/entry.json'),before)
 
+    def test_review_routes_disclose_empty_selectors_and_unsupported_families(self):
+        target=self.server.index[0];owner=self.server.reviews['sample']
+        rules=[{'id':'empty','kind':'forbidden','source':{},'target':{}},
+               {'id':'calls','kind':'cycles','types':['calls']},
+               {'id':'descriptor','kind':'cycles','types':['requires']}]
+        write_json(owner.rules_path,{'version':1,'rules':rules})
+        status,body=self.post(target['review_url'],{'action':'recheck'})
+        self.assertEqual(status,200);page=json.loads(body)
+        self.assertEqual(page['total'],0)
+        self.assertEqual([c['status'] for c in page['checks']],['unavailable']*3)
+        write_json(owner.rules_path,{'version':1,'rules':[{'id':'explicit','kind':'forbidden',
+                   'source':{'label_glob':'*'},'target':{'label_glob':'*'}}]})
+        status,body=self.post(target['review_url'],{'action':'recheck'})
+        self.assertEqual(status,200);self.assertGreater(json.loads(body)['total'],0)
+
     def test_advertised_source_roots_belong_to_the_selected_immutable_run(self):
         from laniakea.server import target_index
         workspace = self.server.workspace_for_tests

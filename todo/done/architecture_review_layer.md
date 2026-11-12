@@ -52,6 +52,9 @@ an entire architecture automatically.
 - **D8:** Run the three Engine integration cases now in one additional focused attempt.
   Effect: resolves Q1's retry authorization; no broader rerun or source change authorized by this decision alone.
   Reason: not stated. Source: operator reply "do now" to the pending retry question, 2026-11-12.
+- **D9:** Evaluate the implementation audit against current code and fix valid in-scope findings.
+  Effect: correct rule applicability and triage semantics, verify affected paths and update their existing owners.
+  Reason: correctness and future scalability. Source: operator audit request, 2026-11-12.
 
 ### Operator gates
 
@@ -475,3 +478,33 @@ Engine cases after UBT became idle. Combined with the separate non-Engine run, P
 tests and four optional skips; skipped paths are not claimed verified. No further code change or costly native
 re-extraction was needed for this read-only review feature. Optional analysis remains evidence-limited, and
 occasional long frames remain a measured usability limit. Completed plan archived under D5; no commit or push.
+
+### 2026-11-12 - Implementation audit corrections under D9
+
+- F1-F3 confirmed against the committed implementation. Empty forbidden selectors implicitly matched all modules;
+  native fingerprints included unrelated outgoing dependencies; advertised graph types bypassed profile applicability.
+  No finding required refutation. Default cycle scope and explicit wildcard selectors remain intentional all-module cases.
+- Three focused regression methods failed before production changes, including false violations, unavailable status
+  becoming partial and an acknowledged native pair reopening after an unrelated dependency. All now pass. Corrected an
+  existing regression that had treated an unrelated outgoing edge as a meaningful native-context change.
+- Empty forbidden selectors produce unavailable checks. An unavailable selector cannot become applicable merely
+  because another selector matches a boundary module. Unsupported or mixed unsupported families are unavailable;
+  supported Unreal build dependencies and explicitly configured generic imports retain their positive controls.
+- Native fingerprints use the directed pair's typed build relations and recorded reachability states. Direct dictionary
+  lookups replace scanning every build relation for each native pair. A native-only semantic version invalidates
+  incompatible acknowledgements without changing cycle/boundary fingerprints or deleting stored decisions.
+- Updated the existing stable review contract. No new graph, parser, schema, renderer or task document was introduced.
+
+Verification:
+
+- `python -m unittest test_review`: all 23 passed. `python -m unittest test_server test_review test_documentation
+  test_privacy`: all 47 passed, including live HTTP availability and explicit-positive controls.
+- Whole non-Engine suite with available LLVM: 181 executed, 177 passed, four optional skips. The three Engine cases
+  were not rerun for these read-only evaluator changes; D8's execution remains historical evidence, not a new result.
+- Existing JavaScript suite: 163 passed. Both Review Chromium scenarios passed on the final run. An earlier run
+  timed out on entity inspection; an isolated repeat and the combined final run passed. Its cause was not established,
+  so no unrelated pointer or rendering behavior was changed to fit that observation.
+- Restarted the local server; real snapshot review regenerates under current code, module-only analysis stays explicit
+  about unavailable native facts, and canonical/index checksums remain valid. Existing layout, policy and triage bytes
+  are unchanged. No private project values or measurements are copied into this record.
+- Documentation, syntax, whitespace and local privacy checks passed. No staging, commit or publication performed.

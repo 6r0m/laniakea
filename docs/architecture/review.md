@@ -35,6 +35,10 @@ A missing file enables candidate-only defaults. An unreadable or malformed file 
 silently substituting defaults. Required selectors with missing IDs or no matches are unavailable. Inspection exposes
 resolved module sets. Exact IDs, case-sensitive label globs, recorded root/path prefixes and exclusions select modules;
 they never scan the source tree. Explicit constraints must reflect the project's actual intended architecture.
+Empty forbidden-rule selectors are unavailable; use an explicit `*` label glob to select every eligible module.
+Omitting cycle scope still selects all eligible modules. Configured edge families must be supported module dependencies
+for the profile, not merely advertised graph types. Unreal accepts public/private build dependencies; calls and descriptor
+requirements are unavailable for these checks. Generic profiles can explicitly select advertised declared module relations.
 
 ## Finding, evidence and decision
 
@@ -47,7 +51,10 @@ the same module pair do not by themselves change that module-level concern. Chan
 relations, cycle membership/internal relations or build context require reconsideration. Missing compatibility is
 not silently treated as a match. Evaluator/profile versions must change when their semantic interpretation changes.
 For native notes, recorded transitive/public-exposure reachability states affect triage; choosing another witness
-path with the same reachability does not. Cache identity binds the code loaded by the server, not later worktree edits.
+path with the same reachability does not. Only build relations between the affected directed module pair participate;
+unrelated outgoing dependencies do not. Native fingerprint semantics are versioned separately from other finding kinds.
+A decision from an incompatible fingerprint version requires reconsideration without deleting its stored record.
+Cache identity binds the code loaded by the server, not later worktree edits.
 Restart serving after changing backend code.
 
 Accept risk and Not relevant remove findings from active badges/list and retain severity and a separate acknowledged
