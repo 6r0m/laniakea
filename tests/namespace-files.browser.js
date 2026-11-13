@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Serve fixtures/namespace-files.graph.json through the normal map/read-index pipeline.
 async page=>{
-  const check=(ok,message)=>{if(!ok)throw Error(message);},errors=[],writes=[];
+  const check=(ok,message)=>{if(!ok)throw Error(message);},errors=[],writes=[],saveBodies=[];
   page.on('pageerror',e=>errors.push(e.message));
-  page.on('request',r=>{if(r.method()==='POST'&&r.url().includes('/layout/'))writes.push(r.url());});
+  page.on('request',r=>{if(r.method()==='POST'&&r.url().includes('/layout/')){
+    writes.push(r.url());saveBodies.push(r.postDataJSON());}});
   const settle=async()=>{await page.waitForFunction(()=>!state.viewportFrame&&!state.gestureActive&&!state.zoomFrame&&!state.wheelFrame);
     await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));};
   check(await page.evaluate(()=>state.target.id==='sample'&&state.universe.nodes.has('build')),'Requires namespace fixture');
@@ -72,6 +73,40 @@ async page=>{
   check(await page.evaluate(id=>state.scopeShard.scope===id,alias),'Double-click could not enter the recorded scope');
   check(await page.evaluate(initial=>JSON.stringify(state.positionCache.layouts)===initial,initial),'Navigation changed pins');
   check(!errors.length&&!writes.length,'Runtime errors or unexpected pin writes');
+  await reset();
+  await page.evaluate(async()=>{
+    const u=state.universe;u.expanded.add('scope');flyToNode('scope',false);refreshMap();frameNode('scope');
+    const files=[...u.contextFiles.keys()].filter(id=>u.nodes.get(id).attrs.source_owner==='scope'&&state.cy.getElementById(id).length);
+    if(files.length<2)throw Error('Expected two visible namespace-local files');
+    const a=u.positions.get(files[0]),b=u.positions.get(files[1]);u.translate(files[1],a.x-b.x,a.y-b.y);
+    u.indexPositions();refreshMap();frameNode('scope');
+    if(!await state.positionCache.moveMany($('layout').value,{other:{...u.positions.get('other')}}))
+      throw Error('Could not seed the unrelated fixture pin');
+  });await settle();
+  await page.locator('#source-layout-status').filter({hasText:/file markers overlap/}).waitFor();
+  check(await page.locator('#arrange-files').isVisible(),'Namespace repair action is unavailable');
+  check(await page.locator('#arrange-files').getAttribute('data-overlap')==='true','Namespace overlap did not emphasize the repair');
+  const protectedPositions=await page.evaluate(()=>Object.fromEntries(['root','module','scope','other'].map(id=>[id,{...state.universe.positions.get(id)}])));
+  const repairStart=saveBodies.length;
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#arrange-files').focus();await page.keyboard.press('Enter');
+  await page.waitForFunction(()=>!state.positionCache.pending);await settle();
+  check(await page.locator('#source-layout-status').isHidden(),'Namespace files still overlap after arranging');
+  check(await page.evaluate(before=>Object.entries(before).every(([id,p])=>{
+    const q=state.universe.positions.get(id);return q.x===p.x&&q.y===p.y;
+  }),protectedPositions),'Namespace arrangement moved its anchor or unrelated scopes');
+  const repaired=saveBodies.slice(repairStart);
+  check(repaired.length===1&&Object.keys(repaired[0].positions).sort().join(',')==='build,helper,record',
+    'Namespace repair saved contextual IDs or unrelated pins');
+  await page.reload();await page.waitForFunction(()=>state.cy&&state.positionCache);await settle();
+  check(await page.evaluate(({positions,other})=>{
+    const saved=state.positionCache.layouts[$('layout').value];
+    return saved.other.x===other.x&&saved.other.y===other.y&&Object.entries(positions).every(([id,p])=>{
+        const q=state.universe.positions.get(id);return q.x===p.x&&q.y===p.y;
+      });
+  },{positions:repaired[0].positions,other:protectedPositions.other}),'Namespace repair or unrelated saved pins did not survive reload');
+  check(!errors.length,'Namespace arrangement caused a runtime error');
   return {fileFirst:true,namespaceContexts:true,noRedundantHeader:true,weightedCounts:true,exactPaging:true,
-    semanticHandoff:true,recursion:true,canonicalOwners:true,keyboard:true,wheel:true,doubleClick:true,reload:true,pinsUnchanged:true,errors};
+    semanticHandoff:true,recursion:true,canonicalOwners:true,keyboard:true,wheel:true,doubleClick:true,reload:true,
+    navigationPinsUnchanged:true,namespaceOverlap:true,arrangeLocal:true,arrangeReload:true,errors};
 }

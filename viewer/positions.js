@@ -148,7 +148,8 @@ function sourceArrangementOwner(){
   const map=state.universe,scope=state.scopeShard?.scope;
   if(!map||!scope)return null;
   const owner=map.nodes.get(scope)?.attrs?.source_owner||scope;
-  return map.fileIds.some(id=>map.nodes.get(id).attrs.source_owner===owner)?owner:null;
+  for(const id of map.contextFiles.keys())if(map.nodes.get(id).attrs.source_owner===owner)return owner;
+  return null;
 }
 
 async function arrangeSourceFiles(){

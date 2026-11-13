@@ -465,6 +465,45 @@ test('source overlap detection finds colliding glyphs without changing their pos
   assert.equal(run('JSON.stringify(glyphs)'),before);
 });
 
+test('namespace contextual files expose overlap detection and scoped arrangement without moving unrelated pins',async()=>{
+  const {run,context}=inspectionViewer();
+  context.namespace=JSON.parse(require('node:fs').readFileSync(require.resolve('../fixtures/namespace-files.graph.json'),'utf8'));
+  const at=id=>context.namespace.nodes.findIndex(n=>n.id===id);
+  context.namespace.files=['Private/API.cpp','Public/API.h','Private/Helper.cpp'].map((path,i)=>({
+    owner:at('module'),root:'project',path:'Source/Sample/'+path,
+    declarations:(i===0?['scope']:i===1?['build','record']:['helper']).map(at),
+    definitions:(i===0?['build']:i===1?['record']:['helper']).map(at)}));
+  const writes=[];context.fetch=async(url,options)=>{writes.push(JSON.parse(options.body));return{ok:true};};
+  try{
+    run(`state.universe=new Universe(namespace);state.universe.place({},'auto');
+      state.universe.expanded=new Set(['root','module','scope']);state.scopeShard={scope:'scope'};
+      globalThis.files=[...state.universe.contextFiles.keys()].filter(id=>state.universe.nodes.get(id).attrs.source_owner==='scope');
+      globalThis.glyphs=files.map(id=>({id,box:{x1:10,y1:10,x2:30,y2:30}}));
+      state.cy.width=()=>400;state.cy.height=()=>300;refreshMap();
+      state.positionCache=new PositionCache('/layout/sample/entry.json',{auto:{other:{x:400,y:500},unavailable:{x:6,y:7}},
+        galaxy:{build:{x:1,y:2}}});globalThis.confirm=()=>true;globalThis.frameNode=()=>{};
+      globalThis.before=new Map([...state.universe.positions].map(([id,p])=>[id,{...p}]));`);
+    assert.ok(run('files.length')>=2,'Use contextual files absent from the module-only catalog');
+    assert.equal(run('sourceArrangementOwner()'),'scope');
+    assert.equal(run("$('arrange-files').hidden"),false);
+    run('updateSourceOverlap(glyphs)');
+    assert.equal(run("$('source-layout-status').hidden"),false);
+    assert.match(run("$('source-layout-status').textContent"),/file markers overlap/);
+    await run('arrangeSourceFiles()');
+    assert.equal(writes.length,1);
+    assert.deepEqual(Object.keys(writes[0].positions).sort(),['build','helper','record']);
+    assert.equal(run("['root','module','scope','other'].every(id=>JSON.stringify(state.universe.positions.get(id))===JSON.stringify(before.get(id)))"),true);
+    assert.equal(run('state.positionCache.layouts.auto.unavailable.x'),6);
+    assert.equal(run('state.positionCache.layouts.auto.other.x'),400);
+    assert.equal(run('state.positionCache.layouts.galaxy.build.x'),1);
+    run(`state.scopeShard={scope:files[0]};`);
+    assert.equal(run('sourceArrangementOwner()'),'scope','A contextual file resolves to the same source owner');
+    run(`state.scopeShard={scope:'other'};updateSourceOverlap(glyphs);`);
+    assert.equal(run('sourceArrangementOwner()'),null);
+    assert.equal(run("$('source-layout-status').hidden"),true);
+  }finally{run('state.cy.destroy()');}
+});
+
 test('label fitting builds its glyph index once per settled scene rather than once per name',t=>{
   const {run}=viewer();
   run(`state.cy=cytoscape({headless:true,styleEnabled:true,elements:[

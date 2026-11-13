@@ -241,8 +241,9 @@ the owner anchor, other scopes, other layout modes and unavailable pins unchange
 Cancel leaves both the displayed arrangement and saved positions unchanged. Save failures use the existing unsaved-position
 status and retry behavior.
 Visible file markers with overlapping glyphs expose a count beside Arrange files and emphasize that action. Detection
-reuses the caption obstacle index and checks the active source owner; it never moves pins. This gives older saved
-arrangements the same scoped repair as a manually crowded layout, without silently replacing unrelated positions.
+reuses the caption obstacle index and checks the active source owner, including namespace-local file contexts; it never
+moves pins. This gives older saved arrangements the same scoped repair as a manually crowded layout, without silently
+replacing unrelated positions.
 
 Recorded declaration kind, qualified owner, signature and source context appear in hover and primary inspection;
 access/properties and observed-member coverage appear when supplied by the profile. Names remain the canvas captions.
