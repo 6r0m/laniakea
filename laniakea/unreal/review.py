@@ -13,13 +13,22 @@ def inputs(manifest):
     return {'version': VERSION, 'types': BUILD_TYPES,
             'native': any(source.get('id')=='compiler' for source in manifest.get('sources', [])),
             'limits': ['Selected target only; Engine dependencies beyond recorded boundary hops are unavailable.',
-                       'Native notes cover recorded calls, not exhaustive call-graph or runtime behavior.']}
+                       'Native checks cover recorded compile access, not binary linkage or runtime behavior.']}
 
 
 def native_note(edge):
-    attrs=edge.get('attrs', {})
-    return edge['type']=='calls' and edge['origin']=='compiler' and edge['status']=='resolved' and \
-        isinstance(attrs.get('dependency_review'), str) and bool(attrs['dependency_review'])
+    return native_availability(edge)=='unsupported'
+
+
+def native_availability(edge):
+    if edge['type']!='calls' or edge['origin']!='compiler' or edge['status']!='resolved':
+        return None
+    attrs=edge.get('attrs',{})
+    state=attrs.get('dependency_access')
+    if state in ('available','unsupported','unverified'):
+        return state
+    # Legacy missing-direct notes lack the evidence needed to claim unsupported compile access.
+    return 'unverified' if 'dependency_review' in attrs or 'dependency_access' in attrs else None
 
 
 def native_context(edge):
@@ -28,4 +37,6 @@ def native_context(edge):
     def observed(key):
         value=attrs.get(key)
         return bool(value) if isinstance(value,list) and all(isinstance(n,str) for n in value) else None
-    return {'transitive':observed('transitive_path'), 'public_exposure':observed('public_exposure_path')}
+    return {'access':native_availability(edge), 'transitive':observed('transitive_path'),
+            'public_exposure':observed('public_exposure_path'),
+            'include_exposure':observed('include_exposure_path')}

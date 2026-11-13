@@ -82,7 +82,7 @@ async page => {
   check(await page.locator('#find-results button').count()===1,'Qualified search must identify its owner');
   await page.locator('#find').press('Enter');
   await page.waitForFunction(()=>state.selection?.id==='get');
-  check(await page.locator('#details > code').innerText()==='int Get()','Signature is not primary inspection content');
+  check(await page.locator('#inspector-page-details > code').innerText()==='int Get()','Signature is not primary inspection content');
   check(/public.*static/.test(await page.locator('#details').innerText()),'Access and static method context missing');
   await page.locator('#clear').click();
   await page.waitForFunction(()=>!state.gestureActive&&!state.viewportFrame&&state.mapSize.width===$('graph').getBoundingClientRect().width);

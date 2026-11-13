@@ -54,7 +54,7 @@ namespaces, classes and callables. Other layout modes keep separate saved arrang
 | Arrow keys with the map focused, then Enter | Navigate stars and open groups |
 | `+` or `-` with the map focused | Zoom; Ctrl+wheel remains browser zoom |
 | Breadcrumbs or Up | Return through navigation contexts; earlier ancestors have a disclosure |
-| Close details, Escape or Clear selection | Close inspection; the close button stays available while scrolling |
+| Close inspector, Escape or Clear selection | Close inspection; the close button stays available while scrolling |
 | Drag a star or its name | Arrange it; a constellation moves its contents too |
 | Fit map | Return to the overview without moving stars |
 | Reset layout | Confirm before clearing the current mode's saved positions |
@@ -63,10 +63,16 @@ Hover colors are relative to the card's named focus: cyan outgoing, amber incomi
 can change near the opposite endpoint. Idle wire colors describe types listed in **Browse & filters**. Crossings are
 not junctions; click overlapping wires to choose a named pair and inspect both directions.
 
+**Inspector** has two tabs: **Architecture** explains findings and decisions; **Details** shows source information and
+all references. Switching retains scroll, loaded pages and unfinished reasons. Use arrow keys, Home or End between tabs.
+On narrower windows, the findings list and inspector share the available space; reopening either retains the inspection.
+
 **Project** inspects source/configuration context. **Config marks** outlines explicitly listed targets, without
 implying compilation or runtime use. Plugin-to-plugin dependencies remain wires.
 Positions save in the workspace per project/layout mode and survive reload, extraction and restarts while IDs remain
 stable. Distant detail is released without losing arrangements. Exact references use Previous/Next pages.
+If saved file markers overlap, the toolbar reports the count. **Arrange files** repacks the current source owner into
+Public and implementation bands after confirmation; other scopes and layout modes stay fixed.
 
 ## Trace a dependency to its cause
 
@@ -103,13 +109,14 @@ High connection counts can reflect an intended integration point.
 | Is there a module cycle? | Follow original module build-dependency edges back to the start; crossings and reciprocal calls do not prove a build cycle |
 | Does runtime code depend on Editor code? | Check descriptor kinds and target conditions; an Editor-target snapshot does not establish a Game-build dependency |
 | Should a public dependency be private? | Inspect public headers and rules; private-only observations may miss other headers/configurations |
-| Is a direct dependency missing? | Inspect the cross-module call and review note; transitive/public exposure or conditional rules may explain it |
+| Is module access supported? | Inspect the exact call and evaluated dependency path; public exposure can legitimately supply access without a direct entry |
 | Is a hub over-coupled? | Inspect incoming/outgoing owners and responsibilities, not counts alone |
 
 Descriptor `kind` (Runtime/Editor) differs from UBT `type` (CPlusPlus/External). Check the descriptor if kind is missing;
-do not infer it from a name. Native exact-call rows can include `dependency_review`, `transitive_path` and
-`public_exposure_path`. An empty path means none was found in that exported graph. These notes are review candidates,
-not violations. Review can collect recorded cycles and native notes; runtime/editor, public-exposure and coupling
+do not infer it from a name. Native exact-call rows explain recorded module access and public/include-only paths.
+Known supporting paths are ordinary context. A complete recorded access closure without a path can produce a candidate,
+not a violation. Incomplete or legacy evidence and include-only static linkage remain unverified; see Review's Policy &
+availability. This does not prove binary linkage, runtime behavior or public API correctness. Runtime/editor and coupling
 judgements still require manual investigation.
 
 For UE rules, see Epic's [module guide](https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-engine-modules)
@@ -118,9 +125,13 @@ Apply them to the project's intended boundaries and actual target conditions.
 
 ## Use architecture review
 
-1. Enable **Review**. Read the candidate/violation counts and availability; ordinary exploration remains independent.
-2. Click a marked star or choose a finding in the Review list. Details show the rule, affected modules, limits and
-   investigation guidance above metadata. Open **Exact evidence** to inspect current references and source links.
+1. Review runs automatically. Its button shows checking, failure or finding counts across the recorded project.
+   Open it for the list and coverage; closing the list keeps markers visible. Uncheck **Review this snapshot** to disable it.
+2. Follow amber triangle badges / `?` wires for candidates, or red stop signs / `!` wires for policy violations.
+   Hover explains the concern, including when the other endpoint is
+   off-screen. Click the wire, a marked star or a finding in the Review list. **Architecture** shows the rule, original
+   affected modules, limits and guidance. Its count applies to the current inspection; Review shows the project total.
+   Open **Exact evidence** for source links, or switch to **Details** for ordinary references and endpoint navigation.
 3. Use **Accept risk** or **Not relevant**, optionally recording a reason. The finding leaves active markers/list.
    **Show acknowledged** retains inspection and **Reopen**; acknowledgement never means fixed.
 4. For project constraints, open **Policy & availability**, edit the shown local JSON path and use **Recheck**.

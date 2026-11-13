@@ -25,6 +25,7 @@ function viewer() {
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/scene.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/positions.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/references.js'), 'utf8'), context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/inspector.js'), 'utf8'), context);
   vm.runInContext(source.slice(0, source.lastIndexOf('start().catch')), context);
   vm.runInContext(`
     globalThis.realRenderDetails = renderDetails;
@@ -63,8 +64,9 @@ function treeElements(run) {
   run(`globalThis.el=(tag,text,attrs={})=>({tag,textContent:text||'',attrs,children:[],isConnected:true,
     append(...items){this.children.push(...items);},replaceChildren(...items){this.children=items;},
     setAttribute(name,value){this.attrs[name]=value;},remove(){},scrollIntoView(){this.scrolled=true;},
-    querySelector(selector){return this.children.flatMap(function walk(n){return[n,...(n.children||[]).flatMap(walk)];})
-      .find(n=>selector==='[data-action="toggle-group"]'&&n.attrs?.['data-action']==='toggle-group')||null;}});
+    querySelector(selector){const attribute=selector.match(/^\\[([^=]+)="([^"]+)"\\]$/);
+      return this.children.flatMap(function walk(n){return[n,...(n.children||[]).flatMap(walk)];})
+        .find(n=>attribute?n.attrs?.[attribute[1]]===attribute[2]:n.tag===selector)||null;}});
     for(const id of ['details','banner','crumbs','find-results']){const old=$(id);Object.assign(old,el('aside'));}
   `);
 }

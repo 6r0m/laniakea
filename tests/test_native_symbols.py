@@ -223,6 +223,10 @@ class NativeSymbols(unittest.TestCase):
                        "PublicDependencyModules": ["Core"]},
             "SampleUtility": {"Directory": str(self.other), "Rules": str(self.other / "SampleUtility.Build.cs")},
             "Core": {"Directory": str(self.core.parent), "Rules": str(self.core.parent / "Core.Build.cs")}}}
+        for module in self.exported['Modules'].values():
+            for field in ('PublicDependencyModules','PrivateDependencyModules',
+                          'PublicIncludePathModules','PrivateIncludePathModules'):
+                module.setdefault(field,[])
 
     def tearDown(self):
         self.temporary.cleanup()
@@ -251,6 +255,120 @@ class NativeSymbols(unittest.TestCase):
         self.assertEqual(len(calls),1)
         self.assertEqual((calls[0]['source'],calls[0]['target']),(node['id'],node['id']))
         self.assertFalse(calls[0].get('internal_to_owner',False))
+
+    def test_dependent_overload_candidates_are_not_confirmed_calls(self):
+        self.source.write_text('struct Left {}; struct Right {};\n'
+            'bool operator==(const Left&, int); bool operator==(const Right&, int);\n'
+            'template<class T> bool Candidate(const T& value){return value==0;}\n'
+            'bool Positive(const Left& value){return value==0;}\n'
+            'template<class T> int Chosen(T value){return 1;}\n'
+            'int TemplatePositive(){return Chosen<int>(1);}\n'
+            'template<class T> struct Box {Box(T);};\n'
+            'int ConstructPositive(){Box<int> value(1);return 0;}\n')
+        batch=self.index();facts={s['usr']:s for s in batch['symbols']}
+        candidates=[r for r in batch['references'] if r['line']==3 and facts[r['target']]['name']=='operator==']
+        self.assertEqual(len(candidates),2,'Keep compiler lookup evidence without inventing a selected overload')
+        self.assertFalse(any(r['call_confirmed'] for r in candidates))
+        built=self.normalize([batch]);nodes={n['id']:n for n in built['nodes']}
+        calls=[e for e in built['edges'] if e['type']=='calls']
+        self.assertEqual({nodes[e['source']]['label'] for e in calls},{'Positive','TemplatePositive','ConstructPositive'})
+        selected=next(e for e in calls if nodes[e['source']]['label']=='Positive')
+        self.assertIn('const Left &',selected['attrs']['symbol'])
+        self.assertNotIn('Right',selected['attrs']['symbol'])
+
+    def test_forward_declarations_do_not_steal_definition_ownership(self):
+        (self.other/'Forward.h').write_text('struct SampleEngineBase;\n')
+        (self.directory/'LocalForward.h').write_text('struct SampleUtilityRecord; struct SampleOpaque;\n')
+        (self.other/'UtilityRecord.h').write_text('struct SampleUtilityRecord {int Run();};\n')
+        self.source.write_text('#include "Forward.h"\n#include "CoreType.h"\n'
+            '#include "LocalForward.h"\n#include "UtilityRecord.h"\n'
+            'int UseEngine(SampleEngineBase& value){return value.Run();}\n'
+            'int UseUtility(SampleUtilityRecord& value){return value.Run();}\n')
+        batch=self.index()
+        engine_type=next(s for s in batch['symbols'] if s['name']=='SampleEngineBase' and s['level']=='class')
+        self.assertTrue(engine_type['definition'])
+        self.assertEqual(Path(engine_type['file']),self.core/'CoreType.h')
+        prior=self.other/'Prior.cpp';prior.write_text('#include "Forward.h"\n')
+        prior_batch=self.index(prior)
+        for batches in ([prior_batch,batch],[batch,prior_batch]):
+            built=self.normalize(batches);nodes={n['id']:n for n in built['nodes']}
+            record=next(n for n in built['nodes'] if n['label']=='SampleUtilityRecord')
+            self.assertEqual(record['parent'],'module:SampleUtility')
+            self.assertEqual(record['id'],symbols.node_id('c:@S@SampleUtilityRecord'))
+            self.assertFalse(any(n['label']=='SampleEngineBase' for n in built['nodes']))
+            opaque=next(n for n in built['nodes'] if n['label']=='SampleOpaque')
+            self.assertFalse(opaque['attrs']['definition'],'An unavailable definition must remain unknown')
+            call=next(e for e in built['edges'] if e['type']=='calls' and nodes[e['source']]['label']=='UseEngine')
+            self.assertEqual(call['target'],'module:Core')
+            self.assertNotIn('dependency_review',call['attrs'])
+
+    def test_instantiated_template_body_keeps_its_resolved_member_call(self):
+        self.source.write_text('#include "CoreType.h"\n'
+            'template<class T> int Invoke(T& value){return value.Run();}\n'
+            'int Positive(SampleEngineBase& value){return Invoke(value);}\n')
+        batch=self.index();facts={s['usr']:s for s in batch['symbols']}
+        body=[r for r in batch['references'] if r['line']==2 and facts[r['target']]['name']=='Run']
+        self.assertTrue(body)
+        self.assertTrue(all(r['call_confirmed'] for r in body))
+        built=self.normalize([batch]);nodes={n['id']:n for n in built['nodes']}
+        pairs={(nodes[e['source']]['label'],nodes[e['target']]['label']) for e in built['edges'] if e['type']=='calls'}
+        self.assertIn(('Positive','Invoke'),pairs)
+        self.assertIn(('Invoke','Core'),pairs)
+
+    def test_template_arguments_do_not_invent_reverse_module_dependency_notes(self):
+        (self.other/'Generic.h').write_text('#include "CoreType.h"\n'
+            'template<class T> int Invoke(T& value){return value.Run()+SampleEngineCall();}\n'
+            'struct Relay {template<class T> static int Call(){return T::Key();}};\n')
+        self.source.write_text('#include "Generic.h"\n'
+            'struct Local {int Run(); static int Key();};\n'
+            'int Positive(Local& value){return Invoke(value)+Relay::Call<Local>();}\n')
+        built=self.normalize([self.index()]);nodes={n['id']:n for n in built['nodes']}
+        calls=[e for e in built['edges'] if e['type']=='calls']
+        injected=[e for e in calls if nodes[e['target']]['label'] in {'Run','Key'}]
+        self.assertEqual(len(injected),2,'Keep actual instantiated calls in the canonical graph')
+        self.assertTrue(all(nodes[e['source']]['attrs']['definition'] is False for e in injected))
+        self.assertFalse(any('dependency_review' in e['attrs'] for e in injected),
+                         'A concrete template argument does not establish a reverse dependency from the template owner')
+        fixed=[e for e in calls if e['attrs']['symbol']=='SampleEngineCall()']
+        self.assertTrue(any(nodes[e['source']]['attrs']['definition'] and 'dependency_review' in e['attrs'] for e in fixed),
+                        'Nondependent calls in the authored template still need a build dependency')
+        self.assertTrue(any(nodes[e['source']]['label']=='Positive' and 'dependency_review' in e['attrs'] for e in calls))
+
+    def test_declared_interface_include_does_not_require_a_link_dependency(self):
+        self.exported['Modules']['Sample']['PublicDependencyModules']=[]
+        self.exported['Modules']['Sample']['PrivateIncludePathModules']=['Core']
+        self.source.write_text('#include "CoreType.h"\n'
+            'int Interface(SampleEngineBase& value){return value.Run();}\n'
+            'int Static(){return SampleEngineCall();}\n')
+        built=self.normalize([self.index()])
+        calls=[e for e in built['edges'] if e['type']=='calls']
+        interface=next(e for e in calls if e['attrs']['symbol'].startswith('SampleEngineBase::Run'))
+        static=next(e for e in calls if e['attrs']['symbol']=='SampleEngineCall()')
+        self.assertEqual(interface['attrs']['dispatch'],'virtual target declaration')
+        self.assertNotIn('dependency_review',interface['attrs'])
+        self.assertNotIn('dependency_review',static['attrs'],'Include-only access does not prove a missing link dependency')
+        self.assertEqual(static['attrs']['dependency_access'],'unverified')
+        self.exported['Modules']['Sample']['PrivateIncludePathModules']=[]
+        undeclared=self.normalize([self.index()])
+        interface=next(e for e in undeclared['edges'] if e['type']=='calls' and e['attrs']['symbol'].startswith('SampleEngineBase::Run'))
+        self.assertIn('dependency_review',interface['attrs'],'Do not infer an undeclared interface arrangement')
+
+    def test_public_module_exposure_keeps_calls_without_a_direct_entry_warning(self):
+        self.source.write_text('#include "CoreType.h"\nint Positive(){return SampleEngineCall();}\n')
+        batch=self.index()
+        self.exported['Modules']['Sample']['PublicDependencyModules']=[]
+        unsupported=self.normalize([batch])
+        call=next(e for e in unsupported['edges'] if e['type']=='calls')
+        self.assertEqual(call['attrs']['dependency_access'],'unsupported')
+        self.exported['Modules']['Sample']['PrivateDependencyModules']=['SampleUtility']
+        self.exported['Modules']['SampleUtility']['PublicDependencyModules']=['Core']
+        available=self.normalize([batch])
+        current=next(e for e in available['edges'] if e['type']=='calls')
+        self.assertEqual(current['id'],call['id'])
+        self.assertEqual(current['attrs']['target_declaration'],call['attrs']['target_declaration'])
+        self.assertEqual(current['attrs']['dependency_access'],'available')
+        self.assertEqual(current['attrs']['public_exposure_path'],['Sample','SampleUtility','Core'])
+        self.assertNotIn('dependency_review',current['attrs'])
 
     def test_macro_spelling_and_unrendered_fields_follow_semantic_class_ownership(self):
         (self.core/'Macros.h').write_text('#define SAMPLE_BODY int Generated(){return SampleEngineCall();}\n')

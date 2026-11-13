@@ -28,6 +28,7 @@ def extract(library, command, project):
     start = perf_counter()
     project = os.path.normcase(os.path.abspath(project)).rstrip("\\/") + os.sep
     symbols, refs, relations, files, exceptions, excluded, evaluated_calls = {}, [], [], {}, [], {}, {}
+    declared_types = {}
 
     def location(loc, indexed=False):
         file, line, column, offset = P(), U(), U(), U()
@@ -47,11 +48,10 @@ def extract(library, command, project):
     def logical(file):
         return os.path.normcase(os.path.relpath(file, project) if is_project(file) else file).replace("\\", "/")
 
-    def metadata(cursor, definition=None):
+    def cursor_identity(cursor, file):
         usr = api.string(api.getCursorUSR(cursor))
         if not usr:
             return None
-        file, line, column, _ = location(api.getCursorLocation(cursor))
         # Clang's file-local USRs can contain only a basename. Keep equal basenames in different files distinct.
         if usr.startswith("c:") and not usr.startswith("c:@"):
             usr = logical(file) + "|" + usr
@@ -64,7 +64,16 @@ def extract(library, command, project):
                 current=api.getCursorSemanticParent(current)
                 if not current.kind or current.kind==350:
                     break
+        return usr
+
+    def metadata(cursor, definition=None):
+        file, line, column, _ = location(api.getCursorLocation(cursor))
+        usr=cursor_identity(cursor,file)
+        if not usr:
+            return None
         old=symbols.get(usr)
+        if cursor.kind in CLASSES and not definition and usr not in declared_types:
+            declared_types[usr]=Cursor.from_buffer_copy(cursor)
         here={"file":file,"line":line,"column":column}
         if old is not None and cursor.kind==22:
             if here not in old['locations']:
@@ -107,10 +116,14 @@ def extract(library, command, project):
         value['declaration_origin']='macro expansion' if location(loc)!=location_expansion(loc) else 'unknown'
         if definition is False:
             value['declaration']=here
+        if cursor.kind in CLASSES and definition:
+            value['declaration']=here
         if cursor.kind==22:
             value['locations']=old['locations'] if old else [here]
         if old:
             for name in ('declaration','lambda_name'):
+                if name=='declaration' and cursor.kind in CLASSES and definition:
+                    continue
                 if name in old:
                     value[name]=old[name]
             if old.get('declaration_kind')=='lambda':
@@ -118,6 +131,18 @@ def extract(library, command, project):
         if old is None or definition or not old.get("file"):
             symbols[usr] = value
         return usr
+
+    def callable_identities(cursor):
+        identities=set()
+        for _ in range(64):
+            if cursor.kind not in FUNCTIONS:
+                break
+            identity=cursor_identity(cursor,location(api.getCursorLocation(cursor))[0])
+            if not identity or identity in identities:
+                break
+            identities.add(identity)
+            cursor=api.getSpecializedCursorTemplate(cursor)
+        return identities
 
     def location_expansion(loc):
         file,line,column,offset=P(),U(),U(),U()
@@ -223,6 +248,7 @@ def extract(library, command, project):
                 source = metadata(item.container.contents.cursor)
             refs.append({"source": source, "target": target, "role": item.role, "file": file,
                          "line": line, "column": column, "offset": offset,
+                         "callee_selected": bool(item.role & 32) and target in callable_identities(api.getCursorReferenced(item.cursor)),
                          "implicit": item.kind == 2})
         except Exception as error:
             exceptions.append(str(error))
@@ -274,6 +300,13 @@ def extract(library, command, project):
             raise LaniakeaError("native index callback failed: " + exceptions[0])
         if code or not translation_unit:
             raise LaniakeaError(f"native compiler could not index the translation unit (code {code})")
+        # Definitions may appear after an observed forward declaration, including outside the project.
+        for usr,cursor in list(declared_types.items()):
+            if symbols[usr]['definition']:
+                continue
+            definition=api.getCursorDefinition(cursor)
+            if definition.kind in CLASSES and metadata(definition,True)!=usr:
+                raise LaniakeaError('compiler definition changed an observed type identity')
     finally:
         if translation_unit:
             api.disposeTranslationUnit(translation_unit)
@@ -281,7 +314,7 @@ def extract(library, command, project):
         api.disposeIndex(index)
     for ref in refs:
         ref["unevaluated"] = any(begin <= ref["offset"] < end for begin, end in excluded.get(ref["file"], []))
-        ref["call_confirmed"] = (bool(ref["role"] & 32) and not ref["unevaluated"] and
+        ref["call_confirmed"] = (bool(ref["role"] & 32) and ref['callee_selected'] and not ref["unevaluated"] and
                                  any(begin <= ref["offset"] < end for begin, end in evaluated_calls.get(ref["file"], [])))
     return {"symbols": list(symbols.values()), "references": refs, "relations": relations,
             "diagnostics": diagnostics, "files": sorted(set(filter(None, files.values()))),

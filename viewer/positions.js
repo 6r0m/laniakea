@@ -114,6 +114,36 @@ async function resetPositions() {
   }
 }
 
+function sourceGlyphOverlaps(glyphs,candidates=new Set(glyphs.map(g=>g.id)),obstacles=labelObstacles(glyphs)) {
+  const overlaps=new Set();if(!obstacles)return overlaps;
+  for(const glyph of glyphs){
+    if(!candidates.has(glyph.id))continue;
+    const a=glyph.box;
+    for(const index of obstacles.search(a.x1-4,a.y1-4,a.x2+4,a.y2+4)){
+      const other=glyphs[index],b=other.box;
+      if(other.id!==glyph.id&&candidates.has(other.id)&&a.x1<b.x2+4&&b.x1<a.x2+4&&a.y1<b.y2+4&&b.y1<a.y2+4){
+        overlaps.add(glyph.id);overlaps.add(other.id);
+      }
+    }
+  }
+  return overlaps;
+}
+
+function updateSourceOverlap(glyphs,obstacles) {
+  const status=$('source-layout-status');
+  if(!state.universe||!state.scopeShard){status.hidden=true;return;}
+  const owner=sourceArrangementOwner(),map=state.universe;
+  const button=$('arrange-files');
+  if(!owner){if(!status.hidden)status.hidden=true;if(button.dataset?.overlap!=='false')button.setAttribute('data-overlap','false');return;}
+  const local=new Set(glyphs.filter(g=>map.nodes.get(g.id)?.attrs?.source_file&&map.contains(owner,g.id)&&
+    g.box.x2>=0&&g.box.y2>=0&&g.box.x1<=state.cy.width()&&g.box.y1<=state.cy.height()).map(g=>g.id));
+  const count=sourceGlyphOverlaps(glyphs,local,obstacles).size;
+  const text=count?`${count} file markers overlap`:'',mark=String(Boolean(count));
+  if(status.hidden!==!count)status.hidden=!count;
+  if(status.textContent!==text)status.textContent=text;
+  if(button.dataset?.overlap!==mark)button.setAttribute('data-overlap',mark);
+}
+
 function sourceArrangementOwner(){
   const map=state.universe,scope=state.scopeShard?.scope;
   if(!map||!scope)return null;

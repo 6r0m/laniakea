@@ -186,10 +186,14 @@ exact-reference pages per direction, so reaching the reverse list does not requi
 Changing that group set or its weights closes the pair inspection; it never falls back to a single hit family.
 Exact-reference navigation retains its original identity. Hiding an inspected item closes its details instead
 of highlighting a different ancestor. Hover and wheel exploration do not require an inspected item.
-Node inspection keeps identity, source and analysis state visible; secondary metadata has a separate disclosure so
+The Inspector's Details tab keeps identity, source and analysis state visible; secondary metadata has a separate disclosure so
 references and navigation remain reachable. Constellation controls track expansion without resetting the reference reader.
-The panel's close button remains available while scrolling and uses the same inspection cancellation as Escape.
-Closing with that button returns keyboard focus to the toolbar's Details control.
+The shared header and native accessible tabs stay outside each page's scroll region. Tab changes retain mounted content,
+reference paging, scroll and unsaved decision reasons, without changing selection or camera. Ordinary reference pages load
+when Details first opens. The panel's close button uses the same inspection cancellation as Escape and returns focus to
+the toolbar's Inspector control. At narrow widths, the inspector, findings queue and filters are mutually exclusive;
+opening the queue hides inspection without discarding it. Explicit reinspection reopens the retained dock; background
+projection refresh does not.
 
 Profiles may annotate source partitions and owners that expose source sections. The viewer folds marked implementation
 branches into derived source regions, with their recorded subfolders inside. Public or unclassified branches stay
@@ -215,7 +219,8 @@ placement gives each section a separate band and packs its files across the avai
 not a dependency endpoint; references still resolve to concrete files or revealed C++ entities. Recorded partition labels
 remain authoritative: a source region is not proof that a declaration is an abstract interface.
 Sibling file captions may omit a long common identifier prefix at a word boundary. Full filenames, source paths and
-reference identities remain available in hover and inspection; the shortened caption is presentation only.
+reference identities remain available in hover and inspection; the shortened caption is presentation only and takes
+priority over the full filename on the canvas.
 Wheel input over a file glyph, name or revealed code group keeps the pointer-anchored camera scale. Its next layer
 opens only when there is enough screen space, using the same threshold as surrounding constellations. Each wheel
 callback opens or closes at most one layer and never fits its contents automatically; outward steps use the separate
@@ -235,6 +240,9 @@ The scoped Arrange files action explicitly confirms replacing the current source
 the owner anchor, other scopes, other layout modes and unavailable pins unchanged, and saves only canonical descendants.
 Cancel leaves both the displayed arrangement and saved positions unchanged. Save failures use the existing unsaved-position
 status and retry behavior.
+Visible file markers with overlapping glyphs expose a count beside Arrange files and emphasize that action. Detection
+reuses the caption obstacle index and checks the active source owner; it never moves pins. This gives older saved
+arrangements the same scoped repair as a manually crowded layout, without silently replacing unrelated positions.
 
 Recorded declaration kind, qualified owner, signature and source context appear in hover and primary inspection;
 access/properties and observed-member coverage appear when supplied by the profile. Names remain the canvas captions.
@@ -377,21 +385,39 @@ disposable; positions under `layouts/` are user-owned and must not be evicted wi
 
 ## Review presentation
 
-Review is an optional layer, off by default. It maps affected canonical module IDs onto the current visible
+Review starts in the background when a supported target opens, after the map is ready. The list starts closed;
+closing it does not disable findings. Its checkbox clears markers and stops new review requests for the current target session.
+The toolbar distinguishes checking, failure, off, unavailable and recorded finding counts. Zero findings is not
+proof of complete coverage. Review maps affected canonical module IDs onto the current visible
 representatives and decorates their native icons without new graph elements, geometry or pointer targets. Collapsed
 representatives deduplicate finding IDs; multiple participants in one cycle do not multiply the global issue count.
 The accessible Review list retains off-view findings. Map filters do not change rule results or triage.
 
-Clicking or keyboard-inspecting a marked entity places its findings before metadata/reference pages in Details.
+Exact reference-group associations also mark existing projected connections and their revealed endpoints. Amber/red
+halos identify candidates/violations independently of direction colors. Fixed-size amber triangle and red stop-sign
+badges remain separate from type icons; counts belong to hover and inspection. Native wire labels show a compact
+`?` candidate or `!` violation symbol while idle. The map key explains both, without adding hit targets.
+Warnings follow file, class and callable projection,
+including a visible line to an off-screen endpoint. A halo means the connection contains finding evidence, not that
+every reference in its bundle is problematic. Filtered-out references receive no wire marker.
+
+Hover shows distinct finding counts and a bounded explanation without fetching analysis or exact rows. Clicking a
+marked wire or clicking/keyboard-inspecting a marked entity opens the Inspector's Architecture tab. Ordinary inspection
+and explicit Project context open Details. Queue choices focus Architecture and name the original affected endpoints,
+even when the map represents them through a collapsed owner. The tab's count describes the inspected findings rather than
+the project-wide queue; off, checking, failed and unavailable states do not resemble zero findings.
 A single finding exposes its explanation and decision actions immediately. Exact evidence reuses current reference
-paging and validates original IDs before displaying rows. Closing inspection cancels its presentation; a late request
-cannot reopen Details. Hover and wheel input never trigger review analysis, fit or layout changes.
-Background review updates replace only the findings section, preserving the ordinary reader, paging and keyboard focus.
+paging and validates original IDs before displaying rows. Connections with several findings use a labelled selector;
+Details retains the existing endpoint navigation and all ordinary references. Closing inspection cancels its presentation;
+a late request cannot reopen the inspector or change its tab. Hover and wheel input never trigger review analysis, fit or
+layout changes. Unchanged report and decision revisions retain draft reasons and loaded evidence. Changed findings update only
+Architecture, preserving the ordinary reader and paging. Removing a focused decision action returns focus to its tab.
 
 Acknowledged visibility and semantics belong to the [review contract](review.md). The viewer retains one affected-entity
-index and at most eight detail pages/8 MiB of serialized page data; parsed-object overhead is additional.
-Report/target changes release pending requests and old pages. Review off has no
-reference scans per animation frame. Trace colors, graph counts and saved arrangements remain independent.
+index, an exact-group association index and at most eight detail pages/8 MiB of serialized page data; parsed-object
+overhead is additional. Report/target changes release pending requests and old pages. Review off releases association
+indices and detail pages and has no reference scans per animation frame. Trace colors, graph counts and saved arrangements
+remain independent.
 
 ## Scope addresses and generated shards
 

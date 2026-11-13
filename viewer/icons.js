@@ -32,18 +32,28 @@ const NodeIcons=(()=>{
     if(['method','constructor','destructor','conversion function','function template'].includes(k))return 'function';
     return Object.hasOwn(paths,node.level)?node.level:'entity';
   }
-  function image(kind,ink,reviewMark=''){
+  function image(kind,ink){
     kind=Object.hasOwn(paths,kind)?kind:'entity';
     ink=/^#[0-9a-f]{3,8}$/i.test(ink)?ink:'#888888';
-    const key=kind+ink+reviewMark;
-    const parts=reviewMark.split(':'),count=Number(parts[1]),badge=Number.isSafeInteger(count)&&count>0?
-      '<circle cx="19" cy="5" r="5" fill="'+(parts[0]==='violation'?'#ab2838':'#855600')+'"/>'+
-      '<text x="19" y="7.5" text-anchor="middle" font-family="sans-serif" font-size="7" font-weight="bold" fill="#fff"'+
-      (count>99?' textLength="9" lengthAdjust="spacingAndGlyphs"':'')+'>'+(count>99?'99+':String(count))+'</text>':'';
+    const key=kind+ink;
     if(!images.has(key)){
       if(images.size>=128)images.clear();
       images.set(key,'data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">'+
-        '<g fill="none" stroke="'+ink+'" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+paths[kind]+'</g>'+badge+'</svg>'));
+        '<g fill="none" stroke="'+ink+'" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+paths[kind]+'</g></svg>'));
+    }
+    return images.get(key);
+  }
+  function warning(mark,fill='#855600',ink='#ffffff'){
+    const [severity,count]=mark.split(':');
+    if(!['candidate','violation'].includes(severity)||!Number.isSafeInteger(Number(count))||Number(count)<1)return null;
+    fill=/^#[0-9a-f]{3,8}$/i.test(fill)?fill:'#855600';ink=/^#[0-9a-f]{3,8}$/i.test(ink)?ink:'#ffffff';
+    const key='warning'+severity+fill+ink;
+    if(!images.has(key)){
+      if(images.size>=128)images.clear();
+      const points=severity==='violation'?'5,1 11,1 15,5 15,11 11,15 5,15 1,11 1,5':'8,1 15,14 1,14';
+      images.set(key,'data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">'+
+        '<polygon points="'+points+'" fill="'+fill+'" stroke="'+ink+'" stroke-width="0.7"/>'+
+        '<text x="8" y="12" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="bold" fill="'+ink+'">!</text></svg>'));
     }
     return images.get(key);
   }
@@ -56,12 +66,19 @@ const NodeIcons=(()=>{
     const expanded=node.hasClass('expanded'),title=titles.get(node),open=node.hasClass('group')||node.hasClass('source-region')||node.hasClass('not-in-target');
     const ink=expanded||open?palette.fg:palette.bg;
     const size=expanded?16:Math.min(20,node.width()*zoom*0.58);
-    apply(node,{'background-image':image(node.data('iconKind'),ink,node.data('reviewMark')||''),'background-fit':'none','background-clip':'none',
-      'background-image-containment':'over','background-width':size/zoom,'background-height':size/zoom,
-      'background-position-x':'50%','background-position-y':expanded?'0%':'50%',
-      'background-offset-x':expanded&&title?.visible?title.x/zoom:0,'background-offset-y':expanded&&title?.visible?title.y/zoom:0,
-      'background-image-opacity':expanded?(title?.visible?1:0):visible?1:0,
-      'bounds-expansion':expanded?[0,22/zoom,0,22/zoom]:0});
+    const mark=node.data('reviewMark')||'',badge=warning(mark,mark.startsWith('violation:')?palette.violation:palette.candidate,palette.bg);
+    const x=expanded&&title?.visible?title.x/zoom:0,y=expanded&&title?.visible?title.y/zoom:0;
+    apply(node,{'background-image':badge?[image(node.data('iconKind'),ink),badge]:image(node.data('iconKind'),ink),
+      'background-fit':badge?['none','none']:'none','background-clip':badge?['none','none']:'none',
+      'background-image-containment':badge?['over','over']:'over',
+      'background-width':badge?[size/zoom,16/zoom]:size/zoom,'background-height':badge?[size/zoom,16/zoom]:size/zoom,
+      'background-position-x':badge?['50%','50%']:'50%',
+      'background-position-y':badge?[expanded?'0%':'50%',expanded?'0%':'50%']:expanded?'0%':'50%',
+      'background-offset-x':badge?[x,expanded?x-19/zoom:node.width()/2]:x,
+      'background-offset-y':badge?[y,expanded?y:-node.height()/2]:y,
+      'background-image-opacity':badge?[expanded?(title?.visible?1:0):visible?1:0,expanded?(title?.visible?1:0):1]:
+        expanded?(title?.visible?1:0):visible?1:0,
+      'bounds-expansion':expanded?[0,(badge?40:22)/zoom,0,(badge?40:22)/zoom]:badge?10/zoom:0});
   }
   function update(cy,map,scope,level,zoom,palette){
     const owner=map.nodes.get(scope),detail=owner&&(owner.attrs?.source_sections||owner.attrs?.presentation_group||
@@ -77,7 +94,8 @@ const NodeIcons=(()=>{
     }
   }
   function titleBox(node,box){
-    return node.hasClass('expanded')&&node.data('iconKind')?{...box,x1:box.x1-22,w:box.w+22}:box;
+    const reserve=node.data('reviewMark')?41:22;
+    return node.hasClass('expanded')&&node.data('iconKind')?{...box,x1:box.x1-reserve,w:box.w+reserve}:box;
   }
   function title(node,box,zoom,palette){
     if(!node.data('iconKind'))return;
@@ -85,6 +103,6 @@ const NodeIcons=(()=>{
     titles.set(node,box?{visible:true,x:-box.w/2-14,y:(box.y1+box.y2)/2-(p.y-node.outerHeight()*zoom/2)-8}:{visible:false});
     paint(node,zoom,palette);
   }
-  return{kind,image,update,titleBox,title};
+  return{kind,image,warning,update,titleBox,title};
 })();
 if(typeof module!=='undefined')module.exports={NodeIcons};

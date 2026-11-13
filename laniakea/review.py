@@ -8,7 +8,7 @@ from collections import defaultdict, deque
 from . import review_policy
 
 VERSION = 1
-NATIVE_FINGERPRINT_VERSION = 2
+NATIVE_FINGERPRINT_VERSION = 3
 MAX_FINDINGS = 20000
 WITNESSES = 8
 
@@ -82,7 +82,7 @@ def evaluate(nodes, rows, manifest, policy, adapter=None):
                 current=all_nodes[current]['parent']
             owners[identity]=current if current in modules else None
         return owners[identity]
-    build={}; native={}; incomplete=set()
+    build={}; native={}; unverified=defaultdict(int); incomplete=set()
     for row in rows:
         edge=row['reference']; a,b=edge['source'],edge['target']; kind=edge['type']
         witness={'id': edge['id'], 'query': {'source': a, 'target': b, 'cursor': row['seq']-1, 'limit': 1}}
@@ -91,16 +91,22 @@ def evaluate(nodes, rows, manifest, policy, adapter=None):
                 incomplete.add(kind)
             else:
                 key=(a,b,kind)
-                entry=build.setdefault(key, {'count':0,'witnesses':[]})
+                entry=build.setdefault(key, {'count':0,'witnesses':[],'groups':set()})
                 entry['count']+=1
+                if 'group' in row:entry['groups'].add(row['group'])
                 if len(entry['witnesses'])<WITNESSES:
                     entry['witnesses'].append(witness)
+        if facts['native'] and adapter and adapter.native_availability(edge)=='unverified':
+            a,b=owner(edge['source']),owner(edge['target'])
+            if a in eligible and b in modules and a!=b:
+                unverified[a]+=1
         if facts['native'] and adapter and adapter.native_note(edge):
             a,b=owner(a),owner(b)
             if a not in eligible or b not in modules or a==b:
                 continue
-            entry=native.setdefault((a,b), {'count':0, 'witnesses':[], 'contexts':set()})
+            entry=native.setdefault((a,b), {'count':0, 'witnesses':[], 'contexts':set(),'groups':set()})
             entry['count']+=1
+            if 'group' in row:entry['groups'].add(row['group'])
             entry['contexts'].add(digest(adapter.native_context(edge)))
             if len(entry['witnesses'])<WITNESSES:
                 entry['witnesses'].append(witness)
@@ -109,7 +115,7 @@ def evaluate(nodes, rows, manifest, policy, adapter=None):
              'adapter': facts['version']}
     # Receipt timestamps and paths are provenance, not a different architecture context.
     context['target']={k:context['target'].get(k) for k in ('name','platform','configuration')}
-    def finding(rule, subjects, relationships, witnesses, count, severity, title, guidance):
+    def finding(rule, subjects, relationships, witnesses, count, severity, title, guidance, groups):
         identity=digest([rule['id'],rule['kind'],subjects,context])
         semantic_rule={k:v for k,v in rule.items() if k not in {'reason','enabled','types','acyclic'}}
         semantic_rule.update(types=sorted(set(rule.get('types',facts['types']))),acyclic=rule.get('acyclic',False))
@@ -125,7 +131,8 @@ def evaluate(nodes, rows, manifest, policy, adapter=None):
         findings.append({'id':identity, 'fingerprint':fingerprint, 'rule':rule['id'], 'kind':rule['kind'],
                          'subjects':subjects, 'severity':severity, 'title':title, 'reason':rule.get('reason',''),
                          'guidance':guidance, 'count':count, 'witnesses':witnesses[:WITNESSES],
-                         'witness_total':len(witnesses) if rule['kind']=='cycles' else count, 'limits':facts['limits']})
+                         'witness_total':len(witnesses) if rule['kind']=='cycles' else count, 'limits':facts['limits'],
+                         'groups':sorted(groups)})
         if len(findings)>MAX_FINDINGS:
             raise ValueError('review finding limit reached; narrow the policy scope')
     for rule in policy['rules']:
@@ -157,16 +164,20 @@ def evaluate(nodes, rows, manifest, policy, adapter=None):
         if rule['kind']=='native':
             if not facts['native']:
                 check.update(status='unavailable', detail='Native analysis was not recorded for this run.'); continue
-            check.update(status='partial', detail='Recorded native notes only; absence is not a conformance proof.')
             scope=set(check['matched']['scope'])
+            unknown=sum(count for a,count in unverified.items() if a in scope)
+            check.update(status='partial', unverified_relations=unknown,
+                         detail=f'{unknown} recorded calls have unverified module access. '
+                                'Binary linkage and runtime execution are not evaluated; absence is not a conformance proof.')
             for (a,b), entry in sorted(native.items()):
                 if a not in scope:
                     continue
                 relationships=[(a,b,kind) for kind in facts['types'] if (a,b,kind) in build]
                 relationships.extend(('native-context',value) for value in sorted(entry['contexts']))
                 finding(rule,[a,b],relationships,entry['witnesses'],entry['count'],'candidate',
-                        'Possible missing direct build dependency',
-                        'Inspect the exact call and declared dependency chain before changing build rules.')
+                        'Native call without recorded module access',
+                        'No dependency or include-only path was recorded. Inspect the call and other build inputs '
+                        'before changing build rules; this is not a build-error diagnosis.',entry['groups'])
             continue
         if not family:
             check.update(status='unavailable', detail='No dependency edge family configured.'); continue
@@ -182,7 +193,8 @@ def evaluate(nodes, rows, manifest, policy, adapter=None):
                 witnesses=[w for key in relationships for w in build[key]['witnesses']]
                 finding(rule,list(pair),relationships,witnesses,sum(build[k]['count'] for k in relationships),'violation',
                         'Forbidden dependency direction',
-                        'Inspect the declaration and intended boundary; consider moving the dependency behind a contract.')
+                        'Inspect the declaration and intended boundary; consider moving the dependency behind a contract.',
+                        {g for key in relationships for g in build[key]['groups']})
         else:
             scope=set(check['matched']['scope']); adjacency={n:set() for n in scope}
             for a,b,kind in build:
@@ -204,6 +216,7 @@ def evaluate(nodes, rows, manifest, policy, adapter=None):
                 witnesses=[pair_witnesses[pair] for pair in loop(members, adjacency)]
                 finding(rule,members,relationships,witnesses,sum(build[k]['count'] for k in relationships),
                         'violation' if rule.get('acyclic') else 'candidate','Module dependency cycle',
-                        'Inspect the recorded loop and intended design; an interface boundary may break unwanted coupling.')
+                        'Inspect the recorded loop and intended design; an interface boundary may break unwanted coupling.',
+                        {g for key in relationships for g in build[key]['groups']})
     return {'findings':sorted(findings,key=lambda f:(f['severity']!='violation',f['rule'],f['subjects'])),
             'checks':checks, 'context':context}

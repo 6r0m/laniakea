@@ -508,3 +508,84 @@ Verification:
   about unavailable native facts, and canonical/index checksums remain valid. Existing layout, policy and triage bytes
   are unchanged. No private project values or measurements are copied into this record.
 - Documentation, syntax, whitespace and local privacy checks passed. No staging, commit or publication performed.
+
+### 2026-11-12 - Visible connection findings and saved-layout repair
+
+- Operator requested live overlap correction, warnings on visible wires through deep navigation and a universal repair
+  path. Existing automatic source bands were clean; an older saved arrangement crowded derived file representatives.
+  Reused scoped Arrange files, with an ignored recoverable copy, after explicit operator authorization. Other scopes,
+  layout modes and layout files remain unchanged. Detection now reports visible file-marker collisions for any active
+  source owner and emphasizes that same action; it never silently replaces saved positions. Compact file names now
+  take precedence on the canvas, retaining full identity in hover and inspection.
+- Findings retain their complete supporting reference-group associations, separate from bounded witness samples and
+  semantic fingerprints. Existing wires receive native halos and revealed endpoints receive deduplicated badges.
+  Hover explains the concern without requests; wire inspection reuses Details, exact evidence and endpoint navigation.
+  A marker means a bundle contains relevant evidence, not that every reference is problematic. No graph facts, parser,
+  renderer elements, extraction or layout-store protocol changed. Turning Review off releases the added associations.
+- Regression-first evidence: group coverage failed without the server association field; frontend rollups failed
+  without their group index; compact names failed before caption priority changed. Live expansion also exposed native
+  edge classes being replaced while marker data remained cached. The direct-owner expansion guard failed before the
+  marker cache checked class presence, and passes after that local correction.
+- Final JavaScript suite: 167 passed. All ten existing Chromium scenarios passed, including synthetic overlap detection,
+  scoped repair, a revealed callable with a genuinely off-screen partner, opposite-endpoint navigation, exact evidence,
+  acknowledgement and no hover requests. Real local visualization showed separated file glyphs and visible warning
+  wires; observed runtime errors: none.
+- Non-Engine Python suite with available LLVM: 182 executed, 178 passed and four optional skips. The three Engine
+  integration cases were excluded, not rerun or claimed by this viewer/read-only-review change. Focused final Review,
+  documentation and privacy checks: 28 passed, including cycle, forbidden and native group associations.
+- Existing wheel harness: three matched off/on pairs. A separate trusted-pointer probe measured first hover after a
+  pan with invalidated hit geometry, two matched off/on pairs. No material interaction regression established in this
+  real scene; this does not prove all dense graphs are smooth. Measurements and raw evidence remain ignored.
+- Verified the recovery copy against its original checksum and limited persisted changes to the authorized scope/mode.
+  Other layout files remained byte-identical; real policy/triage files were not created. Current backend associations
+  are served by the local application. The existing snapshot remains stale; no native re-extraction was needed.
+- Stable guide, graph and review contracts updated. Documentation/privacy checks and local hook-pattern worktree scan
+  passed. No staging, commit, push or external publication.
+
+### 2026-11-13 - Default review and readable warning symbols
+
+- Operator requested review by default and visible warning/error symbols instead of relying on bold lines. Review
+  starts after the map is ready; the list remains closed. Closing it retains analysis and map markers. An explicit
+  checkbox disables review, and the toolbar distinguishes checking, failure, off, unavailable and recorded counts.
+  No new analysis rules, extraction, backend, graph facts or saved-position behavior changed.
+- Type icons retain their size. Separate native background images provide screen-sized amber triangles or red stop
+  signs; compact native wire labels distinguish candidates from violations. Hover/Details retain exact counts and
+  evidence. The legend names the meaning; candidate findings are not promoted to confirmed errors.
+- Lifecycle and independent-symbol regressions failed before implementation and pass afterward. Live inspection
+  exposed clipping of secondary background images; explicit per-image clipping/containment settings correct it.
+  Native rendered-pixel checks now cover collapsed badges and an expanded violation title, rather than checking only
+  that an image URL or marker field exists. Delayed startup still permits camera input and preserves inspection focus.
+- Verification: 168 JavaScript tests, all ten existing Chromium scenarios and four documentation/privacy tests passed.
+  Browser cases cover automatic startup, visible state/failure, closing the list, explicit disabling, native warning
+  pixels, exact evidence, triage, off-screen navigation and unchanged pins. No full Python/native extraction or Engine
+  integration rerun is claimed for this presentation-only increment.
+- Real local map verified after reload. Three matched wheel off/on pairs showed no material regression in this scene;
+  other scenes remain outside that measurement. Stable docs updated; screenshots remain outside the clone and private
+  diagnostics remain ignored. No staging, commit or publication.
+
+### 2026-11-13 - Real native-evidence accuracy
+
+- Operator requested checking actual warnings against C++ and Unreal evidence, then fixing demonstrated noise. The
+  sample exposed unresolved overload lookup being promoted to calls and forward declarations acquiring ownership of
+  available class definitions. Callee confirmation uses the indexing reference's selected declaration, including
+  compiler-linked template identities. Observed type definitions resolve before translation-unit disposal; identity
+  disagreement refuses publication. No symbol migration or Engine-internal expansion was introduced.
+- A positive template-body control rejected the first callee correction before publication. The replacement preserves
+  resolved calls inside instantiated bodies. Further real sampling exposed reverse dependency notes from consumer-supplied
+  template arguments and virtual interface calls with explicit include-only declarations. Native dependency notes now
+  require a recorded callable definition; exact instantiated calls remain. Explicit include-only interfaces exempt
+  virtual dispatch, while static imports and fixed calls in authored templates retain their positive controls.
+- Five focused LLVM regressions failed on their relevant prior implementations and pass after correction. Final
+  non-Engine Python suite: 187 executed, 183 passed, four optional skips, including 28 native semantic tests. The three
+  sample Engine integration cases were not rerun; real selected-project extraction and installed Engine declarations
+  supplied the runtime evidence for this increment. Zero compiler errors does not prove exhaustive semantic coverage.
+- The existing 168 JavaScript tests and ten Chromium scenarios passed. After regeneration, inspected the replacement
+  real findings against all their supporting source/declaration sites and selected-target build data. Live Chrome
+  inspection opened exact evidence for each sampled finding without runtime errors, writes or pin changes. Hypothetical
+  forbidden constraints were evaluated in memory only; no real policy or triage file was created.
+- Successful full native extraction and a subsequent validated-cache regeneration published clean snapshots. The latter
+  changed eligibility annotations without changing graph counts. Private measurements, diagnostics and source evidence
+  remain ignored; no private identifiers or identifying counts are copied here. Stable native contracts updated.
+- Final layout checksums remained byte-identical; real policy and triage remained absent. The restarted local server
+  advertises the fresh run. Documentation, whitespace and local privacy checks passed. No staging, commit or external
+  publication was performed.

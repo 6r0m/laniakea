@@ -45,7 +45,8 @@ Laniakea installation, configuration or committed files.
   inspection directions; `context.js` shares declaration context and qualified lookup; `map.js` renders the canvas
   and hover; `icons.js` decorates native nodes; `scene.js` owns camera navigation;
   `positions.js` loads and saves released pins in order; `references.js` owns bounded reference-page
-  retention and cancellation. See [viewport and memory lifetime](graph-model.md#viewport-and-memory-lifetime).
+  retention and cancellation. `inspector.js` owns accessible tab presentation, independently of selection and data.
+  See [viewport and memory lifetime](graph-model.md#viewport-and-memory-lifetime).
   Project configuration uses existing inspection and projected-node annotations, as defined by
   [configuration context](graph-model.md#centered-overview-and-configuration).
 - **Layout store** (`laniakea/layouts.py`): validated user positions under each target's `layouts/` directory in the

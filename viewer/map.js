@@ -76,6 +76,8 @@ function style() {
       label: '', color: css('--muted'), 'font-size': 11, 'text-background-color': css('--bg'),
       'text-background-opacity': 0.9, 'text-background-padding': 2 } },
     { selector: 'edge.derived.hovered, edge.derived:selected', style: { label: 'data(count)','target-arrow-shape':'triangle' } },
+    {selector:'edge.review-candidate',style:{opacity:0.65}},
+    {selector:'edge.review-violation',style:{opacity:0.9}},
     // Direct owner references meet the named top boundary of an expanded container.
     {selector:'edge.source-expanded',style:{'source-endpoint':'0% -50%'}},
     {selector:'edge.target-expanded',style:{'target-endpoint':'0% -50%'}},
@@ -85,6 +87,8 @@ function style() {
     { selector: '.faded', style: { opacity: 0.3 } },
     { selector: 'edge:selected', style: { opacity: 1,width:3,'line-color':css('--selection'),'target-arrow-color':css('--selection'), 'underlay-color': css('--selection'),
       'underlay-opacity': 0.15, 'underlay-padding': 3 } },
+    {selector:'edge.review-candidate',style:{'underlay-color':css('--review-candidate'),'underlay-opacity':0.28}},
+    {selector:'edge.review-violation',style:{'underlay-color':css('--review-violation'),'underlay-opacity':0.38}},
     { selector: 'edge.focus', style: { width: 2.5, opacity: 1, 'z-index': 5,'target-arrow-shape':'triangle' } },
     ...['outgoing','incoming','within'].map(role=>({selector:'edge.trace-'+role,style:{
       'line-color':css('--trace-'+role),'target-arrow-color':css('--trace-'+role),
@@ -94,6 +98,13 @@ function style() {
     {selector:'node.trace-anchor',style:{'border-color':css('--fg'),'underlay-color':css('--fg'),
       'underlay-opacity':0.16,'font-weight':600}},
     {selector:'edge.pair-inspected',style:{label:''}},
+    {selector:'edge.review-candidate, edge.review-violation',style:{label:'data(reviewSymbol)',
+      'text-background-color':css('--panel'),'text-background-opacity':1,'text-border-width':1,
+      'text-border-opacity':1,'text-background-shape':'roundrectangle','text-margin-y':0,'font-weight':700}},
+    {selector:'edge.review-candidate',style:{color:css('--review-candidate'),'text-border-color':css('--review-candidate')}},
+    {selector:'edge.review-violation',style:{color:css('--review-violation'),'text-border-color':css('--review-violation')}},
+    {selector:'edge.review-candidate.hovered, edge.review-violation.hovered',style:{label:'data(reviewText)',
+      'color':css('--fg'),'text-background-color':css('--panel'),'text-background-opacity':1}},
     { selector: 'node.source-region', style: {shape:'roundrectangle','background-opacity':0.08} },
     { selector: 'node.implementation', style: {'border-color':css('--context'),'background-color':css('--context')} },
     { selector: 'node.restricted-member', style: {'border-color':css('--muted'),'background-color':css('--context')} },
@@ -276,14 +287,14 @@ function refreshMap() {
   readableLabels();
   updateScopeSummary();
   renderFilters();
-  if (state.selection) renderDetails(state.selection);
+  if (state.selection) renderDetails(state.selection,{reopen:false});
   rememberView();
 }
 
 function selectNode(id) {
   const n = state.universe.nodes.get(id);
   if (!n) return;
-  renderDetails(n);
+  renderDetails(n,{reopen:true});
   const trace=ConnectionTrace.node(state.universe,state.shard,id);
   if(trace)showTraceReadout(trace);
 }
@@ -506,7 +517,7 @@ function configurationMarkLabel(id) {
   return targets.size===1&&targets.has(id)?'Listed by project configuration':`${targets.size} listed targets inside`;
 }
 
-function showHoverCard(trace,point) {
+function showHoverCard(trace,point,review=null) {
   if(!state.cy.container())return;
   const card=$('hover-card'),summary=traceSummary(trace),rows=el('div',null,{class:'hover-rows'});
   for(const [name,count,role,configuration,types] of summary.rows) {
@@ -539,6 +550,10 @@ function showHoverCard(trace,point) {
   if(summary.source)card.append(el('small',summary.source,{class:'hover-context'}));
   if(summary.structure)card.append(el('small',summary.structure,{class:'hover-context'}));
   if(summary.scope)card.append(el('small',summary.scope,{class:'hover-context'}));
+  if(review){
+    card.append(el('strong',review.summary,{class:'hover-context review-summary'}));
+    for(const title of review.titles)card.append(el('small',title,{class:'hover-context'}));
+  }
   card.append(rows,...(summary.columns?[el('small',summary.notes.join(' '),{class:'hover-context'})]:
     summary.notes.map(note=>el('small',note,{class:'hover-context'}))));
   const cy=state.cy,node=cy.getElementById(trace.source||trace.pairs[0].source),anchor=trace.kind==='node'&&!node.hasClass('expanded')?
@@ -552,32 +567,32 @@ function showHoverCard(trace,point) {
 }
 
 function showTraceReadout(trace,point) {
-  const counts=trace.counts;
+  const counts=trace.counts,review=state.review?.readout(trace),write=(title,text)=>showTooltip(title,text+(review?' / '+review.summary:''));
   if(trace.focus){
     const f=trace.focus;
-    showTooltip(`Focus: ${traceName(f.id)} / hovered connections`,
+    write(`Focus: ${traceName(f.id)} / hovered connections`,
       `Incoming: ${f.counts.incoming} / Outgoing: ${f.counts.outgoing}`+(f.counts.within?` / Within/self: ${f.counts.within}`:'')+
       (f.others?` / ${f.others} other overlapping connection${f.others===1?'':'s'}`:'')+' / '+f.peers.slice(0,6).map(peer=>
         `${tracePeerName(f,peer)}: ${peer.incoming} incoming, ${peer.outgoing} outgoing`).join(' / '));
   } else if(trace.kind==='overlap'){
     const summary=traceSummary(trace);
-    showTooltip(summary.title+' / '+summary.description,
+    write(summary.title+' / '+summary.description,
       summary.rows.map(([name,count,,,types])=>`${name}: ${count} refs`+(types?' ('+types+')':'')).join(' / ')+
       (trace.pairs.length>3?` / +${trace.pairs.length-3} more; click to inspect`:''));
   } else if(trace.kind==='node') {
     const summary=traceSummary(trace);
-    showTooltip(`In this view / Focus: ${traceName(trace.source)}`,
+    write(`In this view / Focus: ${traceName(trace.source)}`,
       `Outgoing: ${counts.outgoing} / Incoming: ${counts.incoming} / Within: ${counts.within}`+
       ' / All recorded: '+summary.rows.map(([name,count,,configuration])=>`${name}: ${count}`+
         (configuration?` (Of which: project configuration: ${configuration})`:'')).join(' / ')+
       ' / '+summary.notes.join(' / '));
   }
-  else if(trace.source===trace.target)showTooltip(`In this view / Self: ${traceName(trace.source)}`,
+  else if(trace.source===trace.target)write(`In this view / Self: ${traceName(trace.source)}`,
     `Within/self: ${counts.within} refs (${traceTypes(trace.groups.within)})`);
-  else showTooltip(`In this view / A: ${traceName(trace.source)} / B: ${traceName(trace.target)}`,
+  else write(`In this view / A: ${traceName(trace.source)} / B: ${traceName(trace.target)}`,
     `A -> B: ${counts.outgoing} refs${counts.outgoing?' ('+traceTypes(trace.groups.outgoing)+')':''} / `+
     `B -> A: ${counts.incoming} refs${counts.incoming?' ('+traceTypes(trace.groups.incoming)+')':''}`);
-  showHoverCard(trace,point);
+  showHoverCard(trace,point,review);
 }
 
 function showTooltip(title, text) {
@@ -642,6 +657,8 @@ function readableLabels(geometryOnly = false) {
         padding: 26 / zoom, 'text-margin-y': -8 / zoom,'text-valign':'top','text-halign':'center' });
       cy.edges('.loop').forEach(edge => edge.data('loopDistance',
         2*Math.max(edge.source().outerWidth(),edge.source().outerHeight())+20/zoom));
+      cy.edges('.review-candidate,.review-violation').style({'underlay-padding':4/zoom,'font-size':13/zoom,
+        'text-background-padding':3/zoom,'text-border-width':1/zoom});
       state.labelAlign = new Map();
     }
     for (const [n, align] of alignments) {
@@ -649,7 +666,8 @@ function readableLabels(geometryOnly = false) {
         n.style('text-halign', align); state.labelAlign.set(n.id(), align);
       }
     }
-    NodeIcons.update(cy,state.universe,state.scopeShard.scope,worldZoom(),zoom,{fg:css('--fg'),bg:css('--bg')});
+    NodeIcons.update(cy,state.universe,state.scopeShard.scope,worldZoom(),zoom,{fg:css('--fg'),bg:css('--bg'),
+      candidate:css('--review-candidate'),violation:css('--review-violation')});
   });
   state.labelGeometry = {cy, zoom:styleZoom};
   if (!geometryOnly) declutterLabels();
@@ -734,7 +752,8 @@ function declutterLabels() {
   const traced = new Set(cy.edges('.focus').connectedNodes().map(n => n.id()));
   const all = cy.nodes().map(n => {
     const expanded = n.hasClass('expanded');
-    return { id: n.id(), node:n, name:n.data('displayName') || n.data('label') || (n.data('caption') || '').split('\n')[0],
+    return { id: n.id(), node:n, name:n.data('displayName') || (n.hasClass('source-file')&&n.data('caption')) ||
+      n.data('label') || (n.data('caption')||'').split('\n')[0],
       priority: n.hasClass('hovered') || n.selected() ? 8 : inspected.has(n.id()) ? 7 :
         n.hasClass('match') || n.id() === state.scopeShard.scope ? 6 : traced.has(n.id()) ? 5 :
           n.hasClass('overlapping-context')?4:expanded ? 2 : 1 };
@@ -787,10 +806,11 @@ function declutterLabels() {
     });
   });
   state.visibleLabels = names;
+  updateSourceOverlap(glyphs,obstacles);
   state.labelBoxes=new Map([...kept.values()].map(n=>[n.id,n.textBox||n.box]));
   const titled=cy.nodes('.expanded').filter(node=>node.data('iconKind'));
   if(titled.length){
-    const palette={fg:css('--fg'),bg:css('--bg')};
+    const palette={fg:css('--fg'),bg:css('--bg'),candidate:css('--review-candidate'),violation:css('--review-violation')};
     cy.batch(()=>titled.forEach(node=>NodeIcons.title(node,kept.get(node.id())?.textBox,cy.zoom(),palette)));
   }
 }

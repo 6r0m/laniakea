@@ -4,6 +4,47 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const {viewer,inspectionViewer,treeElements}=require('./viewer-support.cjs');
 
+test('the reusable tab presenter exposes native keyboard semantics without owning inspection data',()=>{
+  const {InspectorTabs}=require('../viewer/inspector.js');let focused=null;
+  const create=(tag,text,attrs={})=>({tag,text,attrs,children:[],append(...nodes){this.children.push(...nodes);},
+    setAttribute(name,value){this.attrs[name]=value;},focus(){focused=this;}});
+  const root=create('aside'),tabs=new InspectorTabs(root,create,{id:'sample-inspection',title:'Sample',
+    tabs:[{id:'summary',label:'Summary'},{id:'evidence',label:'Evidence'}],onClose(){}});
+  const summary=tabs.pages.get('summary'),evidence=tabs.pages.get('evidence');
+  const draft=create('input');draft.value='unsaved';summary.append(draft);summary.scrollTop=87;
+  tabs.select('summary');
+  assert.equal(tabs.tabs.get('summary').attrs['aria-controls'],summary.attrs.id);
+  assert.equal(summary.attrs['aria-labelledby'],tabs.tabs.get('summary').attrs.id);
+  let prevented=false;
+  tabs.tabs.get('summary').onkeydown({key:'ArrowLeft',preventDefault(){prevented=true;},stopPropagation(){}});
+  assert.equal(focused,tabs.tabs.get('evidence'));assert.equal(prevented,true);
+  assert.equal(evidence.hidden,false);assert.equal(summary.hidden,true);
+  assert.equal(tabs.tabs.get('evidence').attrs.tabindex,'0');
+  tabs.tabs.get('evidence').onkeydown({key:'Home',preventDefault(){},stopPropagation(){}});
+  assert.equal(summary.hidden,false);assert.equal(summary.children[0],draft);
+  assert.equal(summary.scrollTop,87);assert.equal(draft.value,'unsaved');
+  prevented=false;
+  tabs.tabs.get('summary').onkeydown({key:'ArrowLeft',altKey:true,preventDefault(){prevented=true;},stopPropagation(){}});
+  assert.equal(prevented,false,'Inspector tabs must leave browser Back shortcuts alone');
+  assert.equal(tabs.active,'summary');
+});
+
+test('explicit reinspection reopens a hidden dock without background refresh reopening it',t=>{
+  const {run}=inspectionViewer();treeElements(run);t.after(()=>run('state.cy.destroy()'));
+  run(`state.universe.paged=true;globalThis.renderConnections=()=>{};
+    selectNode('app.core');globalThis.inspectedEpoch=state.referenceEpoch;
+    globalThis.detailPage=state.inspector.pages.get('details');
+    $('details').hidden=true;refreshMap();`);
+  assert.equal(run("$('details').hidden"),true,'Background projection must respect hidden inspection');
+  run("state.hidden.add('imports');refreshMap()");
+  assert.equal(run("$('details').hidden"),true,'A changed filter must not replace the active narrow panel');
+  run("state.hidden.clear();refreshMap();globalThis.inspectedEpoch=state.referenceEpoch;globalThis.detailPage=state.inspector.pages.get('details')");
+  run("selectNode('app.core')");
+  assert.equal(run("$('details').hidden"),false,'Explicit same-star inspection must reopen the existing dock');
+  assert.equal(run('state.referenceEpoch'),run('inspectedEpoch'));
+  assert.equal(run("state.inspector.pages.get('details')===detailPage"),true,'Reopening must retain the reference reader');
+});
+
 test('header search distinguishes recorded file paths without losing equal-basename choices',()=>{
   const {run}=viewer();
   run(`globalThis.files=['One','Two'].map(name=>({id:name,label:'API.h',level:'source-group',attrs:{source_file:true},
@@ -165,7 +206,7 @@ test('recorded signatures and nearest owner context appear in hover and primary 
     globalThis.renderConnections=()=>{};renderDetails(node);`);
   assert.equal(run('summary.signature'),'Run(int value)');
   assert.match(run('summary.path'),/Sample::Owner::Run/);
-  assert.equal(run("$('details').children.some(n=>n.tag==='code'&&n.textContent==='Run(int value)')"),true);
+  assert.equal(run("state.inspector.pages.get('details').children.some(n=>n.tag==='code'&&n.textContent==='Run(int value)')"),true);
 });
 
 test('inheritance readout counts filtered projected references without inventing base names',t=>{
@@ -317,7 +358,7 @@ test('details close control dismisses stars and connections without moving the m
     globalThis.closed=0;
     for(const item of [state.universe.nodes.get('app.core'),state.shard.edges[0]]){
       renderDetails(item);
-      const close=$('details').children.find(n=>n.attrs?.['aria-label']==='Close details');
+      const close=$('details').querySelector('[aria-label="Close inspector"]');
       if(!close)throw Error('Inspection needs an accessible close control');
       close.onclick();refreshMap();
       if(!$('details').hidden||state.selection||state.cy.elements(':selected').length)throw Error('Close left inspection selected');
@@ -340,7 +381,7 @@ test('a late project declaration page cannot reopen closed inspection or replace
     renderDetails({...state.universe.nodes.get('app'),projectContext:true});
     globalThis.oldEpoch=state.referenceEpoch;
     $('toggle-details').focus=()=>{};
-    $('details').children.find(n=>n.attrs?.['aria-label']==='Close details').onclick();refreshMap();
+    $('details').querySelector('[aria-label="Close inspector"]').onclick();refreshMap();
     requests[0]({total:1,items:[],next_cursor:null});`);
   await new Promise(setImmediate);
   assert.equal(run('state.selection'),null);assert.equal(run("$('details').hidden"),true);
@@ -349,7 +390,7 @@ test('a late project declaration page cannot reopen closed inspection or replace
     selectNode('app.core');requests[1]({total:1,items:[],next_cursor:null});`);
   await new Promise(setImmediate);
   assert.equal(run('state.selection.id'),'app.core');
-  assert.equal(run("$('details').children.find(n=>n.tag==='h2').textContent"),'core');
+  assert.equal(run("$('details').querySelector('h2').textContent"),'core');
 });
 
 test('zoom context explains unavailable internals and clears the hint on returning to an analysed scope',()=>{
@@ -377,7 +418,7 @@ test('unavailable nodes expose coverage in hover readout and details while their
   assert.match(run("nodeDescription(state.universe.nodes.get('app.core.db'))"),/outside.*target/i);
   assert.equal(run("state.cy.getElementById('app.core.db').data('caption')"),'db');
   assert.match(run('tip'),/internals.*not analysed/i);
-  assert.equal(run("$('details').children.some(n=>/internals.*not analysed/i.test(n.textContent))"),true);
+  assert.equal(run("state.inspector.pages.get('details').children.some(n=>/internals.*not analysed/i.test(n.textContent))"),true);
 });
 
 test('centered positions use the named boundary rather than guessing from names or weights',()=>{
@@ -400,6 +441,28 @@ test('a name survives when secondary caption text cannot fit the viewport',t=>{
   assert.equal(run("state.cy.nodes()[0].style('text-opacity')"),'1');
   assert.equal(run("state.cy.nodes()[0].style('label')"),'Useful name');
   assert.equal(run("state.labelBoxes.get('a').y2"),198);
+});
+
+test('source files prefer their compact meaningful caption without changing their full identity',t=>{
+  const {run}=viewer();
+  run(`globalThis.css=()=>'#888888';state.cy=cytoscape({headless:true,styleEnabled:true,style:style(),elements:[
+    {data:{id:'file',label:'SampleArchitecturePublicInterface.h',caption:'Interface.h'},classes:'source-file'}]});
+    state.cy.width=()=>400;state.cy.height=()=>200;state.scopeShard={scope:'root'};
+    state.cy.nodes()[0].renderedBoundingBox=options=>options.includeLabels===false?{x1:190,y1:20,x2:210,y2:40}:
+      {x1:100,y1:50,x2:300,y2:75};declutterLabels();`);
+  t.after(()=>run('state.cy.destroy()'));
+  assert.equal(run("state.cy.nodes()[0].style('label')"),'Interface.h');
+  assert.equal(run("state.cy.nodes()[0].data('label')"),'SampleArchitecturePublicInterface.h');
+});
+
+test('source overlap detection finds colliding glyphs without changing their positions',()=>{
+  const {run}=viewer();
+  run(`globalThis.glyphs=[{id:'one',box:{x1:0,y1:0,x2:10,y2:10}},
+    {id:'two',box:{x1:8,y1:8,x2:18,y2:18}},{id:'far',box:{x1:100,y1:100,x2:110,y2:110}}];`);
+  const before=run('JSON.stringify(glyphs)');
+  assert.equal(run('sourceGlyphOverlaps(glyphs).size'),2);
+  assert.equal(run("sourceGlyphOverlaps(glyphs,new Set(['one','far'])).size"),0);
+  assert.equal(run('JSON.stringify(glyphs)'),before);
 });
 
 test('label fitting builds its glyph index once per settled scene rather than once per name',t=>{
@@ -505,12 +568,12 @@ test('secondary node metadata stays disclosed while references and analysis stat
     const n=state.universe.nodes.get('app.core');n.attrs={analysis:'partial',
       compiler_analysis:'not analysed: no native unit observed',disables:'many unrelated project options'};
     selectNode(n.id);`);
-  assert.equal(run("$('details').children.find(n=>n.tag==='details').children[0].textContent"),'Metadata');
-  assert.equal(run("$('details').children.find(n=>n.tag==='details').open"),undefined);
-  assert.ok(run("$('details').children.find(n=>n.tag==='dl').children.some(n=>n.textContent==='partial')"));
-  assert.ok(run("$('details').children.find(n=>n.tag==='dl').children.some(n=>n.textContent==='not analysed: no native unit observed')"));
-  assert.ok(!run("$('details').children.find(n=>n.tag==='dl').children.some(n=>n.textContent==='many unrelated project options')"));
-  assert.ok(run("$('details').children.some(n=>n.tag==='h3'&&n.textContent==='Outgoing')"));
+  assert.equal(run("state.inspector.pages.get('details').children.find(n=>n.tag==='details').children[0].textContent"),'Metadata');
+  assert.equal(run("state.inspector.pages.get('details').children.find(n=>n.tag==='details').open"),undefined);
+  assert.ok(run("state.inspector.pages.get('details').children.find(n=>n.tag==='dl').children.some(n=>n.textContent==='partial')"));
+  assert.ok(run("state.inspector.pages.get('details').children.find(n=>n.tag==='dl').children.some(n=>n.textContent==='not analysed: no native unit observed')"));
+  assert.ok(!run("state.inspector.pages.get('details').children.find(n=>n.tag==='dl').children.some(n=>n.textContent==='many unrelated project options')"));
+  assert.ok(run("state.inspector.pages.get('details').children.some(n=>n.tag==='h3'&&n.textContent==='Outgoing')"));
   run('state.cy.destroy()');
 });
 
@@ -1079,6 +1142,7 @@ test('overlapping labels preserve selection and members, and return on zoom', ()
 
 test('inspected connection endpoints keep labels ahead of unrelated overlapping stars',t=>{
   const {run}=viewer();
+  t.after(()=>run('state.cy.destroy()'));
   run(`state.cy=cytoscape({headless:true,styleEnabled:true,layout:{name:'preset',fit:false},elements:[
     {data:{id:'unrelated',caption:'Unrelated'},position:{x:200,y:200}},
     {data:{id:'caller',caption:'Caller'},position:{x:200,y:200}},
@@ -1089,7 +1153,6 @@ test('inspected connection endpoints keep labels ahead of unrelated overlapping 
     state.cy.nodes().forEach(n=>n.renderedBoundingBox=()=>{const p=n.renderedPosition();return {
       x1:p.x-50,y1:p.y+20,x2:p.x+50,y2:p.y+50,w:100,h:30};});
     state.cy.getElementById('call').select();declutterLabels();`);
-  t.after(()=>run('state.cy.destroy()'));
   assert.equal(run("state.cy.getElementById('caller').style('text-opacity')"),'1');
   assert.equal(run("state.cy.getElementById('unrelated').style('text-opacity')"),'0');
   assert.equal(run("state.cy.getElementById('callee').style('text-opacity')"),'1');

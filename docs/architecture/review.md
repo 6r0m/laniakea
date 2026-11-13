@@ -9,7 +9,7 @@ recorded concerns and configured constraint violations, not an overall architect
 |---|---|
 | Module dependency cycle | Candidate; a configured acyclic constraint makes the witnessed cycle a violation |
 | Forbidden module dependency direction | Violation only when a configured rule forbids the recorded relation |
-| Native missing-direct-dependency note | Candidate from existing profile annotations; never an automatic violation |
+| Native call without recorded module access | Candidate only when the profile records a complete access closure with no supporting path; never an automatic violation |
 
 Red identifies a policy violation; yellow identifies a review candidate. Each finding names its rule, affected
 modules, context, limits and exact witnesses. Counts of findings, recorded relations and displayed witnesses are
@@ -18,6 +18,11 @@ different quantities. Large findings retain bounded witness samples; other exact
 The evaluator reads canonical payloads through the existing read index. It does not reason from bundled lines,
 visual crossings or file representatives. The Unreal adapter owns build-edge interpretation and native-note eligibility;
 generic rules own selectors, directed constraints and iterative strongly connected component detection.
+
+Valid public dependency paths are normal context. Include-only static calls, incomplete access evidence and legacy
+missing-direct annotations remain unverified rather than active findings. The native check reports their recorded-call
+count in Policy & availability. Link environments and runtime execution are not evaluated. A clean candidate list is
+not proof that every binary can link or that every architectural convention has been checked.
 
 Rules evaluate the selected run, not current unsnapshotted source or other targets. Partial coverage permits a proven
 positive witness but cannot prove global conformance. Disabled, unavailable, partial and failed checks remain explicit.
@@ -50,7 +55,7 @@ Location-only edits regenerate the report and exact links while retaining a matc
 the same module pair do not by themselves change that module-level concern. Changed rules, relevant dependency
 relations, cycle membership/internal relations or build context require reconsideration. Missing compatibility is
 not silently treated as a match. Evaluator/profile versions must change when their semantic interpretation changes.
-For native notes, recorded transitive/public-exposure reachability states affect triage; choosing another witness
+For native notes, recorded access classification and reachability states affect triage; choosing another witness
 path with the same reachability does not. Only build relations between the affected directed module pair participate;
 unrelated outgoing dependencies do not. Native fingerprint semantics are versioned separately from other finding kinds.
 A decision from an incompatible fingerprint version requires reconsideration without deleting its stored record.
@@ -74,8 +79,13 @@ decision unchanged and provides an error. Corrupt triage fails visibly; unavaila
 | `review/rules.json` | Local policy input; explicit recheck reloads it |
 | `review/triage.json` | Durable local decisions, independent of caches, runs and layouts |
 
-Analysis starts on demand and streams exact references once for an uncached report. Only module adjacency,
-summaries and bounded witnesses remain; there is no second symbol/reference graph. Finding limits fail visibly
+Opening a supported target starts analysis in the background without blocking the map. An uncached report streams
+exact references once. Only module adjacency,
+summaries, compact reference-group associations and bounded witnesses remain; there is no second symbol/reference graph.
+Associations cover all groups supporting a finding, independently of its witness sample and list pagination. They bind
+presentation to the current read index without entering semantic fingerprints. A group can also contain unflagged
+references, so its marker indicates evidence is present rather than declaring every member problematic.
+Finding limits fail visibly
 rather than publishing a silently truncated report. A validated report cache can be rebuilt without deleting policy,
 triage or pins. In-process generation is shared, and cross-process publication is locked.
 

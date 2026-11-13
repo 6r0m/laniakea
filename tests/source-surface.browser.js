@@ -11,6 +11,14 @@ async page=>{
   await page.evaluate(()=>{flyToNode('module',false);state.universe.expanded.add('module');refreshMap();frameNode('module');});await settle();
   const files=await page.evaluate(()=>Object.fromEntries(state.universe.fileIds.map(id=>[state.universe.nodes.get(id).label,id])));
   check(files['API.h']&&files['Producer.cpp']&&files['Helpers.cpp']&&files['Other.cpp'],'Missing concrete file representatives');
+  const original=await page.evaluate(({one,two})=>{
+    const map=state.universe,point={...map.positions.get(two)};
+    map.positions.set(two,{...map.positions.get(one)});map.indexPositions();refreshMap();return point;
+  },{one:files['API.h'],two:files['Producer.cpp']});await settle();
+  check(await page.locator('#source-layout-status').isVisible(),'Overlapping saved file markers have no observable repair hint');
+  await page.evaluate(({id,point})=>{state.universe.positions.set(id,point);state.universe.indexPositions();refreshMap();},
+    {id:files['Producer.cpp'],point:original});await settle();
+  check(await page.locator('#source-layout-status').isHidden(),'Collision hint remained after separating file markers');
   await page.evaluate(id=>{state.universe.expanded=new Set([state.universe.root]);state.universe.reveal(id);refreshMap();frameNode('module');},files['API.h']);await settle();
   const camera=await page.evaluate(()=>({zoom:worldZoom(),pan:{...state.cy.pan()}}));
   let wheelSteps=0;const wheelAnchors=[];

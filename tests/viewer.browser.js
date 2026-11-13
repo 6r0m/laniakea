@@ -112,7 +112,7 @@ async (page) => {
     await page.waitForFunction(()=>!state.referencePages?.pending.size);
     check(await page.locator('#details').innerText().then(text=>/Project configuration.*listed targets/s.test(text)),
       'Project context lost exact declarations and distinct target counts');
-    const closeDetails=page.getByRole('button',{name:'Close details',exact:true});
+    const closeDetails=page.getByRole('button',{name:'Close inspector',exact:true});
     await closeDetails.focus();await page.keyboard.press('Enter');await page.evaluate(()=>refreshMap());
     check(await page.locator('#details').isHidden()&&await page.locator('#toggle-details').evaluate(n=>n===document.activeElement),
       'Keyboard close must dismiss inspection and return focus to Details');
@@ -453,20 +453,24 @@ async (page) => {
     } finally {
       await page.evaluate(()=>{state.referencePages=pagerProbe.cache;state.referenceEpoch=pagerProbe.epoch;pagerProbe.pane.remove();delete globalThis.pagerProbe;});
     }
-    await page.evaluate(()=>{flyToNode('module:SampleCore');$('details').scrollTop=500;$('details').scrollLeft=20;flyToNode('module:SampleGameplay');});
-    check(await page.evaluate(()=>$('details').scrollTop===0&&$('details').scrollLeft===0),'New inspection retained the previous list scroll');
+    await page.evaluate(()=>flyToNode('module:SampleCore'));
+    await page.waitForFunction(()=>state.selection?.id==='module:SampleCore');
+    await page.evaluate(()=>{const panel=$('inspector-page-details');panel.scrollTop=500;panel.scrollLeft=20;flyToNode('module:SampleGameplay');});
+    await page.waitForFunction(()=>state.selection?.id==='module:SampleGameplay');
+    check(await page.evaluate(()=>$('inspector-page-details').scrollTop===0&&$('inspector-page-details').scrollLeft===0),
+      'New inspection retained the previous list scroll');
     await page.setViewportSize({width:390,height:844});await frames();
     await page.getByRole('button',{name:'Fit map',exact:true}).click();
     const narrow=await page.evaluate(()=>({width:document.documentElement.scrollWidth,viewport:innerWidth,
       count:state.cy.nodes().length,error:$('error').hidden}));
     check(narrow.width<=narrow.viewport&&narrow.count>0&&narrow.error,'Narrow viewport overflows or loses the map');
     await page.evaluate(()=>selectNode('folder:Sample'));await page.waitForFunction(()=>!state.referencePages?.pending.size);
-    await page.evaluate(()=>$('details').scrollTop=200);await frames();
+    await page.evaluate(()=>$('inspector-page-details').scrollTop=200);await frames();
     check(await closeDetails.evaluate(button=>{
       const b=button.getBoundingClientRect(),pane=document.getElementById('details'),p=pane.getBoundingClientRect();
       return b.top>=p.top&&b.bottom<=p.bottom&&b.left>=p.left&&b.right<=p.right&&
         document.elementFromPoint(b.x+b.width/2,b.y+b.height/2)===button&&pane.scrollWidth<=pane.clientWidth;
-    }),'Close details is obscured or offscreen after scrolling the narrow panel');
+    }),'Close inspector is obscured or offscreen after scrolling the narrow panel');
     await closeDetails.click();check(await page.locator('#details').isHidden(),'Narrow details close failed');
     await page.setViewportSize({width:1440,height:1000});
     await page.evaluate(()=>{renderDetails(null);state.universe.expanded=new Set([state.universe.root]);});

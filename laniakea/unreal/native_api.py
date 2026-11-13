@@ -93,6 +93,8 @@ class Library:
         for name in ("CXXMethod_isStatic", "CXXMethod_isVirtual", "CXXMethod_isConst"):
             self._bind(name, U, [Cursor])
         self._bind("getCursorDefinition", Cursor, [Cursor])
+        self._bind("getCursorReferenced", Cursor, [Cursor])
+        self._bind("getSpecializedCursorTemplate", Cursor, [Cursor])
         self._bind("Cursor_getVarDeclInitializer", Cursor, [Cursor])
         self._bind("getCursorExtent", Range, [Cursor])
         self._bind("getRangeStart", Location, [Range])

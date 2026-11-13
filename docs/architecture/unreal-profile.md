@@ -189,12 +189,26 @@ Observed lambda closures retain compiler-derived IDs and callable ownership. Dis
 when recorded, otherwise a file/line/column label; signatures replace known compiler closure spellings and local roots
 without changing identities or source coordinates. Unobserved initializer/unevaluated contexts are not complete coverage.
 
-Call edges require both LLVM's actual call role and a matching native evaluated call-expression range. Address-taking,
+Call edges require LLVM's call role, an evaluated call-expression range and the indexing reference's compiler-selected callee.
+Compiler-linked template specializations may match their originating template. An unresolved overload candidate is
+a reference, not proof that its declaration was called; sharing a source range never establishes that identity. Address-taking,
 `sizeof`, `noexcept`, requirements and type declarations remain references. Unsupported type/default-argument or initializer
 contexts also remain references rather than acquiring an inferred call. Virtual-call targets name the statically selected
 declaration; runtime dispatch is not analysed. Engine classes/functions collapse to their owning module/plugin; external
-toolchain declarations form provider boundaries. Cross-module calls without a direct build dependency carry a review note
-with transitive and public-exposure paths; this is not reported as a violation.
+toolchain declarations form provider boundaries. The profile interprets evaluated module compile access in
+[dependency_access.py](../../laniakea/unreal/dependency_access.py). Direct dependencies are normal. Indirect access permits
+a public or private first dependency, followed by public dependencies; a recorded path is context, not a missing-direct
+warning. Public include-only paths propagate include access without implying link dependencies. A virtual interface call
+can use that interface access; static calls supplied only through include paths retain unverified linkage. The export does
+not prove binary import/link environments, public API exposure correctness or runtime execution.
+
+Only an exhausted, fully recorded compile-access closure with no dependency or include path produces a review note.
+Missing boundary records or dependency fields produce unverified context instead, never a missing-dependency assertion.
+Exact call inspection retains the access path or missing-coverage explanation. Callable sources require a recorded definition.
+Instantiation-only call bodies remain exact references, but do not establish a reverse dependency from the generic
+template's module to a type supplied by its consumer. Fixed calls in the authored template definition remain eligible.
+These checks do not enforce a convention that every consumed module needs a direct Build.cs entry. Include paths are not
+public/private build dependencies, and header availability alone does not prove that an external static function can link.
 
 The optional [review adapter](../../laniakea/unreal/review.py) consumes those published notes and declared public/private
 module dependencies. Its defaults exclude descriptors, include-only/dynamic-load relations, semantic call cycles and
@@ -202,6 +216,10 @@ unrecorded boundary internals. Native-note absence does not establish exhaustive
 decisions are owned by [architecture review](review.md); this adapter invokes neither UBT nor native tools.
 
 Native header-tool manifests map generated declarations back to their module, checked against JsonExport ownership.
+Observed class/struct definitions are resolved after the translation unit is parsed. A forward declaration in a
+consumer does not acquire ownership of an available Engine or other-module definition. This resolves only types
+already observed by the compiler; it does not index external implementation internals. A definition that changes an
+observed compiler identity refuses publication rather than silently migrating the symbol.
 An unrendered field, local or macro-spelled method first retains its nearest recorded class/function ancestor.
 Only declarations without a retained semantic ancestor fall back to recorded module/provider ownership. Call-site and
 target-declaration provenance remain exact even when the displayed endpoint is an enclosing owner.

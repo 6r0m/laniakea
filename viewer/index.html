@@ -41,20 +41,23 @@
     <button id="toggle-filters" type="button" aria-controls="filters" aria-expanded="false">Browse &amp; filters</button>
     <span id="scope-summary" role="status"></span>
     <button id="toggle-configuration" type="button" aria-pressed="false" hidden>Config marks</button>
-    <button id="toggle-review" type="button" aria-pressed="false" aria-controls="review">Review</button>
+    <button id="toggle-review" type="button" aria-expanded="false" aria-controls="review" aria-live="polite">Review: checking...</button>
     <span id="layout-hint" role="status" hidden></span>
     <button id="fit" type="button">Fit map</button>
     <button id="reset-layout" type="button" title="Forget saved positions for this map and layout">Reset layout</button>
     <button id="arrange-files" type="button" hidden title="Arrange interface and implementation files in this scope only">Arrange files</button>
+    <span id="source-layout-status" role="status" hidden></span>
     <span id="position-status" role="status"></span>
     <button id="clear" type="button">Clear selection</button>
-    <button id="toggle-details" type="button" aria-controls="details" aria-expanded="false">Details</button>
+    <button id="toggle-details" type="button" aria-controls="details" aria-expanded="false">Inspector</button>
   </div>
   <main>
     <aside id="filters" aria-label="Browse and filters" hidden></aside>
     <aside id="review" aria-label="Architecture review" hidden>
       <div class="review-actions"><h2>Architecture review</h2><button id="review-close" type="button" aria-label="Close architecture review">Close</button></div>
       <p id="review-status" role="status"></p><p id="review-context" class="muted"></p>
+      <label><input id="review-enabled" type="checkbox" name="review-enabled" checked>Review this snapshot</label>
+      <p class="muted">Amber triangle / ?: review candidate. Red stop sign / !: policy violation. Hover to explain; click for evidence.</p>
       <label><input id="review-ack" type="checkbox" name="review-ack">Show acknowledged</label>
       <button id="review-recheck" type="button">Recheck</button>
       <details><summary>Policy &amp; availability</summary><p id="review-policy"></p><ul id="review-checks"></ul></details>
@@ -64,13 +67,14 @@
       <div id="graph" tabindex="0" role="group" aria-label="Dependency graph" aria-describedby="map-help"></div>
       <div id="map-legend"><details id="type-key"><summary>Type icons</summary><div id="icon-key"></div></details>
         Ring: expandable / Box: source / Diamond: external / Idle colors: reference types<br>
-        Trace: <span class="trace-outgoing">-&gt; Outgoing</span> / <span class="trace-incoming">&lt;- Incoming</span> / <span class="trace-within">Within/self</span><span id="configuration-legend" hidden> / Outer outline: project-listed targets</span></div>
+        Trace: <span class="trace-outgoing">-&gt; Outgoing</span> / <span class="trace-incoming">&lt;- Incoming</span> / <span class="trace-within">Within/self</span><span id="configuration-legend" hidden> / Outer outline: project-listed targets</span>
+        <span id="review-legend" hidden><br><span class="review-candidate">&#9888; / ? Review candidate</span> / <span class="review-violation">! Policy violation</span></span></div>
       <p id="map-help">Wheel to explore. Drag space to fly; drag stars or constellation names to arrange. Hover to trace. Double-click expands.</p>
       <div id="map-tooltip" role="status" aria-live="polite" aria-atomic="true" tabindex="0" aria-label="Connection trace">Hover a star or connection to trace references in this view.</div>
       <div id="hover-card" role="tooltip" aria-hidden="true" hidden></div>
       <div id="map-empty" role="status" hidden></div>
     </section>
-    <aside id="details" aria-label="Selection details" hidden></aside>
+    <aside id="details" aria-label="Selection inspector" hidden></aside>
   </main>
   <footer id="coverage"></footer>
   <script src="vendor/cytoscape.min.js"></script>
@@ -85,6 +89,7 @@
   <script src="positions.js"></script>
   <script src="references.js"></script>
   <script src="review.js"></script>
+  <script src="inspector.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

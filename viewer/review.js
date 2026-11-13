@@ -20,25 +20,66 @@ function ReviewProjection(affected,map,view) {
   return badges;
 }
 
+function ReviewReferenceIndex(connections) {
+  const groups=new Map();
+  for(const finding of connections||[])for(const group of finding.groups){
+    if(!groups.has(group))groups.set(group,new Map());
+    groups.get(group).set(finding.id,finding);
+  }
+  return groups;
+}
+
+function ReviewEdgeProjection(index,view) {
+  const edges=new Map();
+  for(const edge of view.edges){
+    const findings=new Map();
+    for(const ref of edge.refs)for(const [id,finding] of index.get(ref.group)||[])findings.set(id,finding);
+    if(findings.size)edges.set(edge.id,findings);
+  }
+  return edges;
+}
+
 class ArchitectureReview {
   constructor() {
     this.enabled=false;this.ack=false;this.epoch=0;this.requests=new Set();this.pages=new Map();this.badges=new Map();
-    $('toggle-review').onclick=()=>this.toggle();
-    $('review-close').onclick=()=>this.toggle(false);
+    this.referenceIndex=new Map();this.findingIndex=new Map();this.links=new Map();this.nodeLinks=new Map();this.ownerBadges=new Set();
+    $('toggle-review').onclick=()=>this.panel();
+    $('review-close').onclick=()=>this.panel(false);
+    $('review-enabled').onchange=()=>this.toggle($('review-enabled').checked);
     $('review-ack').onchange=()=>{this.ack=$('review-ack').checked;this.pages.clear();this.load();};
     $('review-recheck').onclick=()=>this.recheck();
   }
   reset(target) {
     this.epoch++;for(const controller of this.requests)controller.abort();this.requests.clear();this.pages.clear();
-    this.target=target;this.data=null;this.badges.clear();this.enabled=false;this.pendingFinding=null;
-    $('review').hidden=true;$('toggle-review').setAttribute('aria-pressed','false');
-    $('toggle-review').disabled=!target?.review_url;
+    this.target=target;this.data=null;this.badges.clear();this.enabled=Boolean(target?.review_url);this.pendingFinding=null;
+    this.loading=false;this.error=null;
+    this.referenceIndex.clear();this.findingIndex.clear();this.links.clear();this.nodeLinks.clear();this.ownerBadges.clear();
+    this.panel(false);this.status();
   }
-  toggle(open=!this.enabled) {
-    this.enabled=open;$('review').hidden=!open;$('toggle-review').setAttribute('aria-pressed',String(open));
-    if(open){togglePanel('filters',false);this.load();}
-    else {this.epoch++;for(const c of this.requests)c.abort();this.requests.clear();this.project();readableLabels();
-      this.refreshInspection();$('toggle-review').focus();}
+  panel(open=$('review').hidden) {
+    $('review').hidden=!open;$('toggle-review').setAttribute('aria-expanded',String(open));
+    if(open){togglePanel('filters',false);if(typeof innerWidth!=='undefined'&&innerWidth<=1000)togglePanel('details',false);}
+    else if(typeof document!=='undefined'&&$('review').contains(document.activeElement))$('toggle-review').focus();
+  }
+  status() {
+    const button=$('toggle-review'),counts=this.data?.counts;
+    const label=!this.target?.review_url?'unavailable':!this.enabled?'off':this.loading?'checking...':this.error?'failed':
+      counts?[[counts.violation,'violation'],[counts.candidate,'candidate']].filter(([n])=>n)
+        .map(([n,label])=>`${n} ${label}${n===1?'':'s'}`).join(' / ')||'0 findings':'checking...';
+    button.textContent='Review: '+label;button.disabled=!this.target?.review_url;
+    button.title=this.error||'All modules in the recorded snapshot. Open for review counts, coverage and controls.';
+    button.setAttribute('data-severity',counts?.violation?'violation':counts?.candidate?'candidate':'');
+    $('review-enabled').checked=this.enabled;$('review-enabled').disabled=button.disabled;
+    $('review-legend').hidden=!this.enabled||!this.data;
+    if(typeof state!=='undefined'&&state.inspector&&state.selection)this.refreshInspection();
+  }
+  toggle(enabled=!this.enabled) {
+    this.enabled=enabled;this.error=null;this.loading=false;
+    if(enabled)this.load();
+    else {this.epoch++;for(const c of this.requests)c.abort();this.requests.clear();
+      this.data=null;this.pages.clear();this.referenceIndex.clear();this.findingIndex.clear();this.project();readableLabels();
+      this.refreshInspection();}
+    this.status();
   }
   async request(query={},body=null) {
     const epoch=this.epoch,controller=new AbortController();this.requests.add(controller);
@@ -53,10 +94,13 @@ class ArchitectureReview {
       if(!body) {
         if(!Array.isArray(data.items)||data.items.length>100||typeof data.report!=='string'||
           !Number.isSafeInteger(data.revision)||!Number.isSafeInteger(data.total)||data.total<0||
-          !data.counts||!data.affected||!Array.isArray(data.checks)||
+          !data.counts||!data.affected||!Array.isArray(data.checks)||!Array.isArray(data.connections)||
           data.next_cursor!==null&&(!Number.isSafeInteger(data.next_cursor)||data.next_cursor<=Number(query.cursor||0)))throw Error('Invalid review page');
         for(const f of data.items)if(!['violation','candidate'].includes(f.severity)||!Array.isArray(f.subjects)||
           !Array.isArray(f.witnesses)||f.witnesses.length>8||typeof f.id!=='string')throw Error('Invalid review finding');
+        for(const f of data.connections)if(typeof f.id!=='string'||!['violation','candidate'].includes(f.severity)||
+          !Array.isArray(f.groups)||f.groups.some(g=>!Number.isSafeInteger(g)||g<1)||!Array.isArray(f.subjects))
+          throw Error('Invalid review connection');
       }
       return data;
     } finally {this.requests.delete(controller);}
@@ -64,31 +108,67 @@ class ArchitectureReview {
   async load(cursor=0) {
     if(!this.enabled||!this.target?.review_url)return;
     const epoch=this.epoch,sequence=(this.loadSequence||0)+1;this.loadSequence=sequence;
+    this.loading=true;this.error=null;this.status();
     $('review-status').textContent='Loading review...';$('review').setAttribute('aria-busy','true');
     try {
       const data=await this.request({cursor,...(cursor&&this.data?{report:this.data.report}:{})});
       if(epoch!==this.epoch||sequence!==this.loadSequence||!this.enabled)return;
-      this.data=cursor?{...data,affected:this.data.affected}:data;
+      this.data=cursor?{...data,affected:this.data.affected,connections:this.data.connections}:data;
+      if(!cursor){this.referenceIndex=ReviewReferenceIndex(data.connections);this.findingIndex=new Map(data.connections.map(f=>[f.id,f]));}
       this.project();this.renderList(data,cursor);readableLabels();
       this.refreshInspection();
     } catch(error) {if(epoch===this.epoch&&sequence===this.loadSequence&&error.name!=='AbortError') {
-      $('review-status').textContent=error.message;this.data=null;this.pages.clear();this.project();readableLabels();
+      this.error=error.message;$('review-status').textContent=error.message;this.data=null;this.pages.clear();this.project();readableLabels();
+      this.referenceIndex.clear();this.findingIndex.clear();
       for(const id of ['review-items','review-pager','review-checks'])$(id).replaceChildren();
       this.refreshInspection();}}
-    finally {if(epoch===this.epoch&&sequence===this.loadSequence)$('review').setAttribute('aria-busy','false');}
+    finally {if(epoch===this.epoch&&sequence===this.loadSequence){this.loading=false;this.status();$('review').setAttribute('aria-busy','false');}}
   }
   async recheck() {
     this.epoch++;for(const c of this.requests)c.abort();this.pages.clear();this.data=null;this.project();readableLabels();
+    this.referenceIndex.clear();this.findingIndex.clear();
     for(const id of ['review-items','review-pager','review-checks'])$(id).replaceChildren();
     this.refreshInspection();
-    $('review-status').textContent='Rechecking...';
+    this.loading=true;this.error=null;this.status();$('review-status').textContent='Rechecking...';
     try {await this.request({}, {action:'recheck'});await this.load();}
-    catch(error){if(error.name!=='AbortError')$('review-status').textContent=error.message;}
+    catch(error){if(error.name!=='AbortError'){this.loading=false;this.error=error.message;this.status();$('review-status').textContent=error.message;}}
   }
   project() {
     if(!state.cy||!state.shard)return;
     const previous=this.badges;
     this.badges=this.enabled&&this.data?ReviewProjection(this.data.affected,state.universe,state.shard):new Map();
+    this.ownerBadges=new Set(this.badges.keys());
+    const oldLinks=this.links||new Map();this.nodeLinks=new Map();
+    this.links=this.enabled&&this.data?ReviewEdgeProjection(this.referenceIndex,state.shard):new Map();
+    for(const item of this.links.size?state.shard.edges:[]){
+      const findings=this.links.get(item.id);if(!findings)continue;
+      for(const id of new Set([item.source,item.target])){
+        if(!this.nodeLinks.has(id))this.nodeLinks.set(id,new Set());
+        if(!this.badges.has(id))this.badges.set(id,{ids:new Set(),subjects:[],severity:'candidate',acknowledged:true});
+        const badge=this.badges.get(id);
+        for(const finding of findings.values()){
+          this.nodeLinks.get(id).add(finding.id);badge.ids.add(finding.id);
+          if(finding.severity==='violation')badge.severity='violation';
+          if(!finding.acknowledged)badge.acknowledged=false;
+        }
+        badge.count=badge.ids.size;
+      }
+    }
+    for(const id of new Set([...oldLinks.keys(),...this.links.keys()])){
+      const edge=state.cy.getElementById(state.universe.renderPrefix+id);if(!edge.length)continue;
+      const records=this.links.get(id),violation=records&&[...records.values()].some(f=>f.severity==='violation');
+      const value=records?`${violation?'violation':'candidate'}:${records.size}`:'';
+      const mark=records?(violation?'review-violation':'review-candidate'):null;
+      if(edge.data('reviewMark')===value&&(mark?edge.hasClass(mark):
+        !edge.hasClass('review-candidate')&&!edge.hasClass('review-violation')))continue;
+      edge.removeClass('review-candidate review-violation');
+      edge.data('reviewMark',value);state.labelGeometry=null;
+      if(records){
+        edge.data('reviewSymbol',violation?'!':'?');
+        edge.data('reviewText',`${violation?'!':'?'} ${records.size} review`);
+        edge.addClass(violation?'review-violation':'review-candidate');}
+      else {edge.data('reviewText','');edge.data('reviewSymbol','');}
+    }
     for(const id of new Set([...previous.keys(),...this.badges.keys()])) {
       const node=state.cy.getElementById(id);if(!node.length)continue;
       const badge=this.badges.get(id),value=badge?`${badge.severity}:${badge.count}:${badge.acknowledged}`:'';
@@ -143,16 +223,59 @@ class ArchitectureReview {
   }
   refreshInspection() {
     const slot=document.querySelector('#details [data-review-slot]');
-    if(!slot||slot.dataset.reviewSlot!==state.selection?.id)return;
-    slot.replaceChildren();this.details(slot,state.selection);
+    if(!slot||!state.selection||slot.dataset.reviewSlot!==(state.selection.id||'connection'))return;
+    this.details(slot,state.selection);
+  }
+  inspection(node) {
+    const unavailable=!this.target?.review_url?'unavailable':!this.enabled?'off':this.error?'failed':!this.data?'checking...':null;
+    if(unavailable)return{count:null,status:unavailable,message:this.error||{
+      unavailable:'Architecture review is unavailable for this snapshot.',off:'Review is off. Open Review to enable it.',
+      'checking...':'Checking architecture for the recorded snapshot...'}[unavailable]};
+    const exact=node.id?(node.projectContext||this.ownerBadges.has(node.id)?null:[...(this.nodeLinks.get(node.id)||[])]):
+      [...this.findingsFor(node).keys()];
+    const count=node.projectContext?this.data.counts.violation+this.data.counts.candidate+(this.ack?this.data.counts.acknowledged:0):
+      node.id?this.badges.get(node.id)?.count||0:exact.length;
+    return{count,exact,message:'No recorded architecture findings for this selection. This does not prove conformance; see Review for coverage.'};
+  }
+  findingsFor(trace) {
+    const findings=new Map();if(!this.enabled||!this.data)return findings;
+    if(trace.kind==='node'){
+      for(const id of this.badges.get(trace.source)?.ids||[]){const finding=this.findingIndex.get(id);if(finding)findings.set(id,finding);}
+    }else for(const ref of trace.refs||[])for(const [id,finding] of this.referenceIndex.get(ref.group)||[])findings.set(id,finding);
+    return findings;
+  }
+  readout(trace) {
+    const records=[...this.findingsFor(trace).values()];if(!records.length)return null;
+    const violations=records.filter(f=>f.severity==='violation').length,candidates=records.length-violations;
+    const summary=[violations&&`! ${violations} policy violation${violations===1?'':'s'}`,
+      candidates&&`? ${candidates} review candidate${candidates===1?'':'s'}`].filter(Boolean).join(' / ')+
+      (trace.kind==='node'?' for this owner':' in these references')+
+      (records.some(f=>f.acknowledged)?` (${records.filter(f=>f.acknowledged).length} acknowledged)`:'');
+    return {summary,titles:[...new Set(records.map(f=>f.title))].slice(0,2)};
   }
   details(panel,node) {
-    if(!this.enabled||!this.data||!this.badges.has(node.id))return;
-    const section=el('section',null,{class:'review-details','aria-label':'Architecture findings'});
-    section.append(el('h3','Architecture findings'),el('p','Loading findings...',{role:'status'}));panel.append(section);
-    const epoch=state.referenceEpoch,reviewEpoch=this.epoch,report=this.data.report;
-    const query={node:node.id,report,...(this.pendingFinding?{finding:this.pendingFinding}:{})};this.pendingFinding=null;
+    const status=this.inspection(node),inspector=state.inspector;
+    const label=(count,status)=>inspector?.setLabel('architecture',count===null?`Architecture: ${status}`:`Architecture (${count})`);
+    if(status.count===null||!status.count){
+      label(status.count,status.status);panel.replaceChildren(el('p',status.message,{class:'muted',role:status.status==='failed'?'alert':'status'}));
+      delete panel.dataset.reviewKey;delete panel.dataset.finding;return;
+    }
+    const exact=status.exact,chosen=this.pendingFinding||panel.dataset.finding||exact?.[0];this.pendingFinding=null;
+    const query={report:this.data.report,...(chosen?{finding:chosen}:{node:node.id})};
     const key=JSON.stringify([query,this.ack,this.data.revision]);
+    if(panel.dataset.reviewKey===key)return;
+    label(chosen&&!exact?.length?1:status.count);
+    panel.dataset.reviewKey=key;panel.dataset.finding=chosen||'';panel.replaceChildren();
+    const section=el('section',null,{class:'review-details','aria-label':'Architecture findings'});
+    const body=el('div');
+    if(exact?.length>1){
+      const choose=el('select',null,{'aria-label':'Architecture finding',name:'review-finding'});
+      for(const id of exact){const finding=this.findingIndex.get(id);choose.add(new Option(this.subjects(finding)+' / '+finding.title,id));}
+      choose.value=chosen;choose.onchange=()=>{this.pendingFinding=choose.value;this.refreshInspection();
+        document.querySelector('#details select[name="review-finding"]')?.focus();};section.append(choose);
+    }
+    body.append(el('p','Loading findings...',{role:'status'}));section.append(body);panel.append(section);
+    const epoch=state.referenceEpoch,reviewEpoch=this.epoch,report=this.data.report;
     const loaded=this.pages.has(key)?Promise.resolve(this.pages.get(key).data):this.request(query);
     loaded.then(data=>{
       if(epoch!==state.referenceEpoch||reviewEpoch!==this.epoch||!section.isConnected||!this.enabled)return;
@@ -162,23 +285,23 @@ class ArchitectureReview {
         while(this.pages.size>8||[...this.pages.values()].reduce((sum,p)=>sum+p.bytes,0)>8*1024*1024)
           this.pages.delete(this.pages.keys().next().value);
       }
-      section.replaceChildren(el('h3','Architecture findings'));
+      label(exact?.length||data.total);body.replaceChildren();
       const append=page=>{
-        for(const finding of page.items)this.card(section,finding,page.revision,page.report);
+        for(const finding of page.items)this.card(body,finding,page.revision,page.report);
         if(page.next_cursor!==null) {
-          const more=el('button','More findings',{type:'button'});section.append(more);
+          const more=el('button','More findings',{type:'button'});body.append(more);
           more.onclick=async()=>{more.disabled=true;try{const next=await this.request({...query,cursor:page.next_cursor});
             if(epoch!==state.referenceEpoch||reviewEpoch!==this.epoch||!more.isConnected)return;
             more.remove();append(next);}catch(error){if(error.name!=='AbortError'){more.disabled=false;more.textContent=error.message;}}};
         }
       };append(data);
-    }).catch(error=>{if(epoch===state.referenceEpoch&&reviewEpoch===this.epoch&&section.isConnected&&error.name!=='AbortError')
-      section.replaceChildren(el('p',error.message,{role:'alert'}));});
+    }).catch(error=>{if(epoch===state.referenceEpoch&&reviewEpoch===this.epoch&&section.isConnected&&error.name!=='AbortError'){
+      label(null,'failed');body.replaceChildren(el('p',error.message,{role:'alert'}));}});
   }
   card(parent,finding,revision,report) {
     const article=el('article',null,{class:'review-finding','data-review-finding':finding.id});
-    article.append(el('h4',finding.title),el('strong',finding.severity==='violation'?'! Policy violation':'? Review candidate'),
-      el('p',this.subjects(finding)),el('p',`Rule: ${finding.rule}. ${finding.reason}`),
+    article.append(el('p',this.subjects(finding),{class:'finding-subjects'}),el('h3',finding.title),
+      el('strong',finding.severity==='violation'?'! Policy violation':'? Review candidate'),el('p',`Rule: ${finding.rule}. ${finding.reason}`),
       el('p',`${finding.count} recorded relations / ${finding.triage}`),el('p',finding.guidance));
     if(finding.reopened)article.append(el('p',finding.reopened,{class:'muted'}));
     for(const limit of finding.limits)article.append(el('small',limit));
@@ -209,7 +332,7 @@ class ArchitectureReview {
         try {await this.request({}, {action:'triage',report,revision,finding:finding.id,state:stateValue,reason:reason.value});
           this.pages.clear();await this.load();
           if(epoch===state.referenceEpoch&&returnFocus&&!button.isConnected&&document.activeElement===document.body)
-            $('review-recheck').focus();
+            (state.inspector?.tabs.get('architecture')||$('review-recheck')).focus();
         } catch(error){if(error.name!=='AbortError'&&article.isConnected)status.textContent=error.message;}
         finally {for(const action of controls.children)action.disabled=false;}
       };
@@ -218,4 +341,4 @@ class ArchitectureReview {
   }
 }
 
-if(typeof module!=='undefined')module.exports={ReviewProjection,ArchitectureReview};
+if(typeof module!=='undefined')module.exports={ReviewProjection,ReviewReferenceIndex,ReviewEdgeProjection,ArchitectureReview};

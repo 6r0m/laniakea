@@ -127,7 +127,8 @@ class Review:
         if 'finding' in query and (not isinstance(query['finding'],str) or
                 not any(f['id']==query['finding'] for f in report['findings'])):
             raise ValueError('unknown review finding')
-        triage=self.triage.read(); findings=[]; affected={}; counts={'violation':0,'candidate':0,'acknowledged':0}
+        triage=self.triage.read(); findings=[]; affected={}; connections=[]; counts={'violation':0,'candidate':0,'acknowledged':0}
+        decorations=cursor==0 and 'node' not in query and 'finding' not in query
         if 'node' in query and (not isinstance(query['node'],str) or query['node'] not in self.parents):
             raise ValueError('unknown review node')
         def includes(subject):
@@ -142,6 +143,9 @@ class Review:
             state=decision['state'] if matching else 'active'
             counts['acknowledged' if matching else finding['severity']]+=1
             if not matching or ack:
+                if decorations:
+                    connections.append({**{key:finding[key] for key in ('id','kind','title','subjects','severity','groups')},
+                                        'acknowledged':bool(matching)})
                 for subject in finding['subjects']:
                     affected.setdefault(subject,[]).append({'id':finding['id'],'severity':finding['severity'],
                                                             'acknowledged':bool(matching)})
@@ -150,7 +154,7 @@ class Review:
                     findings.append({**finding,'triage':state,'reason_saved':decision['reason'] if matching else '',
                                      'reopened':'Semantic evidence or rule changed.' if decision and not matching else ''})
         return {'report':report['report'], 'revision':triage['revision'], 'counts':counts,
-                'affected':affected if cursor==0 and 'node' not in query else {},
+                'affected':affected if decorations else {}, 'connections':connections,
                 'checks':report['checks'], 'context':report['context'], 'policy':report['policy'],
                 'policy_path':str(self.rules_path), 'elapsed_seconds':report['elapsed_seconds'],
                 'items':findings[cursor:cursor+limit], 'total':len(findings),

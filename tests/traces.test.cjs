@@ -288,9 +288,9 @@ test('high-degree trace derives from shown facts only and allocates no renderer 
   assert.equal(run('state.trace===firstTrace&&state.connectionHits===hitCache'),true);
   assert.equal(run('state.cy.elements().length'),run('count'));
   treeElements(run);run('inspectOverlap(state.trace);');
-  assert.equal(run("$('details').children.find(n=>n.tag==='ul').children.length"),50);
-  run("$('details').children.find(n=>n.tag==='button'&&n.textContent==='More connections').onclick();");
-  assert.equal(run("$('details').children.find(n=>n.tag==='ul').children.length"),100);
+  assert.equal(run("state.inspector.pages.get('details').children.find(n=>n.tag==='ul').children.length"),50);
+  run("state.inspector.pages.get('details').children.find(n=>n.tag==='button'&&n.textContent==='More connections').onclick();");
+  assert.equal(run("state.inspector.pages.get('details').children.find(n=>n.tag==='ul').children.length"),100);
   run('unfocus(true);beginViewportGesture();');
   assert.equal(run('state.trace'),null);
   assert.equal(run('state.cy.edges(".focus,.hovered,.trace-outgoing").length'),0);

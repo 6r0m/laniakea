@@ -327,40 +327,5 @@ def merge(built, batches, project, copy, engine, exported, generated_owners=None
 
 
 def _dependency_reviews(built, exported):
-    nodes = {n["id"]: n for n in built["nodes"]}
-    def module(identity):
-        while identity and nodes[identity]["level"] != "module":
-            identity = nodes[identity]["parent"]
-        return nodes[identity]["label"] if identity else None
-
-    def path(source, target, public_only=False):
-        pending, visited = [[source]], {source}
-        for chain in pending:
-            entry = exported["Modules"].get(chain[-1], {})
-            following = entry.get("PublicDependencyModules", [])
-            if not public_only or len(chain) == 1:
-                following = [*following, *entry.get("PrivateDependencyModules", [])]
-            for name in following:
-                if name == target:
-                    return [*chain, name]
-                if name not in visited:
-                    visited.add(name)
-                    pending.append([*chain, name])
-        return []
-
-    checked = {}
-    for edge in built["edges"]:
-        if edge["type"] != "calls":
-            continue
-        source, target = module(edge["source"]), module(edge["target"])
-        if not source or not target or source == target:
-            continue
-        pair = (source, target)
-        if pair not in checked:
-            entry = exported["Modules"].get(source, {})
-            direct = target in entry.get("PublicDependencyModules", []) + entry.get("PrivateDependencyModules", [])
-            checked[pair] = None if direct else {
-                "dependency_review": "No direct build dependency; review usage (not a violation)",
-                "transitive_path": path(source, target), "public_exposure_path": path(source, target, True)}
-        if checked[pair]:
-            edge["attrs"].update(checked[pair])
+    from .dependency_access import annotate
+    annotate(built, exported)

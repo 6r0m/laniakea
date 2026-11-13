@@ -28,6 +28,7 @@ def fixture(native=True):
         edges.append({'id': 'call-at-10', 'source': 'functionA', 'target': 'functionC', 'type': 'calls',
                       'status': 'resolved', 'origin': 'compiler', 'attrs': {
                           'dependency_review': 'No direct build dependency; review usage (not a violation)',
+                          'dependency_access': 'unsupported',
                           'transitive_path': [], 'public_exposure_path': [],
                           'location': {'root': 'project', 'path': 'Source/Sample.cpp', 'line': 10}, 'column': 3}})
     manifest = {'profile': 'unreal', 'target': {'name': 'SampleEditor', 'platform': 'Win64',
@@ -66,6 +67,8 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(cycle['subjects'], ['A', 'B'])
         self.assertEqual(cycle['severity'], 'candidate')
         self.assertEqual({w['id'] for w in cycle['witnesses']}, {'AB', 'BA'})
+        cycle_rows=service.index.references({'groups':cycle['groups']})['items']
+        self.assertEqual({row['reference']['id'] for row in cycle_rows},{'AB','BA'})
         native = next(f for f in report['items'] if f['kind'] == 'native')
         self.assertEqual(native['subjects'], ['A', 'C'])
         for finding in report['items']:
@@ -87,6 +90,48 @@ class ReviewTests(unittest.TestCase):
                       'target':{'label_glob':'*'}}])
         self.assertEqual(self.service().page({})['total'],2)
 
+    def test_access_states_keep_unknown_visible_without_false_findings(self):
+        call=self.graph['edges'][-1]
+        for state in ('available','unverified',None,'invalid'):
+            with self.subTest(state=state):
+                if state is None:call['attrs'].pop('dependency_access',None)
+                else:call['attrs']['dependency_access']=state
+                page=self.service().page({})
+                self.assertFalse(any(f['kind']=='native' for f in page['items']))
+                check=next(c for c in page['checks'] if c['kind']=='native')
+                self.assertEqual(check['status'],'partial')
+                self.assertEqual(check['unverified_relations'],int(state!='available'))
+                self.assertIn('Binary linkage',check['detail'])
+        call['attrs']['dependency_access']='unsupported'
+        self.assertTrue(any(f['kind']=='native' for f in self.service().page({})['items']))
+
+    def test_connection_marks_cover_exact_groups_beyond_witness_samples_and_follow_triage(self):
+        call=self.graph['edges'][-1]
+        for index in range(12):
+            identity='helper'+str(index)
+            self.graph['nodes'].append({'id':identity,'label':'Helper','level':'function','parent':'A',
+                                        'boundary':False,'status':'in-target'})
+            self.graph['edges'].append({**copy.deepcopy(call),'id':'extra'+str(index),'source':identity})
+        ordinary=copy.deepcopy(call);ordinary['id']='ordinary-same-group';ordinary['attrs'].pop('dependency_review')
+        self.graph['edges'].append(ordinary)
+        self.graph['edges'].append({**copy.deepcopy(call),'id':'ordinary','type':'uses.type','attrs':{}})
+        service=self.service();page=service.page({})
+        native=next(f for f in page['items'] if f['kind']=='native')
+        mark=next(f for f in page['connections'] if f['id']==native['id'])
+        self.assertEqual(len(native['witnesses']),8)
+        self.assertEqual(len(mark['groups']),13)
+        references=service.index.references({'groups':mark['groups'],'limit':100})['items']
+        self.assertEqual(len(references),14)
+        self.assertEqual(sum(bool(row['reference']['attrs'].get('dependency_review')) for row in references),13)
+        self.assertTrue(any(f['id']==native['id'] for f in service.page({'limit':1})['connections']))
+        self.assertEqual(service.page({'cursor':1})['connections'],[])
+        self.assertEqual(service.page({'node':'A'})['connections'],[])
+        service.update({'action':'triage','report':page['report'],'revision':0,'finding':native['id'],
+                        'state':'accepted','reason':''})
+        self.assertFalse(any(f['id']==native['id'] for f in service.page({})['connections']))
+        mark=next(f for f in service.page({'ack':True})['connections'] if f['id']==native['id'])
+        self.assertTrue(mark['acknowledged'])
+
     def test_unrelated_dependency_preserves_native_triage_but_pair_context_changes_reopen(self):
         self.graph['nodes'].append({'id':'D','level':'module','label':'SampleOther','parent':'project',
                                     'boundary':False,'status':'in-target'})
@@ -102,10 +147,10 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(unchanged['fingerprint'],finding['fingerprint'])
         self.assertEqual(unchanged['triage'],'accepted')
         self.assertEqual(service.triage.path.read_bytes(),before)
-        call['attrs']['public_exposure_path']=['A','B','C']
+        call['attrs']['include_exposure_path']=[]
         changed=next(f for f in self.service().page({})['items'] if f['kind']=='native')
         self.assertEqual(changed['id'],finding['id']);self.assertEqual(changed['triage'],'active')
-        call['attrs']['public_exposure_path']=[]
+        call['attrs'].pop('include_exposure_path')
         self.graph['edges'].append({'id':'AC','source':'A','target':'C','type':'depends.public',
                                     'status':'declared','origin':'ubt'})
         changed=next(f for f in self.service().page({})['items'] if f['kind']=='native')
@@ -140,11 +185,13 @@ class ReviewTests(unittest.TestCase):
         self.policy([{'id': 'domain-no-ui', 'kind': 'forbidden', 'source': {'ids': ['A']},
                       'target': {'ids': ['B']}, 'reason': 'Keep the sample boundary',
                       'types': ['depends.private']}])
-        page = self.service().page({})
+        service=self.service();page=service.page({})
         self.assertEqual(len(page['items']), 1)
         finding = page['items'][0]
         self.assertEqual(finding['severity'], 'violation')
         self.assertEqual(finding['subjects'], ['A', 'B'])
+        rows=service.index.references({'groups':finding['groups']})['items']
+        self.assertEqual({row['reference']['id'] for row in rows},{'AB'})
         self.assertEqual(page['checks'][0]['matched']['source'], ['A'])
         self.policy([{'id': 'acyclic', 'kind': 'cycles', 'scope': {'ids': ['A', 'B']}, 'acyclic': True}])
         self.assertEqual(self.service().page({})['items'][0]['severity'], 'violation')

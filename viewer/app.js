@@ -68,7 +68,7 @@ async function start() {
     $(`toggle-${name}`).onclick = () => name==='details'&&!$('details').hidden ? renderDetails(null) : togglePanel(name);
   }
   $('fit').onclick = fitOverview;
-  $('inspect-project').onclick = () => renderDetails({...state.universe.nodes.get(state.universe.root),projectContext:true});
+  $('inspect-project').onclick = () => renderDetails({...state.universe.nodes.get(state.universe.root),projectContext:true},{reopen:true});
   $('reset-layout').onclick = resetPositions;
   $('arrange-files').onclick = arrangeSourceFiles;
   $('toggle-configuration').onclick = () => { setConfiguration(!configurationVisible()); applyFilters(); };
@@ -100,6 +100,9 @@ async function start() {
     }
   });
   new ResizeObserver(resizeMap).observe($('graph'));
+  window.addEventListener('resize',()=>{
+    if(innerWidth<=1000&&!$('details').hidden){state.review.panel(false);togglePanel('filters',false);}
+  });
   $('graph').addEventListener('wheel', zoomWithWheel, {capture:true,passive:false});
   $('graph').addEventListener('mousedown',grabConstellationLabel,{capture:true});
   window.addEventListener('mouseup',releaseConstellationLabel);
@@ -201,6 +204,7 @@ async function show(id, file, mode) {
     else refreshMap();
     if (!restoreView(savedScene) && shard.scope !== universe.root) frameNode(shard.scope);
     renderDetails(null);
+    if(changed&&state.review?.enabled)state.review.load();
     return true;
   } catch (error) {
     if (navigation === state.navigation) {
@@ -225,7 +229,9 @@ function togglePanel(name, open = $(name).hidden) {
     const other = name === 'details' ? 'filters' : 'details';
     $(other).hidden = true;
     $(`toggle-${other}`).setAttribute('aria-expanded', 'false');
+    if(name==='details')state.review?.panel(false);
   }
+  if(open&&name==='filters')state.review?.panel(false);
 }
 
 function openScope(file) { return show(state.target.id, file, 'push'); }
@@ -483,14 +489,14 @@ function typeLabel(type, refs) {
 
 function inspectPair(source,target) {
   const pair=ConnectionTrace.pair(state.shard,source,target);
-  if(pair)renderDetails({...pair,signature:ConnectionTrace.signature(pair),pairInspection:true});
+  if(pair)renderDetails({...pair,signature:ConnectionTrace.signature(pair),pairInspection:true},{reopen:true});
 }
 
 function inspectOverlap(trace) {
-  renderDetails({...trace,signature:ConnectionTrace.signature(trace),overlapInspection:true});
+  renderDetails({...trace,signature:ConnectionTrace.signature(trace),overlapInspection:true},{reopen:true});
 }
 
-function renderDetails(item) {
+function renderDetails(item,{reopen=true}={}) {
   clearTimeout(state.inspectTimer);
   const isNode = item && item.level !== undefined;
   const requested = item;
@@ -533,10 +539,11 @@ function renderDetails(item) {
     if (item) { rendered.select();if(traceInspection)rendered.addClass('pair-inspected'); }
     readableLabels();
   }
-  const panel = $('details');
+  const panel = $('details'),open=reopen||!panel.hidden;
   const key = state.universe.paged && item ? JSON.stringify([traceInspection?item.key:item.id,item.signature||null,item.referenceGroup||null,
     Boolean(projectContext),Boolean(configurationInspection),[...state.hidden].sort(),state.boundary,item.refs?.map(r=>r.group)]) : null;
   if (key && key===state.detailsKey) {
+    if(reopen)togglePanel('details',true);
     const control = panel.querySelector('[data-action="toggle-group"]');
     if (control) updateGroupControl(control, item.id);
     return;
@@ -548,23 +555,43 @@ function renderDetails(item) {
   state.referenceObservers = [];
   panel.scrollTop=0;panel.scrollLeft=0;
   panel.replaceChildren();
-  const close=el('button','\u00d7',{type:'button',class:'details-close','aria-label':'Close details',title:'Close details (Esc)'});
-  close.onclick=()=>{renderDetails(null);$('toggle-details').focus();};
-  panel.append(close);
+  state.inspector=null;
   if (!item) {
     togglePanel('details', false);
-    panel.append(el('h2', 'Details'), el('p', 'Hover to trace. Click a star or connection to inspect it.'));
+    const close=el('button','\u00d7',{type:'button',class:'details-close','aria-label':'Close inspector',title:'Close inspector (Esc)'});
+    close.onclick=()=>{renderDetails(null);$('toggle-details').focus();};
+    const header=el('div',null,{class:'inspector-header'});header.append(el('h2','Inspector'),close);
+    panel.append(header,el('p', 'Hover to trace. Click a star or connection to inspect it.',{class:'inspector-page'}));
     return;
   }
-  togglePanel('details', true);
+  togglePanel('details', open);
+  const title=item.label||(item.overlapInspection?`${item.pairs.length} overlapping connections`:
+    item.pairInspection?'Connections in this view':typeLabel(item.type,item.refs));
+  let detailsLoaded=false;
+  state.inspector=new InspectorTabs(panel,el,{title,
+    tabs:[{id:'architecture',label:'Architecture'},{id:'details',label:'Details'}],
+    onClose:()=>{renderDetails(null);$('toggle-details').focus();},
+    onSelect:name=>{
+      if(name==='details'&&!detailsLoaded){detailsLoaded=true;
+        renderSelectionDetails(state.inspector.pages.get('details'),item,projectContext,configurationInspection);}
+    }});
+  const requestedFinding=state.review?.pendingFinding;
+  const reviewSlot=state.inspector.pages.get('architecture');reviewSlot.setAttribute('data-review-slot',item.id||'connection');
+  state.review?.details(reviewSlot,item);
+  if(!state.review){state.inspector.setLabel('architecture','Architecture: unavailable');
+    reviewSlot.append(el('p','Architecture review is unavailable for this snapshot.',{class:'muted'}));}
+  const review=state.review?.inspection(item);
+  state.inspector.select(!projectContext&&(requestedFinding||review?.count>0)?'architecture':'details',
+    {focus:Boolean(requestedFinding)});
+}
+
+function renderSelectionDetails(panel,item,projectContext,configurationInspection) {
   if(projectContext) { renderProjectDetails(panel,item);return; }
   if(item.overlapInspection) { renderOverlapDetails(panel,item);return; }
   if(item.pairInspection) { renderPairDetails(panel,item);return; }
   const list = el('dl');
   if (item.level !== undefined) {
-    panel.append(el('h2', item.label), el('p', nodeDescription(item), {class:'muted'}));
-    const reviewSlot=el('div',null,{'data-review-slot':item.id});
-    panel.append(reviewSlot);state.review?.details(reviewSlot,item);
+    panel.append(el('p', nodeDescription(item), {class:'muted'}));
     const context=DeclarationContext.describe(item,state.universe);
     if(context.path)panel.append(el('p',context.path,{class:'declaration-owner'}));
     if(context.signature)panel.append(el('code',context.signature,{class:'declaration-signature'}));
@@ -602,7 +629,6 @@ function renderDetails(item) {
     renderConnections(panel, item);
     return;
   }
-  panel.append(el('h2', typeLabel(item.type, item.refs)));
   if(configurationInspection)panel.append(el('p','Project configuration declaration; shown as context, not an architecture wire.',{class:'muted'}));
   const endpoints = el('p', null, {class:'endpoints'});
   for (const id of [item.source,item.target]) {
@@ -644,7 +670,7 @@ function renderFileSymbols(panel,item){
 
 function renderProjectDetails(panel,node) {
   const map=state.universe,fields=el('dl');
-  panel.append(el('h2',node.label),el('p','Project context',{class:'muted'}));
+  panel.append(el('p','Project context',{class:'muted'}));
   if(node.source){const link=sourceLink(node.source);if(link)panel.append(link);}
   if(state.manifest.target){const {name,platform,configuration}=state.manifest.target;attributes(fields,{name,platform,configuration});}
   const statistics=el('details',null,{class:'node-metadata'});
@@ -673,7 +699,6 @@ function appendConfigurationSubset(panel,id,direction) {
 }
 
 function renderPairDetails(panel,trace) {
-  panel.append(el('h2','Connections in this view'));
   const endpoints=el('p',null,{class:'endpoints'});
   for(const [key,id] of [['A',trace.source],['B',trace.target]]) {
     if(key==='B'&&trace.source===trace.target)continue;
@@ -696,8 +721,7 @@ function renderPairDetails(panel,trace) {
 }
 
 function renderOverlapDetails(panel,trace) {
-  panel.append(el('h2',`${trace.pairs.length} overlapping connections`),
-    el('p',`${ConnectionTrace.total(trace.refs)} distinct references in this view. The crossing is visual, not an architectural junction.`,{class:'muted'}));
+  panel.append(el('p',`${ConnectionTrace.total(trace.refs)} distinct references in this view. The crossing is visual, not an architectural junction.`,{class:'muted'}));
   const list=el('ul',null,{class:'connections'}),more=el('button','More connections',{type:'button'});
   let offset=0;
   const append=()=>{
@@ -829,7 +853,7 @@ function appendReferences(panel, references) {
     observer = new IntersectionObserver(entries => {
       if (!list.isConnected) { observer.disconnect(); return; }
       if (entries.some(entry => entry.isIntersecting)) appendBatch();
-    }, {root:$('details'),rootMargin:'400px'});
+    }, {root:panel.closest?.('[data-inspector-page]')||$('details'),rootMargin:'400px'});
     observer.observe(more);
     (state.referenceObservers ||= []).push(observer);
   }

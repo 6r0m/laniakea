@@ -41,6 +41,7 @@ Source-file fixtures must use the normal pipeline/read index/server and real exa
 | [source-surface.browser.js](source-surface.browser.js) | [Source-surface fixture](../fixtures/source-surface.graph.json): files, symbol identity, gradual/reversible zoom and local arrangement |
 | [namespace-files.browser.js](namespace-files.browser.js) | [Namespace fixture](../fixtures/namespace-files.graph.json): file contexts, exact references, navigation and pins |
 | [review.browser.js](review.browser.js) | [Review fixture](test_review.py): direct explanation, exact evidence, triage, refused writes, late close and pins |
+| [inspector.browser.js](inspector.browser.js) | Review fixture: accessible tabs, separate findings/details, retained drafts/evidence/scroll, lazy references, late responses and narrow panels |
 
 Other functions use the served [sample](../sample/SampleProject/SampleProject.uproject), with synthetic overlays.
 Keep real-project screenshots outside the clone and other observations in the ignored workspace.

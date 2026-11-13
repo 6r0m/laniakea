@@ -2,6 +2,32 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
 
+test('wire findings follow exact reference groups through rollups, deep endpoints and filtering',()=>{
+  const {ReviewReferenceIndex,ReviewEdgeProjection}=require('../viewer/review.js');
+  const finding={id:'native',severity:'candidate',groups:[1,2],subjects:['A','B']};
+  const index=ReviewReferenceIndex([finding]);
+  const folded={edges:[{id:'bundle',source:'A',target:'B',refs:[{group:1},{group:2}]}]};
+  assert.equal(ReviewEdgeProjection(index,folded).get('bundle').size,1);
+  const deep={edges:[{id:'call',source:'method',target:'distant-header',refs:[{group:2}]},
+    {id:'unrelated',source:'method',target:'distant-header',refs:[{group:3}]}]};
+  const marks=ReviewEdgeProjection(index,deep);
+  assert.equal(marks.get('call').get('native'),finding);
+  assert.equal(marks.has('unrelated'),false);
+  assert.equal(ReviewEdgeProjection(index,{edges:[]}).size,0);
+});
+
+test('wire readouts count distinct findings and bound explanations without fetching evidence',()=>{
+  const {ArchitectureReview,ReviewReferenceIndex}=require('../viewer/review.js');
+  const records=[{id:'a',severity:'candidate',title:'One',groups:[1,2]},
+    {id:'b',severity:'violation',title:'Two',groups:[2],acknowledged:true},
+    {id:'c',severity:'candidate',title:'Three',groups:[2]}];
+  const control=Object.assign(Object.create(ArchitectureReview.prototype),{enabled:true,data:{},
+    referenceIndex:ReviewReferenceIndex(records)});
+  const readout=control.readout({kind:'pair',refs:[{group:1,count:8},{group:2,count:8}]});
+  assert.match(readout.summary,/1 policy violation/);assert.match(readout.summary,/2 review candidates/);
+  assert.match(readout.summary,/1 acknowledged/);assert.equal(readout.titles.length,2);
+});
+
 test('review badges aggregate unique active concerns without changing the projection',()=>{
   const {ReviewProjection}=require('../viewer/review.js');
   const map={nodes:new Map([['root',{parent:null}],['A',{parent:'root'}],['B',{parent:'root'}]])};
@@ -35,7 +61,27 @@ test('disabled review performs no rendered-node scan and clears only its previou
   } finally {global.state=previous;}
 });
 
-test('a capped review badge discloses additional findings instead of reporting exactly 99',()=>{
+test('review starts enabled with a closed list, and closing that list retains analysis',()=>{
+  const {ArchitectureReview}=require('../viewer/review.js'),previous=global.$,previousPanel=global.togglePanel;
+  const nodes=new Map(),node=id=>{if(!nodes.has(id))nodes.set(id,{hidden:true,setAttribute(){},focus(){}});return nodes.get(id);};
+  global.$=node;global.togglePanel=()=>{};
+  try {
+    const control=new ArchitectureReview();control.reset({review_url:'/review'});
+    assert.equal(control.enabled,true);assert.equal(node('review').hidden,true);
+    control.panel(true);assert.equal(node('review').hidden,false);
+    control.panel(false);assert.equal(control.enabled,true);assert.equal(node('review').hidden,true);
+    control.loading=true;control.status();assert.match(node('toggle-review').textContent,/checking/i);
+    control.loading=false;control.error='Failed';control.status();assert.match(node('toggle-review').textContent,/failed/i);
+    control.error=null;control.data={counts:{candidate:2,violation:0,acknowledged:0}};control.status();
+    assert.match(node('toggle-review').textContent,/2 candidates/);
+  } finally {global.$=previous;global.togglePanel=previousPanel;}
+});
+
+test('warning symbols use independent readable images rather than shrinking inside type icons',()=>{
   const {NodeIcons}=require('../viewer/icons.js');
-  assert.match(decodeURIComponent(NodeIcons.image('module','#123456','candidate:101:false')),/99\+/);
+  const candidate=decodeURIComponent(NodeIcons.warning('candidate:101:false','#855600','#ffffff'));
+  const violation=decodeURIComponent(NodeIcons.warning('violation:1:false','#ab2838','#ffffff'));
+  assert.match(candidate,/<polygon/);assert.match(violation,/<polygon/);
+  assert.notEqual(candidate,violation);assert.match(candidate,/>!</);
+  assert.equal(NodeIcons.warning(''),null);
 });
