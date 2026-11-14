@@ -142,6 +142,7 @@
         "levels": {"type": "array", "items": {"type": "string"}},
         "edge_types": {"type": "array", "items": {"$ref": "#/$defs/edgeType"}},
         "overview": {"$ref": "#/$defs/overview"},
+        "health": {"$ref": "#/$defs/health"},
         "target": {"type": "object"},
         "timings_seconds": {"type": "object", "additionalProperties": {"type": "number"},
                             "description": "Elapsed seconds. Profile and total contain the named subphases; values are not additive. Total ends before manifest serialization and promotion."},
@@ -151,6 +152,12 @@
         "coverage": {"$ref": "#/$defs/coverage"},
         "entry": {"type": "string", "description": "The shard file the viewer opens first."}
       }
+    },
+    "health": {
+      "type": "object", "required": ["version", "path", "sha256", "prefixes"], "additionalProperties": false,
+      "description": "Optional immutable source observations, separate from graph relationships. Missing means not recorded.",
+      "properties": {"version": {"type": "integer", "const": 1}, "path": {"const": "health.json"}, "sha256": {"type": "string"},
+                     "prefixes": {"type": "array", "items": {"type": "string"}}}
     },
     "overview": {
       "type": "object", "required": ["anchor", "configuration_types"], "additionalProperties": false,

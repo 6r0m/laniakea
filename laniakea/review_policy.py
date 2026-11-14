@@ -6,7 +6,8 @@ import re
 from pathlib import PurePosixPath
 
 DEFAULT = {'version': 1, 'rules': [{'id': 'module-cycles', 'kind': 'cycles'},
-                                    {'id': 'native-direct-dependency', 'kind': 'native'}]}
+                                    {'id': 'native-direct-dependency', 'kind': 'native'},
+                                    {'id':'source-duplication','kind':'duplication','minimum_tokens':100}]}
 
 
 def fields(value, allowed):
@@ -44,13 +45,13 @@ def validate(policy):
         raise ValueError('invalid review policy version or rules')
     seen=set()
     for rule in policy['rules']:
-        fields(rule, {'id', 'kind', 'enabled', 'reason', 'source', 'target', 'scope', 'types', 'context', 'acyclic'})
+        fields(rule, {'id', 'kind', 'enabled', 'reason', 'source', 'target', 'scope', 'types', 'context', 'acyclic','minimum_tokens'})
         identity=rule.get('id')
         if not isinstance(identity, str) or not re.fullmatch(r'[a-z0-9][a-z0-9_.-]{0,79}', identity) or identity in seen:
             raise ValueError('invalid or duplicate review rule id')
         seen.add(identity)
         kind=rule.get('kind')
-        if not isinstance(kind,str) or kind not in {'forbidden', 'cycles', 'native'}:
+        if not isinstance(kind,str) or kind not in {'forbidden', 'cycles', 'native', 'duplication'}:
             raise ValueError('unknown review rule kind')
         for flag in ('enabled', 'acyclic'):
             if flag in rule and type(rule[flag]) is not bool:
@@ -58,11 +59,14 @@ def validate(policy):
         if 'reason' in rule and (not isinstance(rule['reason'], str) or len(rule['reason'])>2000):
             raise ValueError('invalid review reason')
         allowed={'forbidden': {'source', 'target', 'types', 'context'},
-                 'cycles': {'scope', 'types', 'context', 'acyclic'}, 'native': {'scope', 'context'}}[kind]
+                 'cycles': {'scope', 'types', 'context', 'acyclic'}, 'native': {'scope', 'context'},
+                 'duplication': {'scope', 'context', 'minimum_tokens'}}[kind]
         if set(rule)-{'id', 'kind', 'enabled', 'reason'}-allowed:
             raise ValueError('unknown field for review rule kind')
         if kind=='forbidden' and not {'source', 'target'}<=rule.keys():
             raise ValueError('forbidden rule requires source and target selectors')
+        if 'minimum_tokens' in rule and (type(rule['minimum_tokens']) is not int or not 1<=rule['minimum_tokens']<=100000):
+            raise ValueError('invalid duplication threshold')
         for key in ('source', 'target', 'scope'):
             if key in rule:
                 selector(rule[key])

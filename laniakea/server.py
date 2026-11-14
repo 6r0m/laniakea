@@ -206,10 +206,11 @@ class Handler(BaseHTTPRequestHandler):
                             if not query[key].isdecimal():
                                 raise ValueError('invalid review cursor or limit')
                             query[key]=int(query[key])
-                    if 'ack' in query:
-                        if query['ack'] not in {'true','false'}:
-                            raise ValueError('invalid acknowledged flag')
-                        query['ack']=query['ack']=='true'
+                    for flag in ('ack','evidence'):
+                        if flag in query:
+                            if query[flag] not in {'true','false'}:
+                                raise ValueError('invalid review flag')
+                            query[flag]=query[flag]=='true'
                     data=self.server.reviews[path.split('/')[2]].page(query)
                     return self._send(200,json.dumps(data,separators=(',',':')).encode(),'application/json')
                 except Conflict as error:

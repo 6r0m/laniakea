@@ -41,6 +41,8 @@ python laniakea.py extract <project>     [--engine <root>] [--name <id>] [--targ
 python laniakea.py extract <project> --symbols  include native classes/functions for this extraction
 python laniakea.py serve                 [--port <n>, default 8737] [--no-browser]
 python laniakea.py setup-symbols          --libclang <llvm>/bin/libclang.dll --resources <llvm>/lib/clang/21
+python laniakea.py setup-health           --pmd <pmd-bin-7.29.0> --java <jdk>/bin/java.exe (offline, optional)
+python laniakea.py extract <project> --health duplication  explicit strict source clones; add --symbols for native detail
 python -m unittest discover -s tests     whole suite; engine tests run when the sample's engine resolves
 python tests/record_fixture.py           re-record fixtures/sample.ubt.json after changing the sample
 ```

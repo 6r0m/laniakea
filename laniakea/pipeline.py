@@ -4,17 +4,17 @@
 from datetime import datetime, timezone
 from time import perf_counter
 
-from . import LaniakeaError, __version__, profiles, schema, shards
+from . import LaniakeaError, __version__, health, profiles, schema, shards
 from .workspace import read_json, write_json
 
 
-def extract(workspace, target, *, symbols=False):
+def extract(workspace, target, *, symbols=False, health_options=None):
     """Run the target's profile into a new run. latest.json moves only after every file validated and was written."""
     with workspace.extraction_lock(target["id"]):
-        return _extract_locked(workspace, target, symbols)
+        return _extract_locked(workspace, target, symbols, health_options)
 
 
-def _extract_locked(workspace, target, symbols):
+def _extract_locked(workspace, target, symbols, health_options=None):
     profile = profiles.get(target["profile"])
     start = perf_counter()
     latest = workspace.latest(target["id"])
@@ -22,8 +22,9 @@ def _extract_locked(workspace, target, symbols):
     run = workspace.begin_run(target["id"])
     try:
         profile_start = perf_counter()
+        options={'health_options':{**health_options,'tools':workspace.root/'tools/health/cpd'}} if health_options is not None else {}
         graph, fields = profile.extract(target, run, previous,
-                                        tools_dir=workspace.root / "tools" / profile.NAME if symbols else None)
+                                        tools_dir=workspace.root / "tools" / profile.NAME if symbols else None, **options)
         profile_seconds = perf_counter() - profile_start
         schema.validate(graph)
         shards_start = perf_counter()
@@ -53,6 +54,7 @@ def _extract_locked(workspace, target, symbols):
         manifest["timings_seconds"]["total"] = perf_counter() - start
         schema.validate(manifest, "manifest")
         schema.validate_overview(manifest, graph)
+        if 'health' in manifest:health.load(run,manifest,graph['nodes'])
         write_json(run / "manifest.json", manifest)
     except BaseException as error:
         failed = workspace.fail_run(run)

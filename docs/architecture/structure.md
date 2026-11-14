@@ -51,7 +51,8 @@ Laniakea installation, configuration or committed files.
   [configuration context](graph-model.md#centered-overview-and-configuration).
 - **Layout store** (`laniakea/layouts.py`): validated user positions under each target's `layouts/` directory in the
   ignored workspace, separate from immutable runs. Updates merge moved pins; resetting affects one scope and mode.
-- **Architecture review** (`laniakea/review.py`, `review_policy.py`, `review_store.py`): optional indexed analysis,
+- **Review** (`laniakea/review.py`, `review_policy.py`, `review_store.py`): indexed architecture analysis and optional
+  source observations validated by `health.py`,
   report caching and local triage. Its [review contract](review.md) owns applicability and decision lifetimes;
   `viewer/review.js` supplies the controls and passive badges.
 - **Sample, fixtures, tests** (`sample/`, `fixtures/`, `tests/`): a synthetic project with no engine code, its recorded
@@ -62,11 +63,14 @@ Laniakea installation, configuration or committed files.
 See the [component relationships](diagrams/main.md).
 
 Through the profile contract: a profile is a module with `NAME`, `project_file`, `target_fields`, `default_id`,
-`inputs(target, manifest=None)` and `extract(target, run_dir, previous_manifest=None, tools_dir=None)`. The previous successfully published manifest is
+`inputs(target, manifest=None)` and `extract(target, run_dir, previous_manifest=None, tools_dir=None, health_options=None)`. The previous successfully published manifest is
 read-only context; retention and optional local-tool policy belong to its profile. Adding a language is one adapter and one registry line; the core and the viewer change
 nothing.
 The CLI's per-run `--symbols` request enables the pipeline to supply a tool directory. Ordinary extraction supplies none;
 installing a tool does not opt future extractions into compiler analysis.
+An explicit source-health request separately supplies optional collection settings. Its observations are validated before
+publication and do not change graph ownership or reference semantics. Profiles without that optional capability remain
+usable through ordinary extraction.
 
 The manifest's optional `timings_seconds` records elapsed phases. The profile supplies its extraction phases;
 the pipeline supplies profile execution, shard writing/validation and total time through graph serialization, before

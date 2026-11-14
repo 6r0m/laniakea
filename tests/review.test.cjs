@@ -85,3 +85,31 @@ test('warning symbols use independent readable images rather than shrinking insi
   assert.notEqual(candidate,violation);assert.match(candidate,/>!</);
   assert.equal(NodeIcons.warning(''),null);
 });
+
+test('source findings mark concrete contextual files without inventing dependency wires',()=>{
+  const {ReviewProjection,ReviewReferenceIndex,ReviewEdgeProjection}=require('../viewer/review.js');
+  const file={id:'context-file',parent:'scope',source:{root:'project',path:'Source/Sample/API.cpp'},
+    attrs:{source_file:true,source_owner:'scope',presentation_group:true}};
+  const other={...file,id:'unrelated-context',attrs:{...file.attrs,source_owner:'other'}};
+  const map={nodes:new Map([['module',{parent:'root'}],['scope',{parent:'module'}],['other',{parent:'root'}]])};
+  const finding={id:'clone',severity:'candidate',groups:[],subjects:['module'],source_paths:[file.source.path]};
+  const view={nodes:[{id:'module'},file,other],edges:[{id:'real',refs:[{group:1}]}]};
+  const before=JSON.stringify(view),badges=ReviewProjection({module:[finding]},map,view);
+  assert.equal(badges.get('context-file').count,1);assert.equal(badges.has('unrelated-context'),false);
+  assert.equal(ReviewEdgeProjection(ReviewReferenceIndex([finding]),view).size,0);
+  assert.equal(JSON.stringify(view),before);
+  const {ArchitectureReview}=require('../viewer/review.js');
+  const control=Object.assign(Object.create(ArchitectureReview.prototype),{target:{review_url:'/review'},enabled:true,
+    data:{},badges,ownerBadges:new Set(badges.keys())});
+  assert.deepEqual(control.inspection(file).exact,['clone']);
+});
+
+test('source candidates in the same module retain distinct file context in the queue',()=>{
+  const {ArchitectureReview}=require('../viewer/review.js');
+  const control=Object.assign(Object.create(ArchitectureReview.prototype),{data:{affected:{module:[
+    {id:'first',source_paths:['Source/Sample/First.cpp']},{id:'second',source_paths:['Source/Sample/Second.cpp']}]}}});
+  const finding={id:'first',subjects:['module'],evidence_type:'source'};
+  assert.deepEqual(control.sourceFiles(finding),['First.cpp']);
+  assert.deepEqual(control.sourceFiles({...finding,id:'second'}),['Second.cpp']);
+  assert.deepEqual(control.sourceFiles({...finding,evidence_type:undefined}),[]);
+});

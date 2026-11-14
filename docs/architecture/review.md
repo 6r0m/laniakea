@@ -1,4 +1,4 @@
-# Architecture review
+# Code and architecture review
 
 Review evaluates a published snapshot without invoking extraction or modifying the analysed project. It reports
 recorded concerns and configured constraint violations, not an overall architecture grade.
@@ -10,10 +10,19 @@ recorded concerns and configured constraint violations, not an overall architect
 | Module dependency cycle | Candidate; a configured acyclic constraint makes the witnessed cycle a violation |
 | Forbidden module dependency direction | Violation only when a configured rule forbids the recorded relation |
 | Native call without recorded module access | Candidate only when the profile records a complete access closure with no supporting path; never an automatic violation |
+| Strict C++ token duplication | Candidate with matching source ranges, only when explicitly collected; no SOLID or semantic-equivalence verdict |
 
 Red identifies a policy violation; yellow identifies a review candidate. Each finding names its rule, affected
-modules, context, limits and exact witnesses. Counts of findings, recorded relations and displayed witnesses are
+modules, context, limits and exact evidence. Counts of findings, recorded relations and displayed witnesses are
 different quantities. Large findings retain bounded witness samples; other exact references remain in ordinary inspection.
+
+Source duplication uses the optional run-bound observations produced by the [Unreal profile](unreal-profile.md#source-duplication).
+It does not add canonical nodes or relationships. Evidence remains at file/module scope when the compiler has not proved
+unique function ownership; a nearby function name is insufficient. All matching ranges remain available in bounded pages,
+separate from dependency-reference paging. Raw source matches can span inactive branches or intentional boilerplate.
+The default Review threshold is 100 tokens per occurrence. Raising it filters recorded groups; lowering it below the
+collection floor reports unavailable evidence and requires explicit recollection. Missing observations mean not recorded.
+Policy scope selects participating recorded modules; at least two matching occurrences must remain in scope.
 
 The evaluator reads canonical payloads through the existing read index. It does not reason from bundled lines,
 visual crossings or file representatives. The Unreal adapter owns build-edge interpretation and native-note eligibility;
@@ -62,6 +71,11 @@ A decision from an incompatible fingerprint version requires reconsideration wit
 Cache identity binds the code loaded by the server, not later worktree edits.
 Restart serving after changing backend code.
 
+For strict clones, identity uses CPD's token images, not regex-normalized source. Fingerprints bind matching content,
+participant files/multiplicities, tool interpretation, rule and build context, excluding source coordinates and file hashes.
+Comment/line drift therefore refreshes exact evidence without reopening the same concern. Changed clone content or
+participants require reconsideration. Complexity analysis remains deferred; no lexical metric is substituted for it.
+
 Accept risk and Not relevant remove findings from active badges/list and retain severity and a separate acknowledged
 count. Show acknowledged provides inspection and Reopen. Reopen restores active presentation. Acknowledgement is
 not a fix; a finding absent from a later or less complete report is not automatically resolved.
@@ -75,6 +89,7 @@ decision unchanged and provides an error. Corrupt triage fails visibly; unavaila
 | owner | lifetime |
 |---|---|
 | Canonical graph, manifest and reference index | Pinned to the run advertised by the server |
+| Optional health observations | Immutable source evidence bound by the manifest digest; never a dependency graph or triage store |
 | `review/cache/` | Disposable reports keyed by indexed content, manifest, policy and evaluator code |
 | `review/rules.json` | Local policy input; explicit recheck reloads it |
 | `review/triage.json` | Durable local decisions, independent of caches, runs and layouts |
@@ -90,7 +105,7 @@ rather than publishing a silently truncated report. A validated report cache can
 triage or pins. In-process generation is shared, and cross-process publication is locked.
 
 The existing localhost server supplies paged findings and accepts same-origin bounded JSON decision requests.
-Review failure does not prevent normal map serving or publication. No native tools load for module-only review.
+Review failure does not prevent normal map serving or publication. Review never starts a source analyzer; no native tools load for module-only review.
 All learned information and decisions remain in the ignored workspace, with no runtime network access.
 
 Presentation and inspection are owned by the [graph contract](graph-model.md#review-presentation).

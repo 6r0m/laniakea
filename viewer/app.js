@@ -569,7 +569,7 @@ function renderDetails(item,{reopen=true}={}) {
     item.pairInspection?'Connections in this view':typeLabel(item.type,item.refs));
   let detailsLoaded=false;
   state.inspector=new InspectorTabs(panel,el,{title,
-    tabs:[{id:'architecture',label:'Architecture'},{id:'details',label:'Details'}],
+    tabs:[{id:'architecture',label:'Review'},{id:'details',label:'Details'}],
     onClose:()=>{renderDetails(null);$('toggle-details').focus();},
     onSelect:name=>{
       if(name==='details'&&!detailsLoaded){detailsLoaded=true;
@@ -578,8 +578,8 @@ function renderDetails(item,{reopen=true}={}) {
   const requestedFinding=state.review?.pendingFinding;
   const reviewSlot=state.inspector.pages.get('architecture');reviewSlot.setAttribute('data-review-slot',item.id||'connection');
   state.review?.details(reviewSlot,item);
-  if(!state.review){state.inspector.setLabel('architecture','Architecture: unavailable');
-    reviewSlot.append(el('p','Architecture review is unavailable for this snapshot.',{class:'muted'}));}
+  if(!state.review){state.inspector.setLabel('architecture','Review: unavailable');
+    reviewSlot.append(el('p','Review is unavailable for this snapshot.',{class:'muted'}));}
   const review=state.review?.inspection(item);
   state.inspector.select(!projectContext&&(requestedFinding||review?.count>0)?'architecture':'details',
     {focus:Boolean(requestedFinding)});

@@ -95,7 +95,7 @@ async page=>{
   const nativeId=await page.evaluate(()=>state.review.data.items.find(f=>f.kind==='native').id);
   check(await page.evaluate(id=>[...state.review.links.values()].some(records=>records.has(id)),nativeId),'Flagged reference has no visible warning wire');
   await page.evaluate(()=>inspectOverlap(ConnectionTrace.overlap(state.shard,state.shard.edges)));
-  const findingChoice=page.getByRole('combobox',{name:'Architecture finding',exact:true});
+  const findingChoice=page.getByRole('combobox',{name:'Review finding',exact:true});
   check(await findingChoice.locator('option').count()===2,'Overlapping findings need a complete, deduplicated choice');
   await findingChoice.selectOption(nativeId);
   await page.locator('#details .review-finding').filter({hasText:'Native call without recorded module access'}).waitFor();
@@ -206,7 +206,7 @@ async page=>{
   check(await page.locator('#review-items [data-finding]').count()===0&&await page.locator('#details .review-details').count()===0,
     'Failed recheck retained apparently current findings');
   await page.unroute('**'+initial.url);
-  await page.getByRole('button',{name:'Close architecture review',exact:true}).click();
+  await page.getByRole('button',{name:'Close review',exact:true}).click();
   check(await page.evaluate(()=>state.review.enabled),'Closing the list disabled review');
   await page.locator('#toggle-review').click();
   await page.getByLabel('Review this snapshot',{exact:true}).uncheck();

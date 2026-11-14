@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Deterministic module-level findings over indexed canonical facts, independent of camera and triage."""
+"""Deterministic Review interpretation of recorded relationships and optional source observations."""
 
 import hashlib
 import json
 from collections import defaultdict, deque
 
-from . import review_policy
+from . import health, review_policy
 
 VERSION = 1
 NATIVE_FINGERPRINT_VERSION = 3
@@ -63,7 +63,7 @@ def loop(members, adjacency):
     return []
 
 
-def evaluate(nodes, rows, manifest, policy, adapter=None):
+def evaluate(nodes, rows, manifest, policy, adapter=None, health_data=None):
     policy=review_policy.validate(policy)
     all_nodes={n['id']:n for n in nodes}
     modules={i:n for i,n in all_nodes.items() if n['level']=='module'}
@@ -115,8 +115,10 @@ def evaluate(nodes, rows, manifest, policy, adapter=None):
              'adapter': facts['version']}
     # Receipt timestamps and paths are provenance, not a different architecture context.
     context['target']={k:context['target'].get(k) for k in ('name','platform','configuration')}
-    def finding(rule, subjects, relationships, witnesses, count, severity, title, guidance, groups):
-        identity=digest([rule['id'],rule['kind'],subjects,context])
+    def finding(rule, subjects, relationships, witnesses, count, severity, title, guidance, groups, *, identity=None, extra=None):
+        key=[rule['id'],rule['kind'],subjects,context]
+        if identity is not None:key.append(identity)
+        identity=digest(key)
         semantic_rule={k:v for k,v in rule.items() if k not in {'reason','enabled','types','acyclic'}}
         semantic_rule.update(types=sorted(set(rule.get('types',facts['types']))),acyclic=rule.get('acyclic',False))
         for role in ('source','target','scope'):
@@ -132,7 +134,7 @@ def evaluate(nodes, rows, manifest, policy, adapter=None):
                          'subjects':subjects, 'severity':severity, 'title':title, 'reason':rule.get('reason',''),
                          'guidance':guidance, 'count':count, 'witnesses':witnesses[:WITNESSES],
                          'witness_total':len(witnesses) if rule['kind']=='cycles' else count, 'limits':facts['limits'],
-                         'groups':sorted(groups)})
+                         'groups':sorted(groups), **(extra or {})})
         if len(findings)>MAX_FINDINGS:
             raise ValueError('review finding limit reached; narrow the policy scope')
     for rule in policy['rules']:
@@ -160,6 +162,9 @@ def evaluate(nodes, rows, manifest, policy, adapter=None):
                 elif check['status']!='unavailable' and any(i not in eligible for i in selected):
                     check.update(status='partial',detail='Selected scope includes external or unanalysed modules; only recorded relations can be checked.')
         if check['status']=='unavailable':
+            continue
+        if rule['kind']=='duplication':
+            health.evaluate(health_data,rule,set(check['matched']['scope']),check,finding)
             continue
         if rule['kind']=='native':
             if not facts['native']:

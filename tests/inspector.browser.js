@@ -8,7 +8,7 @@ async page=>{
   await page.waitForFunction(()=>state.review.data&&!state.review.requests.size);
   const pins=await page.evaluate(()=>JSON.stringify(state.positionCache.layouts));
   await page.locator('#inspect-project').click();
-  const details=page.getByRole('tab',{name:'Details',exact:true}),architecture=page.getByRole('tab',{name:/^Architecture/});
+  const details=page.getByRole('tab',{name:'Details',exact:true}),architecture=page.getByRole('tab',{name:/^Review/});
   await details.waitFor({timeout:3000});
   check(await details.getAttribute('aria-selected')==='true','Project should open Details');
   await details.focus();await page.keyboard.press('ArrowLeft');

@@ -11,6 +11,7 @@
    "types": ["depends.public", "depends.private"],
    "context": {"name": "SampleEditor", "platform": "Win64", "configuration": "Development"}
   },
-  {"id": "native-direct-dependency", "kind": "native"}
+  {"id": "native-direct-dependency", "kind": "native"},
+  {"id": "source-duplication", "kind": "duplication", "minimum_tokens": 100}
  ]
 }

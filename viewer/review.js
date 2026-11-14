@@ -4,16 +4,29 @@
 
 function ReviewProjection(affected,map,view) {
   const visible=new Set(view.nodes.map(n=>n.id)),badges=new Map();
+  const files=new Map();
+  for(const node of view.nodes)if(node.attrs?.source_file&&node.source?.root==='project'){
+    if(!files.has(node.source.path))files.set(node.source.path,[]);
+    files.get(node.source.path).push(node);
+  }
+  const add=(id,subject,finding)=>{
+    if(!badges.has(id))badges.set(id,{ids:new Set(),subjects:[],severity:'candidate',acknowledged:true});
+    const badge=badges.get(id);if(!badge.subjects.includes(subject))badge.subjects.push(subject);
+    badge.ids.add(finding.id);
+    if(finding.severity==='violation')badge.severity='violation';
+    if(!finding.acknowledged)badge.acknowledged=false;
+  };
   for(const [subject,findings] of Object.entries(affected||{})) {
     let id=subject;
     while(id&&!visible.has(id))id=map.nodes.get(id)?.parent;
     if(!id)continue;
-    if(!badges.has(id))badges.set(id,{ids:new Set(),subjects:[],severity:'candidate',acknowledged:true});
-    const badge=badges.get(id);badge.subjects.push(subject);
     for(const finding of findings) {
-      badge.ids.add(finding.id);
-      if(finding.severity==='violation')badge.severity='violation';
-      if(!finding.acknowledged)badge.acknowledged=false;
+      add(id,subject,finding);
+      for(const path of finding.source_paths||[])for(const file of files.get(path)||[]){
+        let owner=file.attrs.source_owner;
+        while(owner&&owner!==subject)owner=map.nodes.get(owner)?.parent;
+        if(owner===subject)add(file.id,subject,finding);
+      }
     }
   }
   for(const badge of badges.values()){badge.count=badge.ids.size;badge.subjects.sort();}
@@ -84,14 +97,20 @@ class ArchitectureReview {
   async request(query={},body=null) {
     const epoch=this.epoch,controller=new AbortController();this.requests.add(controller);
     try {
-      const params=new URLSearchParams({...query,ack:String(this.ack)});
+      const params=new URLSearchParams({...query,...(query.evidence?{}:{ack:String(this.ack)})});
       const response=await fetch(this.target.review_url+(body?'':'?'+params),{cache:'no-store',signal:controller.signal,
         ...(body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{})});
       const text=await response.text();
       if(epoch!==this.epoch||controller.signal.aborted)throw new DOMException('Review cancelled','AbortError');
       if(!response.ok)throw Error(`Review: ${text.trim()}. Use Recheck to reload.`);
       const data=JSON.parse(text);
-      if(!body) {
+      if(query.evidence&&!body){
+        if(!Array.isArray(data.items)||data.items.length>100||typeof data.report!=='string'||
+          !Number.isSafeInteger(data.total)||data.total<0||data.next_cursor!==null&&
+          (!Number.isSafeInteger(data.next_cursor)||data.next_cursor<=Number(query.cursor||0)))throw Error('Invalid source evidence page');
+        for(const item of data.items)if(item.root!=='project'||typeof item.path!=='string'||
+          !['line','column','end_line','end_column'].every(k=>Number.isSafeInteger(item[k])&&item[k]>0))throw Error('Invalid source range');
+      }else if(!body) {
         if(!Array.isArray(data.items)||data.items.length>100||typeof data.report!=='string'||
           !Number.isSafeInteger(data.revision)||!Number.isSafeInteger(data.total)||data.total<0||
           !data.counts||!data.affected||!Array.isArray(data.checks)||!Array.isArray(data.connections)||
@@ -206,7 +225,10 @@ class ArchitectureReview {
         const visible=[...this.badges].find(([,b])=>b.ids.has(finding.id));
         if(visible)selectNode(visible[0]);else flyToNode(finding.subjects[0]);};
       const caption=`${finding.severity==='violation'?'! Policy violation':'? Review candidate'} / ${finding.triage}`;
-      row.append(button,el('small',finding.title),el('small',caption,
+      row.append(button,el('small',finding.evidence_type==='source'?
+        `Duplication / ${finding.token_count} tokens / ${finding.evidence_total} ranges`:finding.title));
+      const files=this.sourceFiles(finding);if(files.length)row.append(el('small',files.join(', ')));
+      row.append(el('small',caption,
         {'data-review-location':finding.id,'data-caption':caption}));
       list.append(row);
     }
@@ -218,8 +240,17 @@ class ArchitectureReview {
     }
   }
   subjects(finding) {
-    return finding.subjects.slice(0,8).map(label).join(' -> ')+
+    return finding.subjects.slice(0,8).map(label).join(finding.kind==='duplication'?', ':' -> ')+
       (finding.subjects.length>8?` / ${finding.subjects.length-8} more modules`:'');
+  }
+  sourceFiles(finding) {
+    if(finding.evidence_type!=='source')return[];
+    const paths=new Set();
+    for(const subject of finding.subjects.slice(0,8)){
+      const hint=this.data?.affected[subject]?.find(item=>item.id===finding.id);
+      for(const path of (hint?.source_paths||[]).slice(0,2))paths.add(path);
+    }
+    return [...paths].slice(0,2).map(path=>path.split('/').at(-1));
   }
   refreshInspection() {
     const slot=document.querySelector('#details [data-review-slot]');
@@ -229,13 +260,14 @@ class ArchitectureReview {
   inspection(node) {
     const unavailable=!this.target?.review_url?'unavailable':!this.enabled?'off':this.error?'failed':!this.data?'checking...':null;
     if(unavailable)return{count:null,status:unavailable,message:this.error||{
-      unavailable:'Architecture review is unavailable for this snapshot.',off:'Review is off. Open Review to enable it.',
-      'checking...':'Checking architecture for the recorded snapshot...'}[unavailable]};
-    const exact=node.id?(node.projectContext||this.ownerBadges.has(node.id)?null:[...(this.nodeLinks.get(node.id)||[])]):
+      unavailable:'Review is unavailable for this snapshot.',off:'Review is off. Open Review to enable it.',
+      'checking...':'Checking recorded review evidence...'}[unavailable]};
+    const exact=node.attrs?.presentation_group?[...(this.badges.get(node.id)?.ids||[])]:
+      node.id?(node.projectContext||this.ownerBadges.has(node.id)?null:[...(this.nodeLinks.get(node.id)||[])]):
       [...this.findingsFor(node).keys()];
     const count=node.projectContext?this.data.counts.violation+this.data.counts.candidate+(this.ack?this.data.counts.acknowledged:0):
       node.id?this.badges.get(node.id)?.count||0:exact.length;
-    return{count,exact,message:'No recorded architecture findings for this selection. This does not prove conformance; see Review for coverage.'};
+    return{count,exact,message:'No recorded review findings for this selection. This does not prove conformance; see Review for coverage.'};
   }
   findingsFor(trace) {
     const findings=new Map();if(!this.enabled||!this.data)return findings;
@@ -255,7 +287,7 @@ class ArchitectureReview {
   }
   details(panel,node) {
     const status=this.inspection(node),inspector=state.inspector;
-    const label=(count,status)=>inspector?.setLabel('architecture',count===null?`Architecture: ${status}`:`Architecture (${count})`);
+    const label=(count,status)=>inspector?.setLabel('architecture',count===null?`Review: ${status}`:`Review (${count})`);
     if(status.count===null||!status.count){
       label(status.count,status.status);panel.replaceChildren(el('p',status.message,{class:'muted',role:status.status==='failed'?'alert':'status'}));
       delete panel.dataset.reviewKey;delete panel.dataset.finding;return;
@@ -266,10 +298,10 @@ class ArchitectureReview {
     if(panel.dataset.reviewKey===key)return;
     label(chosen&&!exact?.length?1:status.count);
     panel.dataset.reviewKey=key;panel.dataset.finding=chosen||'';panel.replaceChildren();
-    const section=el('section',null,{class:'review-details','aria-label':'Architecture findings'});
+    const section=el('section',null,{class:'review-details','aria-label':'Review findings'});
     const body=el('div');
     if(exact?.length>1){
-      const choose=el('select',null,{'aria-label':'Architecture finding',name:'review-finding'});
+      const choose=el('select',null,{'aria-label':'Review finding',name:'review-finding'});
       for(const id of exact){const finding=this.findingIndex.get(id);choose.add(new Option(this.subjects(finding)+' / '+finding.title,id));}
       choose.value=chosen;choose.onchange=()=>{this.pendingFinding=choose.value;this.refreshInspection();
         document.querySelector('#details select[name="review-finding"]')?.focus();};section.append(choose);
@@ -302,10 +334,14 @@ class ArchitectureReview {
     const article=el('article',null,{class:'review-finding','data-review-finding':finding.id});
     article.append(el('p',this.subjects(finding),{class:'finding-subjects'}),el('h3',finding.title),
       el('strong',finding.severity==='violation'?'! Policy violation':'? Review candidate'),el('p',`Rule: ${finding.rule}. ${finding.reason}`),
-      el('p',`${finding.count} recorded relations / ${finding.triage}`),el('p',finding.guidance));
+      el('p',finding.evidence_type==='source'?`Duplication / ${finding.token_count} tokens / ${finding.evidence_total} matching ranges / ${finding.triage}`:
+        `Architecture / ${finding.count} recorded relations / ${finding.triage}`),el('p',finding.guidance));
     if(finding.reopened)article.append(el('p',finding.reopened,{class:'muted'}));
     for(const limit of finding.limits)article.append(el('small',limit));
-    const evidence=el('details');evidence.append(el('summary','Exact evidence'),
+    const evidence=el('details');evidence.append(el('summary','Exact evidence'));
+    if(finding.evidence_type==='source')this.sourceEvidence(evidence,finding,report);
+    else {
+      evidence.append(
       el('small',`Showing ${finding.witnesses.length} of ${finding.witness_total} recorded witness links.`));
     for(const witness of finding.witnesses) {
       const row=el('div'),button=el('button','Inspect recorded reference',{type:'button'});row.append(button);evidence.append(row);
@@ -318,6 +354,7 @@ class ArchitectureReview {
           const list=el('ul');list.append(referenceRow(edge));row.replaceChildren(list);
         } catch(error){if(error.name!=='AbortError'&&row.isConnected)row.append(el('p',error.message,{role:'alert'}));}
       };
+    }
     }
     article.append(evidence);
     const reasonLabel=el('label','Decision reason (optional)'),reason=el('input',null,{type:'text',name:'review-reason',
@@ -338,6 +375,32 @@ class ArchitectureReview {
       };
     }
     article.append(controls,status);parent.append(article);
+  }
+  sourceEvidence(panel,finding,report) {
+    const body=el('div');panel.append(body);
+    const epoch=state.referenceEpoch,reviewEpoch=this.epoch;
+    let started=false;
+    const load=async(cursor=0)=>{
+      body.replaceChildren(el('p','Loading source ranges...',{role:'status'}));
+      try{
+        const data=await this.request({finding:finding.id,evidence:true,report,cursor,limit:50});
+        if(epoch!==state.referenceEpoch||reviewEpoch!==this.epoch||!body.isConnected||!this.enabled)return;
+        body.replaceChildren(el('p',`${cursor+1}-${cursor+data.items.length} of ${data.total} snapshot ranges`));
+        if(state.target.stale)body.append(el('p','Snapshot is stale. Current source locations may have moved.',{role:'status'}));
+        const list=el('ul');body.append(list);
+        for(const item of data.items){
+          const row=el('li'),link=sourceLink(item);
+          row.append(link||el('span',`${item.path}:${item.line}`),el('small',
+            `${label(item.owner)} / ${item.line}:${item.column}-${item.end_line}:${item.end_column}`));list.append(row);
+        }
+        for(const [title,next] of [['Previous',Math.max(0,cursor-50)],['Next',data.next_cursor]]){
+          const button=el('button',title,{type:'button','aria-label':title+' source ranges'});
+          button.disabled=title==='Previous'?!cursor:next===null;button.onclick=()=>load(next);body.append(button);
+        }
+      }catch(error){if(epoch===state.referenceEpoch&&reviewEpoch===this.epoch&&body.isConnected&&error.name!=='AbortError')
+        body.replaceChildren(el('p',error.message,{role:'alert'}));}
+    };
+    panel.ontoggle=()=>{if(panel.open&&!started){started=true;load();}};
   }
 }
 

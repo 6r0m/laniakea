@@ -394,6 +394,11 @@ representatives and decorates their native icons without new graph elements, geo
 representatives deduplicate finding IDs; multiple participants in one cycle do not multiply the global issue count.
 The accessible Review list retains off-view findings. Map filters do not change rule results or triage.
 
+Source observations add file/module badges through recorded source paths and owners, never fabricated dependency edges.
+Visible contextual files receive only their matching findings; module/ancestor badges keep the concern discoverable while
+those files are folded. The Review tab identifies duplication separately from architecture relations and loads matching
+source ranges in bounded pages when Exact evidence opens. Current-source links retain a snapshot/staleness warning.
+
 Exact reference-group associations also mark existing projected connections and their revealed endpoints. Amber/red
 halos identify candidates/violations independently of direction colors. Fixed-size amber triangle and red stop-sign
 badges remain separate from type icons; counts belong to hover and inspection. Native wire labels show a compact
@@ -403,8 +408,8 @@ including a visible line to an off-screen endpoint. A halo means the connection 
 every reference in its bundle is problematic. Filtered-out references receive no wire marker.
 
 Hover shows distinct finding counts and a bounded explanation without fetching analysis or exact rows. Clicking a
-marked wire or clicking/keyboard-inspecting a marked entity opens the Inspector's Architecture tab. Ordinary inspection
-and explicit Project context open Details. Queue choices focus Architecture and name the original affected endpoints,
+marked wire or clicking/keyboard-inspecting a marked entity opens the Inspector's Review tab. Ordinary inspection
+and explicit Project context open Details. Queue choices focus Review and name the original affected endpoints,
 even when the map represents them through a collapsed owner. The tab's count describes the inspected findings rather than
 the project-wide queue; off, checking, failed and unavailable states do not resemble zero findings.
 A single finding exposes its explanation and decision actions immediately. Exact evidence reuses current reference
@@ -412,7 +417,7 @@ paging and validates original IDs before displaying rows. Connections with sever
 Details retains the existing endpoint navigation and all ordinary references. Closing inspection cancels its presentation;
 a late request cannot reopen the inspector or change its tab. Hover and wheel input never trigger review analysis, fit or
 layout changes. Unchanged report and decision revisions retain draft reasons and loaded evidence. Changed findings update only
-Architecture, preserving the ordinary reader and paging. Removing a focused decision action returns focus to its tab.
+Review, preserving the ordinary reader and paging. Removing a focused decision action returns focus to its tab.
 
 Acknowledged visibility and semantics belong to the [review contract](review.md). The viewer retains one affected-entity
 index, an exact-group association index and at most eight detail pages/8 MiB of serialized page data; parsed-object

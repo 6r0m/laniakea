@@ -12,6 +12,7 @@ How `laniakea/unreal/` reads a project, and the engine behaviour it is built aro
 - What UBT writes into the project
 - Compiler-facing preparation
 - Native symbol analysis
+- Source duplication
 - External dependency ownership
 - From export to graph
 
@@ -25,8 +26,9 @@ How `laniakea/unreal/` reads a project, and the engine behaviour it is built aro
 - Project-owned `Binaries/Win64/*.target` receipts select build context as described below.
 - Build inputs for freshness: the `.uproject`, each `.uplugin`, and every `*.Build.cs` and `*.Target.cs` under `Source/`
   and `Plugins/`.
-- Authored C++ source/header contents participate in freshness only for native-symbol runs, including code reached through
-  declared project plugin junctions. Module-only runs fingerprint build inputs and receipt metadata without scanning C++ bytes.
+- Authored C++ source/header contents participate in freshness for native-symbol runs and explicitly requested source-health
+  runs, including declared project plugin junctions. Health-only freshness follows its collected prefixes. Ordinary
+  module-only runs fingerprint build inputs and receipt metadata without scanning C++ bytes.
 - Native jobs hash the compiler's actual input buffers, including generated and external headers. External hashes enter
   manifest freshness; conflicting bytes for one external input abort normalization.
 
@@ -253,6 +255,34 @@ This retains exact source coordinates after comment-only edits. Volatile date/ti
 Windows commands use response files; no expanded source dump is retained. Cached facts stay target-local in the workspace.
 Scope normalization still runs against the current module graph. Cache misses fall back to native analysis; preparation
 and write I/O failures are reported in worker metrics. Compiler errors never produce reusable facts.
+
+## Source duplication
+
+`cpd.py` runs optional PMD CPD 7.29.0 over an isolated snapshot of source files in recorded in-target project modules.
+`SourceTree` constrains physical reads to the project and declared plugin mounts; target excludes remain applicable.
+Engine, build intermediates and out-of-target modules are not scanned. Explicit root-relative prefixes bound the corpus;
+use target excludes for vendor source inside an otherwise selected module. This is raw-source analysis, independent of
+LLVM and of which preprocessing branches compile. It does not infer function ownership from line proximity.
+
+Offline `setup-health` copies the supplied PMD libraries and notices into the ignored workspace and compiles the small
+CPD API adapter with a supplied JDK 11+. The installation pins hashes of libraries, adapter and Java executable. No host
+installation, network download, source modification or tool invocation occurs during ordinary extraction or map opening.
+See [third-party terms](../../THIRD_PARTY.md) and [operator commands](../guide.md#collect-source-duplication).
+
+The adapter uses CPD's own token images for strict-match fingerprints and exports exact line/column ranges without source
+text. Identifier/literal normalization is off. It verifies every input was processed and every match's token count and
+identity agree. Lexical errors, missing tools, timeout, changing corpus or invalid evidence fail the requested run;
+the previous published map remains available. No partial/empty-success fallback is permitted.
+
+One corpus-wide result can be reused only for identical source hashes, membership/owners, scope, threshold and tool
+identity. Adding or removing a file invalidates reuse. Compilation changes affect triage context and the selected module
+corpus; raw token matching has no additional compiler context. The run records analysis time, file/group counts and reuse.
+The Java heap is bounded to 1 GiB, execution to 15 minutes and artifact size to 32 MiB; limits fail visibly and can be
+addressed by explicitly narrowing scope. Input snapshots and diagnostics remain in the run's ignored directory.
+
+The manifest binds optional health observations by digest; pipeline validation precedes publication. Absence remains
+compatible with older runs. [Review](review.md) interprets observations and owns thresholds/decisions independently of
+extraction. Clang-Tidy complexity has not passed its real-context product gate and is not enabled.
 
 ## External dependency ownership
 

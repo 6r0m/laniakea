@@ -42,11 +42,13 @@ def default_id(project):
     return Path(project).stem.lower()
 
 
-def inputs(target, manifest=None, *, symbols=False):
+def inputs(target, manifest=None, *, symbols=False, health_options=None):
     native = symbols or any(source['id'] == 'compiler' for source in (manifest or {}).get('sources', []))
+    health_scope=health_options if health_options is not None else (manifest or {}).get('health')
     return {**descriptors.build_inputs(Path(target["project_file"]).parent),
             **builds.fingerprints(target["project_file"]),
-            **(source_inputs.fingerprints(target["project_file"], manifest) if native else {})}
+            **(source_inputs.fingerprints(target["project_file"], manifest, prefixes=() if native else health_scope.get('prefixes',[]),
+                                          excludes=() if native else target.get('excludes',[])) if native or health_scope is not None else {})}
 
 
 def _choose(targets, wanted):
@@ -61,13 +63,16 @@ def _choose(targets, wanted):
     return next((t for t in editors if t["default"]), editors[0])
 
 
-def extract(target, run_dir, previous_manifest=None, tools_dir=None):
+def extract(target, run_dir, previous_manifest=None, tools_dir=None, health_options=None):
     """Export the target's module graph into run_dir/ubt and build schema v1 from it."""
+    if health_options is not None:
+        from . import cpd
+        health_options=cpd.prepare(health_options)
     project = Path(target["project_file"])
     root = Path(target["engine_root"])
     out = Path(run_dir) / "ubt"
     out.mkdir(parents=True, exist_ok=True)
-    inputs_before = inputs(target, symbols=tools_dir is not None)
+    inputs_before = inputs(target, symbols=tools_dir is not None,health_options=health_options)
     start = perf_counter()
     targets = ubt.query_targets(root, project, out)
     timings = {"query_targets": perf_counter() - start}
@@ -137,4 +142,13 @@ def extract(target, run_dir, previous_manifest=None, tools_dir=None):
         unknown = compiler_result["unknown"]
         if any(unknown.values()):
             coverage["not_analysed"].append(f"unresolved compiler reference ownership: source={unknown['source']}, target={unknown['target']}")
+    if health_options is not None:
+        from . import cpd, cpd_tools
+        marker,result=cpd.extract(target,run_dir,built,exported,health_options,previous_manifest)
+        manifest['health']=marker
+        manifest['sources'].append({'id':'source-health','name':'PMD CPD strict C++ token clones','version':cpd_tools.VERSION})
+        timings['health_cpd']=result['seconds']
+        coverage['counts'].update({'health.files':result['files'],'health.groups':result['groups'],'health.reused':int(result['reused'])})
+        coverage['analysed'].append('strict authored-source C++ token duplication in the explicitly collected corpus')
+        coverage['not_analysed'].append('source clones do not prove semantic duplication, selected preprocessing branches or a SOLID violation')
     return built, manifest

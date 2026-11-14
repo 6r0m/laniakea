@@ -7,11 +7,11 @@ import threading
 from pathlib import Path
 from time import perf_counter
 
-from . import profiles, review, review_policy
+from . import health, profiles, review, review_policy
 from .workspace import read_json, write_json, writer_lock
 
 CODE_DIGEST=review.digest([Path(p).read_text(encoding='utf-8')
-                           for p in (__file__,review.__file__,review_policy.__file__)])
+                           for p in (__file__,review.__file__,review_policy.__file__,health.__file__)])
 
 class Conflict(ValueError):
     pass
@@ -95,6 +95,7 @@ class Review:
             if self.parents is None:
                 self.parents={n['id']:n['parent'] for n in self.index.topology()['nodes']}
             manifest=read_json(self.run/'manifest.json')
+            observations=health.load(self.run,manifest,self.index.topology()['nodes'])
             profile=profiles.PROFILES.get(manifest.get('profile'))
             adapter=getattr(profile, 'review_adapter', None)
             marker=read_json(self.index.root/'cache.json')
@@ -107,7 +108,7 @@ class Review:
                     if cached['key']!=key or cached['checksum']!=review.digest(report):
                         raise ValueError('review cache checksum mismatch')
                 except (FileNotFoundError, ValueError, KeyError, TypeError):
-                    report=review.evaluate(self.index.topology()['nodes'],self.index.iter_references(),manifest,policy,adapter)
+                    report=review.evaluate(self.index.topology()['nodes'],self.index.iter_references(),manifest,policy,adapter,observations)
                     report.update(report=key, policy=policy, elapsed_seconds=perf_counter()-start)
                     encoded={'key':key,'checksum':review.digest(report),'report':report}
                     if len(json.dumps(encoded).encode())>32*1024*1024:
@@ -117,9 +118,10 @@ class Review:
             return report
 
     def page(self, query):
-        review_policy.fields(query, {'cursor','limit','ack','report','node','finding'})
+        review_policy.fields(query, {'cursor','limit','ack','report','node','finding','evidence'})
         cursor=query.get('cursor',0); limit=query.get('limit',50); ack=query.get('ack',False)
-        if type(cursor) is not int or cursor<0 or type(limit) is not int or not 1<=limit<=100 or type(ack) is not bool:
+        if type(cursor) is not int or cursor<0 or type(limit) is not int or not 1<=limit<=100 or type(ack) is not bool or \
+                type(query.get('evidence',False)) is not bool:
             raise ValueError('invalid review page')
         report=self.load()
         if query.get('report',report['report'])!=report['report']:
@@ -127,6 +129,14 @@ class Review:
         if 'finding' in query and (not isinstance(query['finding'],str) or
                 not any(f['id']==query['finding'] for f in report['findings'])):
             raise ValueError('unknown review finding')
+        if query.get('evidence'):
+            if 'finding' not in query or 'node' in query or 'ack' in query:
+                raise ValueError('source evidence requires one finding')
+            finding=next(f for f in report['findings'] if f['id']==query['finding'])
+            if finding.get('evidence_type')!='source':raise ValueError('finding has no source evidence')
+            evidence=finding['source_evidence']
+            return {'report':report['report'],'items':evidence[cursor:cursor+limit],'total':len(evidence),
+                    'next_cursor':cursor+limit if cursor+limit<len(evidence) else None}
         triage=self.triage.read(); findings=[]; affected={}; connections=[]; counts={'violation':0,'candidate':0,'acknowledged':0}
         decorations=cursor==0 and 'node' not in query and 'finding' not in query
         if 'node' in query and (not isinstance(query['node'],str) or query['node'] not in self.parents):
@@ -148,10 +158,13 @@ class Review:
                                         'acknowledged':bool(matching)})
                 for subject in finding['subjects']:
                     affected.setdefault(subject,[]).append({'id':finding['id'],'severity':finding['severity'],
-                                                            'acknowledged':bool(matching)})
+                                                            'acknowledged':bool(matching),
+                        **({'source_paths':sorted({o['path'] for o in finding['source_evidence'] if o['owner']==subject})}
+                           if finding.get('evidence_type')=='source' else {})})
                 if ('node' not in query or any(includes(s) for s in finding['subjects'])) and \
                         ('finding' not in query or query['finding']==finding['id']):
-                    findings.append({**finding,'triage':state,'reason_saved':decision['reason'] if matching else '',
+                    public={k:v for k,v in finding.items() if k!='source_evidence'}
+                    findings.append({**public,'triage':state,'reason_saved':decision['reason'] if matching else '',
                                      'reopened':'Semantic evidence or rule changed.' if decision and not matching else ''})
         return {'report':report['report'], 'revision':triage['revision'], 'counts':counts,
                 'affected':affected if decorations else {}, 'connections':connections,

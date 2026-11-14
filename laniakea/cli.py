@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Command line: extract, serve, up."""
+"""Local extraction, optional offline tools and loopback viewer commands."""
 
 import argparse
 import sys
@@ -39,7 +39,10 @@ def _extract(args, workspace):
     target = _target(workspace, args.project, args.engine, args.name, args.target)
     print(f"laniakea: extracting {target['project_file']}")
     print(f"laniakea: engine {target['engine_root']}")
-    run, manifest = pipeline.extract(workspace, target, symbols=args.symbols)
+    if not args.health and (args.health_scope or args.health_minimum_tokens!=100):
+        raise LaniakeaError('--health-scope and --health-minimum-tokens require --health duplication')
+    options={'prefixes':args.health_scope,'minimum_tokens':args.health_minimum_tokens} if args.health else None
+    run, manifest = pipeline.extract(workspace, target, symbols=args.symbols,health_options=options)
     counts = manifest["coverage"]["counts"]
     summary = ", ".join(f"{key.split('.', 1)[1]} {value}" for key, value in counts.items() if key.startswith("nodes."))
     print(f"laniakea: {target['id']}: target {manifest['target']['name']}, run {run.name}")
@@ -83,6 +86,9 @@ def parser():
         command.add_argument("--name", help="target id in the workspace; defaults to the project name")
         command.add_argument("--target", help="build target to export; defaults to the latest usable build receipt, then Editor")
         command.add_argument("--symbols", action="store_true", help="also analyse classes/functions with locally installed LLVM tools")
+        command.add_argument('--health',choices=['duplication'],help='explicitly collect strict C++ source clones with local CPD tools')
+        command.add_argument('--health-scope',action='append',default=[],help='root-relative source prefix; repeat to bound the corpus')
+        command.add_argument('--health-minimum-tokens',type=int,default=100,help='CPD collection floor; default 100')
 
     def serve_options(command):
         command.add_argument("--port", type=int, default=DEFAULT_PORT,
@@ -98,6 +104,9 @@ def parser():
     setup.add_argument("--libclang", required=True, help="LLVM 21.1.8 libclang.dll")
     setup.add_argument("--resources", required=True, help="LLVM's lib/clang/21 resource directory")
     setup.add_argument("--compiler", help="matching clang-cl.exe, for compiler-validated reuse between extractions")
+    health = commands.add_parser('setup-health',help='install optional strict CPD tools into the workspace (offline)')
+    health.add_argument('--pmd',required=True,help='unpacked PMD 7.29.0 binary distribution')
+    health.add_argument('--java',required=True,help='JDK 11+ bin/java.exe (javac.exe is needed during setup)')
     return top
 
 
@@ -105,6 +114,10 @@ def main(argv=None):
     args = parser().parse_args(argv)
     workspace = Workspace(args.workspace)
     try:
+        if args.command == 'setup-health':
+            from .unreal import cpd_tools
+            cpd_tools.install(workspace.root/'tools/health/cpd',args.pmd,args.java)
+            print(f'laniakea: installed optional CPD {cpd_tools.VERSION}')
         if args.command == "setup-symbols":
             from .unreal import tools
             tools.install(workspace.root / "tools" / "unreal", args.libclang, args.resources, args.compiler)

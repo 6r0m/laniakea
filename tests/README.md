@@ -20,6 +20,7 @@ and durable/transient dependency checks. Run the privacy checks before publishin
 | `LANIAKEA_TEST_ENGINE=<engine root>` | Real-engine integration when the sample's engine does not otherwise resolve |
 | `LANIAKEA_TEST_LIBCLANG=<libclang.dll>` | Pinned LLVM 21.1.8 class/function, call-role, inheritance, override, ownership and edit regressions |
 | `LANIAKEA_TEST_CLANGD_INDEXER=<clangd-indexer.exe>` | Pinned 21.1.8 compiler-argument/adjacent-PCH regression; not the production symbol extractor |
+| `LANIAKEA_TEST_CPD=<workspace>/tools/health/cpd` | Real pinned CPD matches/ranges, token identity, scoped scans, corpus edits, reuse, lexical failure and timeout refusal after offline setup |
 
 `python tests/record_fixture.py [--engine <engine root>]` regenerates the sample's recorded UBT export when the sample
 changes. Review the tokenized fixture before publishing; analysed-project data never belongs in tracked tests.
@@ -42,6 +43,7 @@ Source-file fixtures must use the normal pipeline/read index/server and real exa
 | [namespace-files.browser.js](namespace-files.browser.js) | [Namespace fixture](../fixtures/namespace-files.graph.json): file contexts, exact references, navigation and pins |
 | [review.browser.js](review.browser.js) | [Review fixture](test_review.py): direct explanation, exact evidence, triage, refused writes, late close and pins |
 | [inspector.browser.js](inspector.browser.js) | Review fixture: accessible tabs, separate findings/details, retained drafts/evidence/scroll, lazy references, late responses and narrow panels |
+| [health.browser.js](health.browser.js) | `test_health.browser_fixture`: source evidence paging, file badges, triage/reopen, late-close, narrow layout and pin preservation |
 
 Other functions use the served [sample](../sample/SampleProject/SampleProject.uproject), with synthetic overlays.
 Keep real-project screenshots outside the clone and other observations in the ignored workspace.

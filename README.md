@@ -2,7 +2,7 @@
 
 Explore an Unreal Engine C++ project like a star map, from plugin folders and modules to files, namespaces,
 classes and functions. Trace dependencies from public contracts into their implementations, with links to source.
-Optional architecture review highlights recorded concerns and checks the dependency boundaries you configure.
+Review highlights recorded architecture concerns, checks configured boundaries and inspects optional source-duplication evidence.
 
 Needs Windows, Python 3.9 or later, and an installed Unreal Engine 5. Clone this repository, then run:
 
@@ -19,8 +19,10 @@ project again. Use `python laniakea.py serve` to reopen published maps without e
 |---|---|
 | Ordinary `up` or `extract` | Evaluated module dependencies and plugin descriptors; LLVM is not required |
 | `up --symbols` or `extract --symbols` | Also indexes authored C++ with locally supplied LLVM 21.1.8 tools |
+| `up --health duplication` | Collects strict C++ source matches with optional local PMD CPD; works with or without `--symbols` |
 
 For native setup, build-context selection and coverage limits, see the [developer guide](docs/guide.md#open-a-project).
+For source-duplication setup and limits, see [code-health collection](docs/guide.md#collect-source-duplication).
 
 Wheel in or out to reveal or fold detail gradually. Drag empty space to fly; hover to trace; click to inspect exact
 references. Drag a star or its name to arrange it; positions save on release.

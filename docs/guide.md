@@ -10,6 +10,7 @@ Trace dependencies to source, explore public contracts and inspect the evidence 
 - [Find the public contract and its implementation](#find-the-public-contract-and-its-implementation)
 - [Investigate a suspicious relationship](#investigate-a-suspicious-relationship)
 - [Use architecture review](#use-architecture-review)
+- [Collect source duplication](#collect-source-duplication)
 - [Account for missing information](#account-for-missing-information)
 
 ## Open a project
@@ -63,7 +64,7 @@ Hover colors are relative to the card's named focus: cyan outgoing, amber incomi
 can change near the opposite endpoint. Idle wire colors describe types listed in **Browse & filters**. Crossings are
 not junctions; click overlapping wires to choose a named pair and inspect both directions.
 
-**Inspector** has two tabs: **Architecture** explains findings and decisions; **Details** shows source information and
+**Inspector** has two tabs: **Review** explains findings and decisions; **Details** shows source information and
 all references. Switching retains scroll, loaded pages and unfinished reasons. Use arrow keys, Home or End between tabs.
 On narrower windows, the findings list and inspector share the available space; reopening either retains the inspection.
 
@@ -129,7 +130,7 @@ Apply them to the project's intended boundaries and actual target conditions.
    Open it for the list and coverage; closing the list keeps markers visible. Uncheck **Review this snapshot** to disable it.
 2. Follow amber triangle badges / `?` wires for candidates, or red stop signs / `!` wires for policy violations.
    Hover explains the concern, including when the other endpoint is
-   off-screen. Click the wire, a marked star or a finding in the Review list. **Architecture** shows the rule, original
+   off-screen. Click the wire, a marked star or a finding in the Review list. The **Review** tab shows the rule, original
    affected modules, limits and guidance. Its count applies to the current inspection; Review shows the project total.
    Open **Exact evidence** for source links, or switch to **Details** for ordinary references and endpoint navigation.
 3. Use **Accept risk** or **Not relevant**, optionally recording a reason. The finding leaves active markers/list.
@@ -139,6 +140,29 @@ Apply them to the project's intended boundaries and actual target conditions.
 
 Defaults produce yellow review candidates. Red violations need applicable configured constraints; the tool does not
 decide a project's intended architecture. See [rule meaning, coverage and saved decisions](architecture/review.md).
+
+## Collect source duplication
+
+Supply the unpacked [PMD 7.29.0 distribution](https://docs.pmd-code.org/pmd-doc-7.29.0/pmd_userdocs_installation.html)
+and a JDK 11+ locally, then explicitly request strict C++ duplication:
+
+```text
+python laniakea.py setup-health --pmd <pmd-bin-7.29.0> --java <jdk>/bin/java.exe
+python laniakea.py up --health duplication
+```
+
+Add `--symbols` to retain native classes/functions in a newly extracted map. Without it, the new map is module-only.
+Use repeated `--health-scope Source --health-scope Plugins/Example` to limit the scan. The default collection floor is
+100 tokens per occurrence; `--health-minimum-tokens <n>` changes that floor. Failed tools or source processing retain
+the last good map and identify the diagnostic log. Narrow scope explicitly rather than silently ignoring a failed file.
+
+Yellow **Duplication** candidates mark recorded files or modules. Click a marked item or Review-list entry, then open
+**Exact evidence** for paged source ranges and editor links. These matches can be intentional or in inactive branches;
+inspect ownership before refactoring. A stale snapshot warns that current coordinates may have moved. No duplication
+wires are invented. Accept/reopen decisions use the existing Review workflow.
+
+Opening a map never runs PMD. Later extractions must request health again; ordinary module exploration needs neither
+Java nor LLVM. See [collection boundaries and costs](architecture/unreal-profile.md#source-duplication).
 
 ## Account for missing information
 
