@@ -36,7 +36,8 @@ project needs no Laniakea installation or integration.
 | [Server](../../laniakea/server.py) | loopback delivery of pinned data and validated local writes |
 | [Viewer](viewer.md) | continuous projection, navigation, tracing and inspection |
 | [Layout store](../../laniakea/layouts.py) | validated positions independent of extracted runs |
-| [Review](review.md) | rules, source evidence, report caching and durable triage |
+| [Source observations](../../laniakea/health.py) | immutable evidence validation and loading |
+| [Review](review.md) | rules, findings, report caching and durable triage |
 | [Verification](../../tests/README.md) | synthetic regressions, native checks and browser acceptance |
 
 ## Relationships

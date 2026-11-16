@@ -17,6 +17,8 @@ modules, context, limits and exact evidence. Counts of findings, recorded relati
 different quantities. Large findings retain bounded witness samples; other exact references remain in ordinary inspection.
 
 Source duplication uses the optional run-bound observations produced by the [Unreal profile](unreal-profile.md#source-duplication).
+The [artifact validator](../../laniakea/health.py) owns integrity and source ranges independently of Review policy;
+the [evaluator](../../laniakea/review.py) interprets validated observations as findings.
 It does not add canonical nodes or relationships. Evidence remains at file/module scope when the compiler has not proved
 unique function ownership; a nearby function name is insufficient. All matching ranges remain available in bounded pages,
 separate from dependency-reference paging. Raw source matches can span inactive branches or intentional boilerplate.

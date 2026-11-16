@@ -6,16 +6,16 @@ functions. Trace recorded relationships to source and review architecture concer
 Windows, Python 3.9+ and Unreal Engine 5 are needed to analyse a project. Start with:
 
 ```text
-make build PROJECT="path/to/YourProject.uproject"
-make up
+python laniakea.py build "path/to/YourProject.uproject"
+python laniakea.py up
 ```
 
 The viewer opens at **http://127.0.0.1:8737/**.
 
 | concern | owner |
 |---|---|
-| commands and Make options | [Makefile](Makefile) (`make help`) |
-| Python commands without Make | [CLI](laniakea/cli.py) (`python laniakea.py --help`) |
+| commands and options | [CLI](laniakea/cli.py) (`python laniakea.py --help`) |
+| optional Make shortcuts: build, up, down | [Makefile](Makefile) (`make help`) |
 | exploration, setup and architecture | [documentation](docs/README.md) |
 | checks and browser acceptance | [verification](tests/README.md) |
 | contributions welcome, first steps | [contribution guide](CONTRIBUTING.md) |

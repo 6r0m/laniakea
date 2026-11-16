@@ -55,7 +55,7 @@ def _extract(args, workspace):
 
 def _serve(args, workspace):
     if not any(workspace.latest(t['id']) for t in workspace.targets()):
-        raise LaniakeaError('no saved map; run make build PROJECT=<project> first')
+        raise LaniakeaError('no saved map; run python laniakea.py build <project> first')
     with service.running(workspace) as owner:
         _run_server(args,workspace,owner)
 
@@ -65,14 +65,14 @@ def _run_server(args,workspace,owner):
     print('laniakea: checking freshness and preparing map views...', flush=True)
     server = make_server(workspace, args.port)
     try:
-        owner.ready(server)
         print(f'laniakea: viewer preparation: {perf_counter()-started:.3f}s')
         url = f"http://{HOST}:{server.server_address[1]}/"
         for entry in server.index:
             state = f"STALE, {entry['changed_count']} build input(s) changed" if entry["stale"] else "fresh"
             print(f"laniakea: {entry['id']}: run {entry['run']} ({state})")
-        print(f"laniakea: serving {url} (Ctrl+C or make down stops)",flush=True)
         if not args.no_browser:webbrowser.open(url)
+        print(f"laniakea: serving {url} (Ctrl+C or python laniakea.py down stops)",flush=True)
+        owner.ready(server)
         server.serve_forever()
     except KeyboardInterrupt:
         pass

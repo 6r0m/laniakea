@@ -71,6 +71,36 @@ class ViewerLifecycle(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()),contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(cli.main(['--workspace',str(self.workspace.root),'up','--no-browser']),2)
 
+    def test_blocked_browser_launch_keeps_starting_state_until_the_serving_loop(self):
+        entered=threading.Event();release=threading.Event();serving=threading.Event();results=[]
+        server=make_server(self.workspace);serve=server.serve_forever
+        def browser(_url):
+            entered.set()
+            if not release.wait(timeout=5):raise AssertionError('Browser launch was not released')
+        def loop():
+            serving.set();serve(poll_interval=.05)
+        def run():
+            try:results.append(cli.main(['--workspace',str(self.workspace.root),'up']))
+            except BaseException as error:results.append(error)
+        with patch.object(cli,'make_server',return_value=server),patch.object(cli.webbrowser,'open',side_effect=browser), \
+                patch.object(server,'serve_forever',side_effect=loop),contextlib.redirect_stdout(io.StringIO()):
+            worker=threading.Thread(target=run,daemon=True);worker.start()
+            try:
+                self.assertTrue(entered.wait(timeout=5))
+                self.assertEqual(read_json(self.workspace.root/'server.json'),{'version':1,'state':'starting'})
+                with patch.object(service.http.client,'HTTPConnection',side_effect=AssertionError('Starting viewer must not receive control requests')):
+                    with self.assertRaisesRegex(LaniakeaError,'still preparing'):service.stop(self.workspace,HOST)
+                release.set();self.assertTrue(serving.wait(timeout=5))
+                self.assertEqual(self.request(server,'GET','/')[0],200)
+                self.assertTrue(service.stop(self.workspace,HOST))
+            finally:
+                release.set()
+                if serving.wait(timeout=5) and worker.is_alive():server.shutdown()
+                worker.join(timeout=5);server.server_close()
+        self.assertFalse(worker.is_alive());self.assertEqual(results,[0])
+        self.assertFalse((self.workspace.root/'server.json').exists());self.assertTrue(service.idle(self.workspace))
+        self.assertEqual({p:p.read_bytes() for p in self.protected},self.protected)
+
     def test_stale_state_never_sends_stop_to_a_foreign_port(self):
         posts=[]
         class Foreign(BaseHTTPRequestHandler):
@@ -118,7 +148,7 @@ class ViewerLifecycle(unittest.TestCase):
         with patch.object(cli.pipeline,'extract',side_effect=AssertionError('up must not analyse')), \
                 contextlib.redirect_stdout(io.StringIO()),contextlib.redirect_stderr(io.StringIO()) as error:
             self.assertEqual(cli.main(['--workspace',str(self.workspace.root/'empty'),'up','--no-browser']),2)
-        self.assertIn('make build',error.getvalue())
+        self.assertIn('python laniakea.py build',error.getvalue())
 
     def test_cancelled_viewer_preparation_releases_ownership_without_changing_saved_maps(self):
         with patch.object(cli,'make_server',side_effect=KeyboardInterrupt),contextlib.redirect_stdout(io.StringIO()), \

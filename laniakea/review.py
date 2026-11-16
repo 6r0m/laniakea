@@ -3,9 +3,9 @@
 
 import hashlib
 import json
-from collections import defaultdict, deque
+from collections import Counter, defaultdict, deque
 
-from . import health, review_policy
+from . import review_policy
 
 VERSION = 1
 NATIVE_FINGERPRINT_VERSION = 3
@@ -61,6 +61,39 @@ def loop(members, adjacency):
             if b not in parents:
                 parents[b]=a; pending.append(b)
     return []
+
+
+def _duplication(data,rule,selected,check,emit):
+    if data is None:
+        check.update(status='unavailable',detail='Source duplication was not recorded; explicitly request --health duplication.')
+        return
+    minimum=rule.get('minimum_tokens',100)
+    if minimum<data['minimum_tokens']:
+        check.update(status='unavailable',detail='Threshold is below collected coverage; extract health again with a lower collection threshold.')
+        return
+    scope=', '.join(data['scope']['prefixes']) or 'all in-target project source'
+    missing=len(selected-set(data['scope']['modules']))
+    check.update(status='partial',detail=f"Strict raw-source matches, minimum {data['minimum_tokens']} tokens; "
+                 f"{len(data['files'])} collected files in {scope}. {missing} selected modules have no collected files. "
+                 'Semantic equivalence, active preprocessing branches and runtime use are not established.')
+    check['recorded_modules']=data['scope']['modules']
+    for group in data['groups']:
+        if group['tokens']<minimum:continue
+        occurrences=[o for o in group['occurrences'] if data['files'][o['path']]['owner'] in selected]
+        if len(occurrences)<2:continue
+        subjects=sorted({data['files'][o['path']]['owner'] for o in occurrences})
+        counts=Counter(o['path'] for o in occurrences)
+        relationships=[('file',path,count) for path,count in sorted(counts.items())]
+        relationships.extend([('tokens',group['fingerprint'],group['tokens']),
+                              ('provider',data['provider']['id'],data['provider']['version'],data['provider']['identity'])])
+        evidence=[{'root':'project',**o,'sha256':data['files'][o['path']]['sha256'],
+                   'owner':data['files'][o['path']]['owner']} for o in occurrences]
+        emit(rule,subjects,relationships,[],len(occurrences),'candidate','Duplicated source tokens',
+             'Inspect the matching ranges and intended ownership. The same tokens can be intentional; no automatic refactoring is implied.',[],
+             identity=group['fingerprint'],extra={'category':'Duplication','evidence_type':'source',
+             'evidence_total':len(evidence),'source_evidence':evidence,'token_count':group['tokens'],
+             'limits':['Raw authored source; preprocessing branches may differ from the selected target.',
+                       'Recorded snapshot ranges; current source edits may move these locations.']})
 
 
 def evaluate(nodes, rows, manifest, policy, adapter=None, health_data=None):
@@ -164,7 +197,7 @@ def evaluate(nodes, rows, manifest, policy, adapter=None, health_data=None):
         if check['status']=='unavailable':
             continue
         if rule['kind']=='duplication':
-            health.evaluate(health_data,rule,set(check['matched']['scope']),check,finding)
+            _duplication(health_data,rule,set(check['matched']['scope']),check,finding)
             continue
         if rule['kind']=='native':
             if not facts['native']:

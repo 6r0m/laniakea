@@ -3,6 +3,8 @@
 
 import copy
 import json
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -10,6 +12,7 @@ from unittest.mock import patch
 import test_review as review_fixture
 from laniakea import LaniakeaError
 from laniakea.workspace import write_json
+from support import ROOT
 
 
 def observations():
@@ -41,6 +44,26 @@ class SourceHealth(unittest.TestCase):
         self.data=observations() if data is None else data
         self.manifest['health']=health.write(self.run,self.data,self.graph['nodes'])
         write_json(self.run/'manifest.json',self.manifest)
+
+    def test_artifact_validation_and_loading_do_not_import_review(self):
+        self.install()
+        program='''
+import copy,json,sys
+sys.modules['laniakea.review']=None
+sys.modules['laniakea.review_policy']=None
+from laniakea import health
+run,manifest,data=json.load(sys.stdin)
+assert health.validate(data)==data
+assert health.load(run,manifest)==data
+invalid=copy.deepcopy(data);invalid['unexpected']=True
+try:health.validate(invalid)
+except ValueError:pass
+else:raise AssertionError('Unknown evidence fields were accepted')
+'''
+        result=subprocess.run([sys.executable,'-c',program],cwd=ROOT,
+                              input=json.dumps([str(self.run),self.manifest,self.data]),
+                              capture_output=True,text=True,timeout=10)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
 
     def test_clones_are_candidates_with_paged_source_evidence_and_no_fake_edges(self):
         self.install();before=copy.deepcopy(self.graph)

@@ -27,7 +27,7 @@ class Owner:
 
 @contextmanager
 def running(workspace):
-    with writer_lock(workspace.root/'server.lock','Laniakea is already starting or running in this workspace; run make down first.'):
+    with writer_lock(workspace.root/'server.lock','Laniakea is already starting or running in this workspace; run python laniakea.py down first.'):
         owner=Owner(workspace)
         try:
             write_json(owner.path,{'version':1,'state':'starting'})

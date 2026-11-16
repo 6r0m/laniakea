@@ -51,7 +51,7 @@ async function start() {
   document.querySelector('.skip').onclick = event => { event.preventDefault(); $('map').focus(); };
   state.targets = await getJson('/data/targets.json');
   if (!state.targets.length) {
-    $('graph').append(el('p', 'No saved map yet. Run: make build PROJECT=<path to .uproject>, then make up', { class: 'empty' }));
+    $('graph').append(el('p', 'No saved map yet. Run: python laniakea.py build <path to .uproject>, then python laniakea.py up', { class: 'empty' }));
     for (const id of ['target', 'layout', 'find', 'inspect-project']) $(id).disabled = true;
     document.querySelector('.scope-bar').hidden = true;
     $('coverage').textContent = 'No analysis loaded';
@@ -283,7 +283,7 @@ function renderBanner() {
   if (t.stale) {
     const details = el('details');
     details.append(el('summary', `Snapshot out of date: ${t.changed_count} inputs changed`),
-      el('p', `Showing run ${t.run}. Run: python laniakea.py build ${t.id}; then make down and make up to load the new map.`));
+      el('p', `Showing run ${t.run}. Run: python laniakea.py build ${t.id}; then python laniakea.py down and python laniakea.py up to load the new map.`));
     const changed = el('ul');
     for (const path of t.changed) changed.append(el('li', path));
     details.append(changed);
