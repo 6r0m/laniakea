@@ -1,10 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""The one registry of language profiles.
-
-A profile is a module with NAME, project_file(reference), target_fields(project, engine, target), default_id(project),
-inputs(target, manifest=None) and extract(target, run_dir, previous_manifest=None, tools_dir=None) -> (graph, manifest fields). Adding a language means one adapter and
-one line here.
-"""
+"""Language profile registration and project detection; adapters own their extraction interfaces."""
 
 from . import LaniakeaError, unreal
 

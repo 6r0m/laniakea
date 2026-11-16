@@ -3,6 +3,15 @@
 Run these synthetic regression checks from the repository root. Native/Engine checks are conditional; a skip does
 not verify that path.
 
+## First checks
+
+These use synthetic data and need no Unreal Engine, LLVM or Java:
+
+```text
+python -m unittest discover -s tests -p test_documentation.py
+python -m unittest discover -s tests -p test_shards.py
+```
+
 ## Automated checks
 
 ```text
@@ -12,6 +21,8 @@ node --test tests/review.test.cjs
 ```
 
 Python 3.9+ needs no extra packages. Viewer unit tests need Node.js 18+; Node is not a runtime requirement for Laniakea.
+`test_commands.py` exercises CLI dispatch and, when Make is installed, its aliases and argument forwarding. `test_service.py` verifies owned shutdown,
+foreign-instance refusal, startup/cancellation cleanup and saved-map preservation using loopback synthetic servers.
 Documentation-only edits can use `python -m unittest discover -s tests -p test_documentation.py` for local link/anchor
 and durable/transient dependency checks. Run the privacy checks before publishing; follow [repository rules](../AGENTS.md).
 
@@ -20,7 +31,7 @@ and durable/transient dependency checks. Run the privacy checks before publishin
 | `LANIAKEA_TEST_ENGINE=<engine root>` | Real-engine integration when the sample's engine does not otherwise resolve |
 | `LANIAKEA_TEST_LIBCLANG=<libclang.dll>` | Pinned LLVM 21.1.8 class/function, call-role, inheritance, override, ownership and edit regressions |
 | `LANIAKEA_TEST_CLANGD_INDEXER=<clangd-indexer.exe>` | Pinned 21.1.8 compiler-argument/adjacent-PCH regression; not the production symbol extractor |
-| `LANIAKEA_TEST_CPD=<workspace>/tools/health/cpd` | Real pinned CPD matches/ranges, token identity, scoped scans, corpus edits, reuse, lexical failure and timeout refusal after offline setup |
+| `LANIAKEA_TEST_CPD=<workspace>/tools/health/cpd` | Real pinned CPD matches/ranges, token identity, scope, corpus edits, reuse and refusal; offline reinstall also runs when the registered JDK compiler is available |
 
 `python tests/record_fixture.py [--engine <engine root>]` regenerates the sample's recorded UBT export when the sample
 changes. Review the tokenized fixture before publishing; analysed-project data never belongs in tracked tests.

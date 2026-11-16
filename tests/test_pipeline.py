@@ -45,7 +45,7 @@ class Pipeline(unittest.TestCase):
 
     def test_cli_symbols_are_an_explicit_per_run_choice(self):
         self.assertFalse(cli.parser().parse_args(['extract', 'sample']).symbols)
-        self.assertTrue(cli.parser().parse_args(['up', 'sample', '--symbols']).symbols)
+        self.assertTrue(cli.parser().parse_args(['build', 'sample', '--symbols']).symbols)
 
     def test_run_is_complete_before_latest_moves(self):
         run, manifest = self.extract()

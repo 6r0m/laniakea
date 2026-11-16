@@ -27,7 +27,8 @@ How `laniakea/unreal/` reads a project, and the engine behaviour it is built aro
 - Build inputs for freshness: the `.uproject`, each `.uplugin`, and every `*.Build.cs` and `*.Target.cs` under `Source/`
   and `Plugins/`.
 - Authored C++ source/header contents participate in freshness for native-symbol runs and explicitly requested source-health
-  runs, including declared project plugin junctions. Health-only freshness follows its collected prefixes. Ordinary
+  runs, including declared project plugin junctions. Health-only freshness conservatively includes out-of-target source
+  under the requested prefixes. Ordinary
   module-only runs fingerprint build inputs and receipt metadata without scanning C++ bytes.
 - Native jobs hash the compiler's actual input buffers, including generated and external headers. External hashes enter
   manifest freshness; conflicting bytes for one external input abort normalization.
@@ -167,7 +168,7 @@ The disposable read index additionally derives concrete implementation-file navi
 and reference locations. It uses source partition hints for visibility and can identify a definition in a different
 file as implementation context without inferring C++ access. A mixed namespace is not assigned wholesale to its first
 observed file. File exploration and its one-symbol definition links follow the generic
-[continuous-map contract](graph-model.md#continuous-map).
+[continuous-map contract](viewer.md#continuous-map).
 
 Named, nested and reopened namespaces provide real owners between modules and their declarations. A namespace's new
 graph identity combines its compiler identity with the owning module; the same shared namespace cannot merge modules.
@@ -265,7 +266,9 @@ use target excludes for vendor source inside an otherwise selected module. This 
 LLVM and of which preprocessing branches compile. It does not infer function ownership from line proximity.
 
 Offline `setup-health` copies the supplied PMD libraries and notices into the ignored workspace and compiles the small
-CPD API adapter with a supplied JDK 11+. The installation pins hashes of libraries, adapter and Java executable. No host
+CPD API adapter with a supplied JDK 11+. The installation pins hashes of libraries, adapter and Java executable. Its
+complete file inventory must match the tool manifest; additional files are refused before reuse or execution. Reinstall
+replaces the library and generated-class directories, so obsolete classpath entries do not survive setup. No host
 installation, network download, source modification or tool invocation occurs during ordinary extraction or map opening.
 See [third-party terms](../../THIRD_PARTY.md) and [operator commands](../guide.md#collect-source-duplication).
 
@@ -330,7 +333,7 @@ metadata reuse are scoped to one normalization, not a second persistent ownershi
 - **Overview presentation.** The profile names the existing Engine boundary as the optional layout anchor and identifies
   `requires` as configuration only when its original source is the project root. Plugin-to-plugin `requires` edges remain
   dependency declarations. This changes no node ownership or extraction depth; generic presentation behavior belongs to
-  [the graph model](graph-model.md#centered-overview-and-configuration).
+  [the viewer contract](viewer.md#centered-overview-and-configuration).
   Descriptor discovery, explicit enable/disable declarations, `EnabledByDefault`, evaluated module presence and observed
   code references describe different evidence. Project configuration is not the exhaustive list of enabled or available
   plugins: target rules and defaults can also participate. The profile does not infer complete effective enablement;

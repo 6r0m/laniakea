@@ -108,4 +108,4 @@ The existing localhost server supplies paged findings and accepts same-origin bo
 Review failure does not prevent normal map serving or publication. Review never starts a source analyzer; no native tools load for module-only review.
 All learned information and decisions remain in the ignored workspace, with no runtime network access.
 
-Presentation and inspection are owned by the [graph contract](graph-model.md#review-presentation).
+Presentation and inspection are owned by the [viewer contract](viewer.md#review-presentation).

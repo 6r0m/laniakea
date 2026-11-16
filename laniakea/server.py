@@ -16,7 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from . import LaniakeaError, map_index, pipeline
+from . import LaniakeaError, map_index, pipeline, service
 from .layouts import LayoutStore
 from .review_store import Review, Conflict
 from .workspace import read_json
@@ -147,6 +147,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(403, b"forbidden origin or host\n")
         try:
             path = unquote(urlsplit(self.path).path)
+            if path==service.STOP:return service.control(self,stop=True)
             if path.startswith('/map/'):
                 view = self._view(path)
                 if view is None or view[1] not in {'references','review'}:
@@ -188,6 +189,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self._local():
             return self._send(403, b"forbidden host\n")
         path = unquote(urlsplit(self.path).path)
+        if path==service.INSTANCE:return service.control(self)
         if path.startswith('/map/'):
             view = self._view(path)
             if view is None:

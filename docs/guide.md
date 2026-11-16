@@ -15,21 +15,21 @@ Trace dependencies to source, explore public contracts and inspect the evidence 
 
 ## Open a project
 
-Run `python laniakea.py up path/to/YourProject.uproject` for module dependencies and plugin descriptors.
-Later, `python laniakea.py up` or `make up` extracts the newest project again; `python laniakea.py serve` reopens published maps and
-checks freshness without extracting. The default address is **http://127.0.0.1:8737/**. Use `--port <n>` to change it,
-or `--port 0` for a free port if the default is occupied.
+Use the [Make shortcuts](../Makefile) (`make help`) to build a map, then open the saved result. For Python commands,
+options and defaults, run `python laniakea.py --help` or `python laniakea.py <command> --help`.
 
-The latest usable successful-build receipt selects target/configuration; `--target <name>` fixes the target.
-Without a usable receipt, module extraction uses Development with the explicit target, or Editor by default.
-Receipts select build context, not historical sources: the graph describes current rules and sources. See
-[build-context selection](architecture/unreal-profile.md#build-context).
+`up` stays in the foreground. Stop it with Ctrl+C or `make down` from another terminal. After source changes, run
+`make build`; restart an already running viewer with `make down`, then `make up` to display the new snapshot.
+
+The displayed target/configuration describes the selected [build context](architecture/unreal-profile.md#build-context).
+Check it before interpreting the map: a saved run does not prove that current sources compiled.
 
 For namespaces, classes, functions and static references, supply local LLVM 21.1.8 tools and request native analysis:
 
 ```text
 python laniakea.py setup-symbols --libclang <llvm>/bin/libclang.dll --resources <llvm>/lib/clang/21 --compiler <llvm>/bin/clang-cl.exe
-python laniakea.py up --symbols
+make build ARGS="--symbols"
+make up
 ```
 
 Setup copies tools into `workspace/` without downloading. The optional `--compiler` enables preprocessing-validated
@@ -78,7 +78,7 @@ Public and implementation bands after confirmation; other scopes and layout mode
 ## Trace a dependency to its cause
 
 Open the [synthetic sample](../sample/SampleProject/SampleProject.uproject) with
-`python laniakea.py up sample/SampleProject/SampleProject.uproject` when its Engine resolves.
+`make build PROJECT=sample/SampleProject/SampleProject.uproject`, then `make up`, when its Engine resolves.
 
 1. Open the `SampleGameplay` module and hover its connection toward `SampleCore`. Read the direction and reference types.
 2. Inspect the public module dependency. Open its `Build.cs` link and check the evaluated declaration.
@@ -148,13 +148,14 @@ and a JDK 11+ locally, then explicitly request strict C++ duplication:
 
 ```text
 python laniakea.py setup-health --pmd <pmd-bin-7.29.0> --java <jdk>/bin/java.exe
-python laniakea.py up --health duplication
+make build ARGS="--health duplication"
+make up
 ```
 
 Add `--symbols` to retain native classes/functions in a newly extracted map. Without it, the new map is module-only.
-Use repeated `--health-scope Source --health-scope Plugins/Example` to limit the scan. The default collection floor is
-100 tokens per occurrence; `--health-minimum-tokens <n>` changes that floor. Failed tools or source processing retain
-the last good map and identify the diagnostic log. Narrow scope explicitly rather than silently ignoring a failed file.
+Use the build command's health-scope options to bound the scan and its minimum-token option to choose the collection floor.
+Failed tools or source processing retain the last good map and identify the diagnostic log. Narrow scope explicitly
+rather than silently ignoring a failed file.
 
 Yellow **Duplication** candidates mark recorded files or modules. Click a marked item or Review-list entry, then open
 **Exact evidence** for paged source ranges and editor links. These matches can be intentional or in inactive branches;

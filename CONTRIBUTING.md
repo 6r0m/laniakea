@@ -14,20 +14,13 @@ and core-logic contributions; Unreal Engine and LLVM are optional.
    git switch -c improve-map-guide
    ```
 
-2. Run these synthetic checks from the repository root:
-
-   ```text
-   python -m unittest discover -s tests -p test_documentation.py
-   python -m unittest discover -s tests -p test_shards.py
-   ```
-
+2. Run the [first checks](tests/README.md#first-checks) from the repository root; they need no Unreal Engine or LLVM.
 3. Keep one problem per change. Discuss broad features or new dependencies in an issue first; small corrections
    need no issue. For bugs, add a regression that fails before the fix when practical.
 4. Run the relevant checks, then open a pull request against `develop`. Explain the problem, resulting behavior,
    reproduction and verification, including checks not run. Use only synthetic screenshots for visual changes.
 
-Python checks need no extra packages. Node.js 18+ runs the viewer unit suite. See [verification](tests/README.md)
-for commands and optional native checks. Full Python discovery can run real Engine integration tests when an Engine resolves.
+The [verification guide](tests/README.md) owns test prerequisites, commands and optional native checks.
 
 ## Find the right owner
 

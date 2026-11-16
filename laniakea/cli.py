@@ -7,7 +7,7 @@ import webbrowser
 from pathlib import Path
 from time import perf_counter
 
-from . import LaniakeaError, __version__, pipeline, profiles
+from . import LaniakeaError, __version__, pipeline, profiles, service
 from .server import DEFAULT_PORT, HOST, make_server
 from .workspace import DEFAULT_ROOT, Workspace
 
@@ -37,7 +37,7 @@ def _target(workspace, reference, engine, name, target):
 
 def _extract(args, workspace):
     target = _target(workspace, args.project, args.engine, args.name, args.target)
-    print(f"laniakea: extracting {target['project_file']}")
+    print(f"laniakea: building map for {target['project_file']}")
     print(f"laniakea: engine {target['engine_root']}")
     if not args.health and (args.health_scope or args.health_minimum_tokens!=100):
         raise LaniakeaError('--health-scope and --health-minimum-tokens require --health duplication')
@@ -54,18 +54,25 @@ def _extract(args, workspace):
 
 
 def _serve(args, workspace):
+    if not any(workspace.latest(t['id']) for t in workspace.targets()):
+        raise LaniakeaError('no saved map; run make build PROJECT=<project> first')
+    with service.running(workspace) as owner:
+        _run_server(args,workspace,owner)
+
+
+def _run_server(args,workspace,owner):
     started = perf_counter()
     print('laniakea: checking freshness and preparing map views...', flush=True)
     server = make_server(workspace, args.port)
-    print(f'laniakea: serve preparation: {perf_counter()-started:.3f}s')
-    url = f"http://{HOST}:{server.server_address[1]}/"
-    for entry in server.index:
-        state = f"STALE, {entry['changed_count']} build input(s) changed" if entry["stale"] else "fresh"
-        print(f"laniakea: {entry['id']}: run {entry['run']} ({state})")
-    print(f"laniakea: serving {url} (Ctrl+C stops)")
-    if not args.no_browser:
-        webbrowser.open(url)
     try:
+        owner.ready(server)
+        print(f'laniakea: viewer preparation: {perf_counter()-started:.3f}s')
+        url = f"http://{HOST}:{server.server_address[1]}/"
+        for entry in server.index:
+            state = f"STALE, {entry['changed_count']} build input(s) changed" if entry["stale"] else "fresh"
+            print(f"laniakea: {entry['id']}: run {entry['run']} ({state})")
+        print(f"laniakea: serving {url} (Ctrl+C or make down stops)",flush=True)
+        if not args.no_browser:webbrowser.open(url)
         server.serve_forever()
     except KeyboardInterrupt:
         pass
@@ -95,11 +102,9 @@ def parser():
                              help=f"port on 127.0.0.1; default {DEFAULT_PORT}, 0 picks a free one")
         command.add_argument("--no-browser", action="store_true", help="do not open a browser")
 
-    project_options(commands.add_parser("extract", help="export a project into a new run"))
-    serve_options(commands.add_parser("serve", help="serve every extracted project on 127.0.0.1"))
-    up = commands.add_parser("up", help="extract, then serve")
-    project_options(up)
-    serve_options(up)
+    project_options(commands.add_parser('build',aliases=['extract'],help='analyse a project and save a new map'))
+    serve_options(commands.add_parser('up',aliases=['serve'],help='open saved maps without analysing sources'))
+    commands.add_parser('down',help='stop the viewer owned by this workspace')
     setup = commands.add_parser("setup-symbols", help="install the pinned local symbol compiler into the workspace (offline)")
     setup.add_argument("--libclang", required=True, help="LLVM 21.1.8 libclang.dll")
     setup.add_argument("--resources", required=True, help="LLVM's lib/clang/21 resource directory")
@@ -122,11 +127,17 @@ def main(argv=None):
             from .unreal import tools
             tools.install(workspace.root / "tools" / "unreal", args.libclang, args.resources, args.compiler)
             print(f"laniakea: installed local symbol tools {tools.VERSION}")
-        if args.command in ("extract", "up"):
+        if args.command in ('build','extract'):
             _extract(args, workspace)
-        if args.command in ("serve", "up"):
+        if args.command in ('up','serve'):
             _serve(args, workspace)
+        if args.command=='down':
+            stopped=service.stop(workspace,HOST)
+            print('laniakea: viewer stopped' if stopped else 'laniakea: viewer is already stopped')
     except LaniakeaError as error:
         print(f"laniakea: error: {error}", file=sys.stderr)
         return 2
+    except KeyboardInterrupt:
+        print('laniakea: cancelled',file=sys.stderr)
+        return 130
     return 0

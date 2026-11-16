@@ -151,7 +151,7 @@ async (page) => {
       check(await warning.evaluate(node=>node.getBoundingClientRect().height<=70),'Collapsed staleness consumes the desktop map');
       await summary.click();
       check(await disclosure.evaluate(node=>node.open&&node.querySelectorAll('li').length===40&&
-        node.textContent.includes('SyntheticComponent39.cpp')&&node.textContent.includes('python laniakea.py extract sample')),
+        node.textContent.includes('SyntheticComponent39.cpp')&&node.textContent.includes('python laniakea.py build sample')),
         'Expanding staleness lost exact diagnostics or its recovery action');
       await summary.focus();await page.keyboard.press('Enter');
       check(await disclosure.evaluate(node=>!node.open),'Stale diagnostics cannot be collapsed by keyboard');

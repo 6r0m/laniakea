@@ -32,21 +32,11 @@ This repository is public. An analysed project may be private, and its owner may
   folder outside this clone; never use a relative screenshot filename.
 - Commits and pushes belong to the maintainer. Agents run them only when the current request names the operation.
 
-## Commands
+## Task routes
 
-```text
-python laniakea.py up [<project>]        extract, then serve; a .uproject, its folder, a target id, or the newest
-make up [PROJECT=<project>]              the same through make
-python laniakea.py extract <project>     [--engine <root>] [--name <id>] [--target <name>]
-python laniakea.py extract <project> --symbols  include native classes/functions for this extraction
-python laniakea.py serve                 [--port <n>, default 8737] [--no-browser]
-python laniakea.py setup-symbols          --libclang <llvm>/bin/libclang.dll --resources <llvm>/lib/clang/21
-python laniakea.py setup-health           --pmd <pmd-bin-7.29.0> --java <jdk>/bin/java.exe (offline, optional)
-python laniakea.py extract <project> --health duplication  explicit strict source clones; add --symbols for native detail
-python -m unittest discover -s tests     whole suite; engine tests run when the sample's engine resolves
-python tests/record_fixture.py           re-record fixtures/sample.ubt.json after changing the sample
-```
-
-Set `LANIAKEA_TEST_ENGINE=<engine root>` to run the engine tests against a specific engine.
-Set `LANIAKEA_TEST_LIBCLANG=<libclang.dll>` for native symbol regressions. LLVM 21.1.8 is pinned; setup copies supplied
-tools into the ignored workspace and never installs a host-wide tool. Compiler action export runs only in a marked copy.
+| task | owner |
+|---|---|
+| run commands | [Makefile](Makefile), through `make help`; Python options through `python laniakea.py --help` |
+| setup and exploration | [user guide](docs/guide.md) |
+| checks, optional tools and fixture recording | [verification](tests/README.md) |
+| graph and viewer contracts | [architecture](docs/architecture/README.md) |

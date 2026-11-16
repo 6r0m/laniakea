@@ -2,166 +2,91 @@
 
 ## Purpose
 
-Explore Unreal C++ structure progressively, with typed dependencies, source links and optional review of recorded
-concerns against local constraints. Views are generated from source and build rules; the analysed project needs no
-Laniakea installation, configuration or committed files.
+Connect recorded Unreal C++ facts to a progressively explorable map and optional architecture review. The analysed
+project needs no Laniakea installation or integration.
 
 ## Owns
 
-- Joining the facts other tools already own into one graph, and saying how complete it is.
-- The graph schema v1 and its meaning ([graph-model.md](graph-model.md)).
-- The ignored workspace, the only place anything learned about an analysed project is written.
-- The viewer, and the loopback server that feeds it.
+- Validated publication of extracted facts and explicit coverage.
+- Independent lifetimes for immutable runs, disposable views and local user decisions.
+- The local exploration and review application.
 
 ## Does not own
 
-- Any fact about the analysed project. Module dependencies belong to Unreal Build Tool's evaluation of `Build.cs` and
-  `Target.cs`, and plugin ownership to the `.uplugin` and `.uproject` descriptors. Laniakea reads them; it never
-  edits, infers or overrides them.
-- The engine and its tools. Their behaviour that matters here is recorded in [unreal-profile.md](unreal-profile.md).
-- Publishing safety of the analysed project. Its own repository owns that; Laniakea only guarantees it writes nothing
-  there itself. Unreal Build Tool's own cache refreshes are listed in [unreal-profile.md](unreal-profile.md).
+- Project semantics or build rules: these belong to the analysed project and its tools. The
+  [Unreal profile](unreal-profile.md) defines the read boundary and permitted tool-side effects.
+- Runtime behavior or an overall architecture grade: recorded evidence cannot establish either.
+- Publishing safety of an analysed project: its repository owns that process. Laniakea's own
+  [privacy rules](../../AGENTS.md#privacy-never-violate) govern this clone.
 
 ## Composition
 
-- **CLI** (`laniakea/cli.py`): the `extract`, `serve` and `up` commands; resolves a path or id to a target.
-- **Pipeline** (`laniakea/pipeline.py`): runs a profile into a new run folder, validates every output, then switches
-  `latest.json`; computes freshness.
-- **Workspace** (`laniakea/workspace.py`): target registration and run folders under `workspace/`.
-  An operating-system lock permits one extraction writer per target's mutable compiler copy.
-- **Profiles** (`laniakea/profiles.py`): the one registry of language profiles.
-- **Unreal profile** (`laniakea/unreal/`): engine resolution, the UBT calls, descriptors, and the graph builder. See
-  [unreal-profile.md](unreal-profile.md).
-- **Shards** (`laniakea/shards.py`): the drill-down scopes and their summaries, plus the index used to find nodes;
-  language-neutral.
-- **Map read index** (`laniakea/map_index.py`): regenerable compact topology and indexed canonical reference pages;
-  language-neutral, separate from extraction authority and user positions. Its `source_files.py` helper derives file
-  membership and reference provenance from recorded source hints without reading or parsing source files.
-- **Schema** (`schema/graph.v1.schema.json`, validated by `laniakea/schema.py`): the shapes of graph, shard and
-  manifest.
-- **Server** (`laniakea/server.py`) and **viewer** (`viewer/`, Cytoscape.js): presentation and saved user positions.
-  `app.js` owns startup and HTML controls; `universe.js` owns hierarchy, reference projection and world positions;
-  `sections.js` derives source/header regions without changing canonical ownership; `traces.js` calculates hover and
-  inspection directions; `context.js` shares declaration context and qualified lookup; `map.js` renders the canvas
-  and hover; `icons.js` decorates native nodes; `scene.js` owns camera navigation;
-  `positions.js` loads and saves released pins in order; `references.js` owns bounded reference-page
-  retention and cancellation. `inspector.js` owns accessible tab presentation, independently of selection and data.
-  See [viewport and memory lifetime](graph-model.md#viewport-and-memory-lifetime).
-  Project configuration uses existing inspection and projected-node annotations, as defined by
-  [configuration context](graph-model.md#centered-overview-and-configuration).
-- **Layout store** (`laniakea/layouts.py`): validated user positions under each target's `layouts/` directory in the
-  ignored workspace, separate from immutable runs. Updates merge moved pins; resetting affects one scope and mode.
-- **Review** (`laniakea/review.py`, `review_policy.py`, `review_store.py`): indexed architecture analysis and optional
-  source observations validated by `health.py`,
-  report caching and local triage. Its [review contract](review.md) owns applicability and decision lifetimes;
-  `viewer/review.js` supplies the controls and passive badges.
-- **Sample, fixtures, tests** (`sample/`, `fixtures/`, `tests/`): a synthetic project with no engine code, its recorded
-  UBT export, a hand-written non-Unreal graph, and the test suite.
+| part | responsibility |
+|---|---|
+| [CLI](../../laniakea/cli.py) | command parsing and dispatch; [Makefile](../../Makefile) supplies shortcuts |
+| [Viewer lifecycle](../../laniakea/service.py) | workspace ownership and authenticated graceful stop |
+| [Pipeline](../../laniakea/pipeline.py) | validate and publish runs, coordinate optional analysis and freshness |
+| [Workspace](../../laniakea/workspace.py) | target registration, run storage and extraction-writer coordination |
+| [Profile registry](../../laniakea/profiles.py) | select the language adapter |
+| [Unreal profile](unreal-profile.md) | engine/tool integration and normalization |
+| [Graph contract](graph-model.md) | canonical meaning, coverage and generated scope semantics |
+| [Schema](../../schema/graph.v1.schema.json) | graph, shard and manifest shapes |
+| [Shards](../../laniakea/shards.py) | generated scope summaries and address index |
+| [Read index](../../laniakea/map_index.py) | disposable compact topology and exact-reference queries |
+| [Server](../../laniakea/server.py) | loopback delivery of pinned data and validated local writes |
+| [Viewer](viewer.md) | continuous projection, navigation, tracing and inspection |
+| [Layout store](../../laniakea/layouts.py) | validated positions independent of extracted runs |
+| [Review](review.md) | rules, source evidence, report caching and durable triage |
+| [Verification](../../tests/README.md) | synthetic regressions, native checks and browser acceptance |
 
 ## Relationships
 
-See the [component relationships](diagrams/main.md).
+The [main view](diagrams/main.md) owns the component relationships. Adapter interfaces are owned by the
+[registry](../../laniakea/profiles.py), [pipeline consumer](../../laniakea/pipeline.py) and
+[implemented profile](../../laniakea/unreal/__init__.py).
 
-Through the profile contract: a profile is a module with `NAME`, `project_file`, `target_fields`, `default_id`,
-`inputs(target, manifest=None)` and `extract(target, run_dir, previous_manifest=None, tools_dir=None, health_options=None)`. The previous successfully published manifest is
-read-only context; retention and optional local-tool policy belong to its profile. Adding a language is one adapter and one registry line; the core and the viewer change
-nothing.
-The CLI's per-run `--symbols` request enables the pipeline to supply a tool directory. Ordinary extraction supplies none;
-installing a tool does not opt future extractions into compiler analysis.
-An explicit source-health request separately supplies optional collection settings. Its observations are validated before
-publication and do not change graph ownership or reference semantics. Profiles without that optional capability remain
-usable through ordinary extraction.
+Through the profile contract, extraction remains language-specific while validation and publication stay generic.
+Installing an optional tool does not authorize analysis; explicit collection failures retain the published map.
 
-The manifest's optional `timings_seconds` records elapsed phases. The profile supplies its extraction phases;
-the pipeline supplies profile execution, shard writing/validation and total time through graph serialization, before
-manifest validation/serialization and promotion. Parent phases contain their subphases, so values are not additive.
+**Decision:** language profiles, with only the Unreal adapter built.
+**Why:** other languages can reuse the graph and viewer without importing Unreal semantics.
 
-**Decision:** language profiles, with only the `unreal` profile built.
-**Why:** additional languages can reuse the core and viewer. `fixtures/generic.graph.json` exercises that boundary.
+Through the tool contracts, evaluated build rules and compiler observations remain evidence from their original owners.
 
-Through Unreal Build Tool's command line and LLVM's native indexing API: the Unreal profile owns compiler-facing preparation
-and normalization, with every learned output in the workspace. The viewer only consumes the language-neutral graph contract.
+**Decision:** reuse existing build/compiler tools and the renderer; keep canonical JSON authoritative.
+**Why:** Laniakea joins facts rather than maintaining another parser or authoritative database.
 
-**Decision:** reuse UBT's evaluated module graph and native compiler facts; build no custom parser, renderer or authoritative database.
-**Why:** UBT owns evaluated rules and the compiler owns semantic facts. A disposable SQLite index accelerates reads
-of canonical JSON without owning graph facts. See the [tool comparison](../prior-art.md).
-
-Through HTTP on 127.0.0.1, port 8737 unless `--port` says otherwise: the viewer reads `/data/targets.json` and run
-files. Content-bound `/map/` endpoints provide compact topology and bounded exact-reference queries. The
-`/layout/<target>/<scope file>` endpoint reads user positions; same-origin JSON POST requests update or
-reset them. Only targets and nodes in the server's advertised run can be written. The entry layout accepts the complete
-canonical graph for the continuous map; other scope layouts accept only nodes in that shard. Foreign origins, forms,
-unknown nodes and non-finite coordinates are refused without changing saved data.
-The server pins data requests to the runs advertised by its startup index, so a new extraction cannot mix a
-manifest and shards from different runs. Restart serving to load newly extracted runs. Entry-layout validation reuses
-the advertised run's node-id set; released drags do not reread the complete reference graph.
-
-Dragged positions use stable node ids, scoped by project and layout mode, in the entry layout. Both a star and
-its visible label accept dragging; hidden labels cannot intercept pointer input. A constellation drag translates
-its complete subtree and saves the moved pins on release. Large patches use bounded sequential UTF-8 requests with
-consumed responses and small acknowledgements, avoiding the browser's keepalive quota. Renderer positions are copies, so a live drag
-cannot mutate the saved arrangement before release. Request threads serialize merge and atomic JSON replacement.
-There is no polling or write per drag frame or wheel gesture. Fit, filtering, expansion and viewport resizing
-preserve positions. Missing nodes are ignored after regeneration; new nodes use automatic positions. Opening the
-map reads the workspace with HTTP caching disabled after outstanding saves finish. A failed save stays visible and
-pending/failed saves trigger the browser's leave-page guard. Saved positions do not change graph facts, extraction
-inputs, runs, or the analysed project.
-
-The viewer retains one scene while groups expand or fold. Universe owns containment and viewport detail;
-Cytoscape renders the resulting shapes and connections. Mouse
-wheel input is normalized by pixel, line or page units and changes zoom around the pointer; Ctrl+wheel remains
-browser zoom. Keyboard zoom and explicit group controls provide alternatives. The URL retains a scope address;
-browser history retains the camera and expansion state for navigation and reload. Graph data stays pinned to the
-advertised run. A fresh page reads saved pins from the server rather than treating browser storage as their owner.
+Through local HTTP, serving pins data to its advertised runs. Publishing a new run cannot mix old and new artifacts;
+a viewer restart adopts the new snapshot. Same-origin validation protects local writes.
+The viewer lifetime has one workspace owner. A stop request verifies that instance, preserves saved state and never
+kills an unrelated process based on its port or PID. Startup failure and cancellation release ownership.
 
 ## Invariants
 
-1. The analysed project gains no file, configuration, hook, link or ignore rule from Laniakea. The only writes there
-   are Unreal Build Tool's own caches, listed in [unreal-profile.md](unreal-profile.md); the engine integration test
-   fails on any other change.
-2. `-Mode=GenerateClangDatabase` is never run against an analysed project.
-3. Every edge carries its status and the manifest source that produced it.
-4. Absence is never rendered as proof: targets, levels and hops that were not analysed are named in the manifest and
-   shown by the viewer.
-5. Engine modules and plugins appear only as boundary nodes that a project node touches.
-6. The schema is the contract; raw tool output is not, and stays in the run folder.
-7. A run becomes `latest` only after its graph, every shard and the manifest validated and were written; a failed run
-   is kept as `.failed` for diagnosis.
-8. A run stays fresh only while its recorded build-input hashes match the project; the server marks a stale run. An
-   export naming another project is refused.
-9. Graph and shard source locations hold root-relative paths. Absolute source-link roots live in `target.json`;
-   external compiler-input fingerprint keys and raw compiler provenance retain host paths in the ignored workspace.
-10. No network at run time. The server binds 127.0.0.1 and answers only requests addressed to it.
-11. Tracked files never hold data from an analysed project; examples and fixtures come from the synthetic sample.
-12. Core, shards, schema and viewer contain no language-specific logic.
+- The [schema](../../schema/graph.v1.schema.json) owns shapes; raw tool output cannot bypass validation.
+- A run is published only after every required artifact validates. Failed runs remain available for diagnosis.
+- Canonical facts, disposable read/presentation caches, positions and review decisions have separate owners.
+- Core, schema, shards and viewer remain language-neutral. Coverage limits remain observable.
+- Source locations are root-relative; machine-specific roots and raw provenance stay in the ignored workspace.
+- Runtime resources stay local; host/origin checks protect the loopback boundary.
 
-**Decision:** the analysed project is a black box, and all project data lives in the clone's ignored `workspace/`.
-**Why:** full decoupling in both directions; one visible folder is simple to inspect and delete.
+**Decision:** treat the analysed project as a black box and retain learned data only in the ignored workspace.
+**Why:** the tool and project remain independently usable and removable. The
+[repository rules](../../AGENTS.md) enforce privacy and unsafe-tool restrictions.
 
-**Decision:** Windows only.
-**Why:** the maintainer's target platform; Linux and Mac are not targets, so no code path serves them.
+**Decision:** Windows only, Python standard library core and vendored viewer dependencies.
+**Why:** this is the supported platform and avoids additional core packages or runtime downloads.
 
-**Decision:** Python standard library only, and Cytoscape.js vendored, not fetched.
-**Why:** no extra Python packages or runtime network resources are required.
-
-**Decision:** GNU AGPL-3.0-or-later.
-**Why:** the maintainer's choice, so that modified versions stay open, including when offered over a network.
+**Decision:** [AGPL-3.0-or-later](../../LICENSE).
+**Why:** modified versions remain open, including when offered over a network.
 
 ## Risks and technical debt
 
-- **One target per run.** The Unreal profile selects receipt-backed build context when available, as specified in
-  [unreal-profile.md](unreal-profile.md#build-context); other targets are named as not analysed. A launcher
-  engine refuses Client and Server targets, so their graphs need a source-built engine.
-- **Summaries hide detail by design.** Above the module level, edges are summaries; the exact edges behind one are
-  listed completely in its details, including references internal to a collapsed group. A summary of module use can disagree with the
-  declared `requires`, and both are shown rather than reconciled.
-- **Wide scopes.** A project without plugin folders puts every plugin in one scope, and a flat scope of a few
-  hundred nodes is hard to read in any layout. The continuous map reveals local detail while keeping other groups collapsed.
-  [Caption fitting and readable-name access](graph-model.md#viewport-and-memory-lifetime) preserve navigation when names collide.
-  Very wide groups may still require more zoom or a name search to distinguish their contents.
-  The viewport evicts distant detail without forgetting expansion. Unchanged projections retain their renderer elements;
-  exact reference pages have bounded retention. A single exceptionally dense local view still costs more to draw than a sparse one.
-- **Native extraction cost.** Class/function analysis parses current compilation units with optional local LLVM tools.
-  Preparing native unity/PCH actions avoids reparsing each source separately. Serving an existing run does not start a compiler.
-- **Export scale.** Leaf and container scopes reuse reference indexes. Serialized scope artifacts still grow with the
-  hierarchy; the continuous map folds unrelated branches and retains exact references behind their visible summaries.
+- **Partial analysis.** One selected build context and recorded static evidence cannot prove global conformance.
+  Scope and unsupported facts are defined by the [Unreal profile](unreal-profile.md) and [Review](review.md).
+- **Dense views.** A very wide local scope remains harder to read and more expensive to render; the
+  [viewer contract](viewer.md#viewport-and-memory-lifetime) bounds retained detail without claiming constant draw cost.
+- **Native cost.** Compiler analysis can be expensive; its isolation and reuse belong to the
+  [native-analysis contract](unreal-profile.md#native-symbol-analysis).
+- **Export scale.** Generated shard artifacts grow with hierarchy size even though the read index avoids full-reference
+  downloads during exploration.

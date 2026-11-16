@@ -6,7 +6,10 @@ drawn.
 ```mermaid
 flowchart LR
     subgraph laniakea["laniakea clone"]
-        CLI["CLI: extract, serve, up"] -->|"profile contract"| Profile["unreal profile"]
+        CLI["CLI: build, up, down"] -->|"profile contract"| Profile["unreal profile"]
+        CLI -->|"viewer lifetime"| Lifecycle["local viewer lifecycle"]
+        Lifecycle -->|"instance identity and ownership lease"| Workspace
+        Lifecycle -->|"authenticated local stop"| Server
         CLI -->|"run folders, latest.json"| Workspace[("workspace/ (ignored)")]
         Profile -->|"schema v1 graph"| Shards["shards"]
         Shards -->|"schema v1 shards"| Workspace
