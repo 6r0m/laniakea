@@ -84,7 +84,7 @@ class Outcomes(unittest.TestCase):
         self.assertEqual(self.workspace.latest('sample'),run)
 
     def test_provider_failure_is_optional_only_in_auto_mode(self):
-        prepared=lambda options:(dict(options,minimum_tokens=100,prefixes=[]),
+        prepared=lambda options:(dict(options,minimum_tokens=100,prefixes=[],heap_mib=4096),
             {'provider':'pmd-cpd','mode':options['mode'],'minimum_tokens':100,'prefixes':[],
              'status':'pending','code':'prepared'})
         with patch('laniakea.unreal.source_health.prepare',side_effect=prepared), \
@@ -98,7 +98,7 @@ class Outcomes(unittest.TestCase):
             self.assertEqual(self.workspace.request('sample'),before)
 
     def test_unknown_failure_and_changed_corpus_never_become_optional_success(self):
-        prepared=({'mode':'auto','prefixes':[],'minimum_tokens':100},
+        prepared=({'mode':'auto','prefixes':[],'minimum_tokens':100,'heap_mib':4096},
             {'provider':'pmd-cpd','mode':'auto','minimum_tokens':100,'prefixes':[],'status':'pending','code':'prepared'})
         for error in (LaniakeaError('unknown failure'),cpd.Changed('superseded inputs')):
             with self.subTest(error=type(error).__name__),patch('laniakea.unreal.source_health.prepare',return_value=prepared), \

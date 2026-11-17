@@ -10,7 +10,13 @@ from . import LaniakeaError
 from .workspace import write_json
 
 MAX_BYTES=32*1024*1024
+MAX_GROUPS=20000
+MAX_OCCURRENCES=100000
 HEX=re.compile(r'[0-9a-f]{64}\Z')
+
+
+class Limit(ValueError,LaniakeaError):
+    """Complete observations exceed the bounded artifact contract, rather than fail validation."""
 
 
 def _fields(value,allowed):
@@ -56,8 +62,8 @@ def validate(data,nodes=None):
         if not isinstance(entry.get('sha256'),str) or not HEX.fullmatch(entry['sha256']) or entry.get('owner') not in selected:
             raise ValueError('invalid health source ownership or digest')
     groups=data.get('groups')
-    if not isinstance(groups,list) or len(groups)>20000:
-        raise ValueError('health observation limit reached')
+    if not isinstance(groups,list):raise ValueError('invalid health observations')
+    if len(groups)>MAX_GROUPS:raise Limit('health observation limit reached')
     identities=set();total=0
     for group in groups:
         _fields(group,{'fingerprint','tokens','occurrences'})
@@ -66,7 +72,7 @@ def validate(data,nodes=None):
                 type(count) is not int or count<data['minimum_tokens'] or not isinstance(occurrences,list) or len(occurrences)<2:
             raise ValueError('invalid duplicate observation')
         identities.add(identity);seen=set();total+=len(occurrences)
-        if total>100000:raise ValueError('source occurrence limit reached')
+        if total>MAX_OCCURRENCES:raise Limit('source occurrence limit reached')
         for occurrence in occurrences:
             _fields(occurrence,{'path','line','column','end_line','end_column'})
             if not isinstance(occurrence.get('path'),str) or occurrence['path'] not in files or \
@@ -83,7 +89,7 @@ def validate(data,nodes=None):
 def write(run,data,nodes):
     validate(data,nodes)
     raw=(json.dumps(data,indent=1,sort_keys=True)+'\n').encode('utf-8')
-    if len(raw)>MAX_BYTES:raise LaniakeaError('health observations exceed 32 MiB')
+    if len(raw)>MAX_BYTES:raise Limit('health observations exceed the artifact size limit')
     path=Path(run)/'health.json';write_json(path,data)
     return {'version':1,'path':'health.json','sha256':hashlib.sha256(path.read_bytes()).hexdigest(),
             'prefixes':data['scope']['prefixes']}

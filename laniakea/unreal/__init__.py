@@ -114,6 +114,8 @@ def extract(target, run_dir, previous_manifest=None, tools_dir=None, health_opti
     }
     manifest = {
         "profile": NAME,
+        "recipe": {"symbols": tools_dir is not None,
+                   "health": {key: prepared[0][key] for key in ('mode','prefixes','minimum_tokens','heap_mib')}},
         "project": project.stem,
         "levels": graph.LEVELS + (["namespace", "class", "function"] if compiler_result["enabled"] else []),
         "edge_types": graph.EDGE_TYPES,

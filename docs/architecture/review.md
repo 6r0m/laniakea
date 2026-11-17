@@ -25,8 +25,9 @@ separate from dependency-reference paging. Raw source matches can span inactive 
 An omitted Review threshold uses the recorded collection floor. Explicit policy remains authoritative. Raising it filters
 recorded groups; lowering it below the collection floor reports unavailable evidence and requires explicit recollection.
 Missing observations mean not recorded.
-Structured acquisition failure, unavailability and disabled status remain distinct from successful zero findings. A new
-graph without current observations cannot reuse findings from an older health artifact; stored triage is retained.
+Structured acquisition failed, incomplete, unavailable and disabled states remain distinct in checks and the compact
+Review summary; none establishes successful zero findings. A graph without current observations cannot reuse findings from
+an older health artifact; stored triage is retained.
 Effective policy is canonicalized before finding fingerprints, preserving unchanged implicit 100-token decisions on legacy
 100-token evidence.
 Policy scope selects participating recorded modules; at least two matching occurrences must remain in scope.

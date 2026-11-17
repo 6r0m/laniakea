@@ -280,15 +280,27 @@ requires it; original bytes still own hashes and existing token coordinates do n
 `--health duplication` requires complete successful collection. `--health auto` permits a validated module/native graph
 with explicitly unavailable, failed or incomplete duplication coverage; it never substitutes old observations or an empty
 successful report. `--health off` skips collection. Tool integrity failure refuses execution. Core input, physical-boundary,
-graph validation, superseded corpus and unknown internal failures still reject publication. Required failures retain the
-previous map and committed settings. No-health ordinary extraction remains independent of Java and C++ content scans.
+graph validation, superseded corpus and unknown internal failures still reject publication. Later health hashes cannot
+replace an earlier mandatory/native input identity: disagreement rejects the complete candidate. Known provider-local
+read/write failures report failed acquisition; bounded artifact limits report incomplete acquisition. Malformed evidence
+remains a validation failure. Required failures retain the previous map and committed settings. No-health ordinary
+extraction remains independent of Java and C++ content scans.
 Structured outcomes use the existing [manifest coverage contract](graph-model.md#coverage); Review does not own acquisition.
 
-One corpus-wide result can be reused only for identical source hashes, membership/owners, scope, threshold and tool
-identity. Adding or removing a file invalidates reuse. Compilation changes affect triage context and the selected module
+Input paths preserve source spelling because PMD sorts file IDs case-sensitively. Windows case folding is restricted to
+lookup, never used to rename analyzer input. The recorded collection revision prevents reuse from incompatible input
+ordering; the provider identity and token fingerprints retain their original meaning for Review decisions.
+
+One corpus-wide result can be reused only for identical source hashes, membership/owners, scope, threshold, collection
+revision and tool identity. Adding or removing a file invalidates reuse. Compilation changes affect triage context and the selected module
 corpus; raw token matching has no additional compiler context. The run records analysis time, file/group counts and reuse.
-The Java heap is bounded to 1 GiB, execution to 15 minutes and artifact size to 32 MiB; limits fail visibly and can be
-addressed by explicitly narrowing scope. Input snapshots and diagnostics remain in the run's ignored directory.
+The [provider](../../laniakea/unreal/cpd.py) resolves an omitted collection floor and heap budget; explicit CLI values
+override those defaults. Changing the heap alone does not invalidate semantic reuse. Before a new JVM, Windows physical
+and commit availability must cover the heap, non-heap allowance and host headroom; unavailable or unreadable capacity
+refuses launch. This admission check is not a memory reservation or a guarantee against concurrent host pressure.
+The JVM uses a bounded heap and processor-count setting, with a 15-minute timeout; its processor count is not an OS CPU
+quota. Resource refusal never changes thresholds, excludes files or partitions cross-module matching. Artifact size remains
+bounded to 32 MiB. Input snapshots and diagnostics remain in the run's ignored directory.
 
 The manifest binds optional health observations by digest; pipeline validation precedes publication. Absence remains
 compatible with older runs. [Review](review.md) interprets observations and owns thresholds/decisions independently of

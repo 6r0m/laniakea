@@ -10,13 +10,14 @@ from . import cpd, cpd_tools, source_inputs
 
 
 def prepare(options):
-    options=cpd.options_for(options or {'mode':'off'})
+    options=cpd.options_for({'mode':'off'} if options is None else options)
     mode=options.get('mode','required')
     if mode not in {'auto','off','required'}:
         raise LaniakeaError('invalid source-health acquisition mode')
     options['mode']=mode
     outcome={'provider':'pmd-cpd','mode':mode,'prefixes':options['prefixes'],
-             'minimum_tokens':options['minimum_tokens'],'status':'disabled','code':'explicit_off'}
+             'minimum_tokens':options['minimum_tokens'],'heap_mib':options['heap_mib'],'collection_version':cpd.COLLECTION_VERSION,
+             'status':'disabled','code':'explicit_off'}
     if mode=='off':return options,outcome
     try:
         try:Path(options['tools']).stat()
@@ -40,6 +41,8 @@ def _inputs(target,options):
     try:
         return source_inputs.fingerprints(target['project_file'],prefixes=options['prefixes'],
                                          excludes=target.get('excludes',[]))
+    except FileNotFoundError as error:
+        raise cpd.Changed('CPD source disappeared during input verification; retry') from error
     except OSError as error:
         raise cpd.Failure('CPD source could not be read','source_io') from error
 
@@ -49,6 +52,8 @@ def collect(target,run,built,exported,manifest,prepared,previous):
     try:
         if outcome['status']=='pending':
             before=_inputs(target,options)
+            if any(manifest['inputs'][key]!=value for key,value in before.items() if key in manifest['inputs']):
+                raise cpd.Changed('Mandatory inputs changed before CPD acquisition; retry the complete extraction')
             marker,result=cpd.extract(target,run,built,exported,options,previous)
             after=_inputs(target,options)
             if before!=after:raise cpd.Changed('CPD inputs changed during analysis; retry')

@@ -1,6 +1,6 @@
 # Continuous useful analysis with safe reuse
 
-**Status:** IN PROGRESS - Gate 1 and bounded CPD bottleneck investigation; Gates 2-3 paused by D5
+**Status:** IN PROGRESS - Gate 1 review corrections verified; automatic monitoring and Gates 2-3 remain paused
 
 **Scope:** continuous monitoring, default code-health collection, safe reuse and validated live map updates  
 **Stable documentation owners:** [Unreal profile](../docs/architecture/unreal-profile.md),
@@ -73,8 +73,9 @@ state. Missing coverage and ongoing work remain visible; unchanged analysis is r
   publication during viewing are outside this delivery, preserving the accepted build/view separation.
 - **A2 [ACTIVE]:** Automatically use the validated local CPD installation when present. Missing optional tooling is
   visible unavailability, not an instruction to download or install host software automatically.
-- **A3 [ACTIVE]:** A 50-token strict collection floor is the first candidate to validate on a representative real corpus.
-  Synthetic success does not establish the production default or acceptable noise.
+- **A3 [VERIFIED FOR THE MEASURED CORPUS]:** The strict 50-token floor passed complete frozen-corpus and independent
+  short-clone controls. Explicit health requests use that provider default; ordinary builds do not yet enable collection.
+  Findings still require human review, and this evidence does not establish universal scalability or acceptable noise.
 - **A4 [ACTIVE]:** Identifier normalization is a separately labelled, opt-in collection mode only after a real usefulness
   gate. It is not an additional simultaneous default scan; literal normalization is excluded.
 - **A5 [ACTIVE]:** Preserve explicit native indexing and defer Clang-Tidy implementation. Its real Unreal context,
@@ -808,3 +809,40 @@ Only changes authorized after this review are implemented; no new services or sp
 - D5 remains a review checkpoint: Gates 2-3 are paused, no default is promoted, and no real-project map is published by
   these diagnostics. An unused process-containment prototype is parked in ignored scratch, outside the production diff.
   Monitoring, default short-clone acquisition and live adoption remain unfinished. Keep this task active, not archived.
+
+### 2026-11-17 - Gate 1 reviewer corrections and production-adapter acceptance
+
+- The operator requested evaluation and correction of the attached review. F1, F3, F4 and F5 were reproduced and fixed.
+  F2's claimed public pipeline regression is overstated: pipeline.extract injects the tool path, so health_options={} was
+  already a required request. Preserve its existing passing regression and distinguish only None from an empty request at
+  the profile boundary; direct-boundary proof covers the formerly ambiguous expression.
+- F1: reject disagreements between optional source hashes and earlier mandatory/native identities before starting CPD.
+  No optional failure catch can convert superseded inputs into publication. F3: CLI omission is None, provider options own
+  the default floor/budget, explicit overrides remain exact, and the immutable request records the resolved recipe.
+- Explicit CPD requests use strict 50-token collection and a configurable 4 GiB heap ceiling, with Windows physical/commit
+  headroom admission and a bounded JVM processor setting. Admission is not reservation or a CPU quota. Low or unreadable
+  resources refuse a fresh JVM; a valid cache can be reused without admission. Ordinary build/up still do not launch CPD.
+- F4: classify known CPD-local I/O failures where they occur; typed artifact limits become incomplete acquisition.
+  Boundary violations, changed/disappearing inputs, corrupt previous evidence and unexpected validation remain hard errors.
+  F5: Review retains failed/incomplete/unavailable/disabled states and shows each in the compact summary.
+- The production-adapter replay exposed an additional defect absent from the earlier fixed-path diagnostics: Windows
+  normcase was applied to the file names sent to Java. PMD sorts file IDs case-sensitively, changing input order and some
+  groups. A failing regression proves input spelling loss. Preserve source case in the request and use case folding only
+  for lookup. The collection revision rejects older cache provenance without changing provider identity, token fingerprints
+  or stored triage. No matcher replacement or source suppression was needed.
+- The corrected production adapter processed every frozen authorized input and reproduced the prior validated signature,
+  fingerprints, token counts, occurrences and exact ranges. The complete artifact passed current limits; unchanged reuse
+  launched no Java. The initial busy-host attempt was refused before Java; subsequent admission used the unchanged guard.
+  Private proof: [production replay](../workspace/tmp/gate1-review/real-acceptance.json),
+  [exact-match difference diagnosis](../workspace/tmp/gate1-review/match-differences-semantic.json).
+- Verification: 231 Python tests passed; 24 optional native tests skipped and three real-Engine cases excluded. The first
+  broad run encountered one Windows access-denied snapshot rename; the focused repeat and final full run passed. Its cause
+  is unconfirmed; no publication retry or weakened refusal was introduced. All 173 JavaScript tests passed. Review and health
+  Chromium suites plus narrow coverage-label rendering passed without browser errors. Evidence:
+  [Python checks](../workspace/tmp/gate1-review/non-engine-results.json),
+  [browser checks](../workspace/tmp/gate1-review/browser-results.json).
+- Protected saved-position and triage inventory stayed byte-identical. Documentation links, ASCII, local privacy,
+  diff whitespace and unchanged-index checks passed. The owned disposable browser fixture server was stopped.
+- Stable profile, graph, Review and guide contracts describe the delivered behavior. The task stays active: continuous
+  monitoring, automatic ordinary-build collection and live browser adoption remain unfinished. No real-project publication,
+  Engine extraction, staging or commit is part of this correction round.

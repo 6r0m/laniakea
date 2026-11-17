@@ -25,6 +25,8 @@ Python 3.9+ needs no extra packages. Viewer unit tests need Node.js 18+; Node is
 foreign-instance refusal, startup/cancellation cleanup and saved-map preservation using loopback synthetic servers.
 Documentation-only edits can use `python -m unittest discover -s tests -p test_documentation.py` for local link/anchor
 and durable/transient dependency checks. Run the privacy checks before publishing; follow [repository rules](../AGENTS.md).
+`test_cpd_contract.py` verifies mandatory-input preservation, provider-local refusal, precise coverage states, memory
+admission and cache reuse. With real CPD configured it also checks CLI default/override behavior through published evidence.
 
 | optional input | check enabled |
 |---|---|

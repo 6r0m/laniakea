@@ -64,7 +64,8 @@ Presentation is defined by the [viewer contract](viewer.md).
 Optional provider acquisition has schema-validated outcomes separate from findings: completed, unavailable, disabled,
 failed or incomplete. Only completed evidence supports a zero-finding claim. Reuse preserves completion with its original
 input/tool identity; it is not a separate coverage state. Older runs without outcomes remain unrecorded where their
-coverage cannot be established. The [Unreal profile](unreal-profile.md#source-duplication) owns provider-specific modes.
+coverage cannot be established. Mandatory input identities cannot be replaced by a later optional-provider sample.
+The [Unreal profile](unreal-profile.md#source-duplication) owns provider-specific modes.
 
 ## Owner-local references
 

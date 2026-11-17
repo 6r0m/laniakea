@@ -39,10 +39,13 @@ def _extract(args, workspace):
     target = _target(workspace, args.project, args.engine, args.name, args.target)
     print(f"laniakea: building map for {target['project_file']}")
     print(f"laniakea: engine {target['engine_root']}")
-    if not args.health and (args.health_scope or args.health_minimum_tokens!=100):
-        raise LaniakeaError('--health-scope and --health-minimum-tokens require --health duplication')
+    if not args.health and (args.health_scope or args.health_minimum_tokens is not None or args.health_heap_mib is not None):
+        raise LaniakeaError('source-health options require --health duplication, auto or off')
     options={'mode':'required' if args.health=='duplication' else args.health,
-             'prefixes':args.health_scope,'minimum_tokens':args.health_minimum_tokens} if args.health else None
+             'prefixes':args.health_scope} if args.health else None
+    if options is not None:
+        if args.health_minimum_tokens is not None:options['minimum_tokens']=args.health_minimum_tokens
+        if args.health_heap_mib is not None:options['heap_mib']=args.health_heap_mib
     run, manifest = pipeline.extract(workspace, target, symbols=args.symbols,health_options=options)
     counts = manifest["coverage"]["counts"]
     summary = ", ".join(f"{key.split('.', 1)[1]} {value}" for key, value in counts.items() if key.startswith("nodes."))
@@ -96,7 +99,8 @@ def parser():
         command.add_argument("--symbols", action="store_true", help="also analyse classes/functions with locally installed LLVM tools")
         command.add_argument('--health',choices=['duplication','auto','off'],help='source clones: required duplication, optional auto, or off')
         command.add_argument('--health-scope',action='append',default=[],help='root-relative source prefix; repeat to bound the corpus')
-        command.add_argument('--health-minimum-tokens',type=int,default=100,help='CPD collection floor; default 100')
+        command.add_argument('--health-minimum-tokens',type=int,help='override the CPD provider collection floor')
+        command.add_argument('--health-heap-mib',type=int,help='override the bounded CPD Java heap budget in MiB')
 
     def serve_options(command):
         command.add_argument("--port", type=int, default=DEFAULT_PORT,

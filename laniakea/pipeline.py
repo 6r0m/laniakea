@@ -26,6 +26,8 @@ def _extract_locked(workspace, target, symbols, health_options=None):
         options={'health_options':{**health_options,'tools':workspace.root/'tools/health/cpd'}} if health_options is not None else {}
         graph, fields = profile.extract(target, run, previous,
                                         tools_dir=workspace.root / "tools" / profile.NAME if symbols else None, **options)
+        recipe=fields.pop('recipe',{'symbols':symbols,
+                          'health':{'mode':'required',**health_options} if health_options is not None else {'mode':'off'}})
         profile_seconds = perf_counter() - profile_start
         schema.validate(graph)
         shards_start = perf_counter()
@@ -48,7 +50,7 @@ def _extract_locked(workspace, target, symbols, health_options=None):
             "edge_types": fields["edge_types"] + summary_types,
             "sources": fields["sources"] + [{"id": "rollup", "name": "laniakea scope summaries", "version": __version__}],
             "entry": shards.ENTRY,
-            "request": workspace.stage_request(run, target, symbols, health_options),
+            "request": workspace.stage_request(run, target, recipe),
             "timings_seconds": {**fields.get("timings_seconds", {}), "profile": profile_seconds,
                                 "shards": shards_seconds},
         }

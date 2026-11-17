@@ -51,7 +51,7 @@ class CpdProcess(unittest.TestCase):
         (self.workspace.root/'tools/health/cpd').mkdir(parents=True,exist_ok=True)
         with recorded_ubt(self.project,self.engine),patch('laniakea.unreal.cpd_tools.load',return_value=tool), \
                 patch('laniakea.unreal.compiler.extract',side_effect=AssertionError('CPD must not load LLVM')):
-            return pipeline.extract(self.workspace,self.target,health_options={'prefixes':['Source'],'minimum_tokens':100})
+            return pipeline.extract(self.workspace,self.target,health_options={'prefixes':['Source'],'minimum_tokens':100,'heap_mib':512})
 
     def clones(self):
         first=self.project/'Source/SampleProject/First.cpp';second=first.with_name('Second.cpp')

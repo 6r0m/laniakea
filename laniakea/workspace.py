@@ -118,11 +118,10 @@ class Workspace:
                 f"target id {target_id!r} already belongs to {existing['project_file']}; pick another with --name")
         return {**(existing or {}), **fields, "id": target_id}
 
-    def stage_request(self, run, target, symbols, health_options):
+    def stage_request(self, run, target, recipe):
         from . import schema
         self.propose(target['id'], target)
-        request = {'version': 1, 'target': target, 'recipe': {'symbols': symbols,
-                   'health': {'mode':'required',**health_options} if health_options is not None else {'mode': 'off'}}}
+        request = {'version': 1, 'target': target, 'recipe': recipe}
         schema.validate(request, 'extractionRequest')
         path = Path(run) / 'request.json'
         write_json(path, request)

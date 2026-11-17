@@ -67,7 +67,7 @@ def _duplication(data,rule,selected,check,emit,acquisition=None):
     if data is None:
         status=(acquisition or {}).get('status','unrecorded')
         code=(acquisition or {}).get('code','no_observations')
-        check.update(status=status if status in {'failed','disabled'} else 'unavailable',
+        check.update(status=status if status in {'failed','disabled','incomplete','unavailable'} else 'unavailable',
                      detail=f'Source duplication {status} ({code}); inspect source-health coverage/setup or retry collection.')
         return
     minimum=rule.get('minimum_tokens',data['minimum_tokens'])

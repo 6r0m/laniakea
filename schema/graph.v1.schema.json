@@ -204,6 +204,8 @@
       "properties": {
         "provider": {"type": "string"}, "mode": {"enum": ["auto", "required", "off"]},
         "prefixes": {"type": "array", "items": {"type": "string"}}, "minimum_tokens": {"type": "integer"},
+        "heap_mib": {"type": "integer"},
+        "collection_version": {"type": "integer"},
         "status": {"enum": ["completed", "unavailable", "disabled", "failed", "incomplete"]},
         "code": {"type": "string"}, "reused": {"type": "boolean"}, "tool_identity": {"type": "string"},
         "artifact_sha256": {"type": "string"}, "input_identity": {"type": "string"}
