@@ -269,7 +269,7 @@ Offline `setup-health` copies the supplied PMD libraries and notices into the ig
 CPD API adapter with a supplied JDK 11+. The installation pins hashes of libraries, adapter and Java executable. Its
 complete file inventory must match the tool manifest; additional files are refused before reuse or execution. Reinstall
 replaces the library and generated-class directories, so obsolete classpath entries do not survive setup. No host
-installation, network download, source modification or tool invocation occurs during ordinary extraction or map opening.
+installation, network download or source modification occurs during extraction. Map opening does not invoke CPD.
 See [third-party terms](../../THIRD_PARTY.md) and [operator commands](../guide.md#collect-source-duplication).
 
 The adapter uses CPD's own token images for strict-match fingerprints and exports exact line/column ranges without source
@@ -277,14 +277,16 @@ text. Identifier/literal normalization is off. It verifies every input was proce
 identity agree. An absent terminal newline is supplied only in the isolated tool copy because PMD's preprocessor lexer
 requires it; original bytes still own hashes and existing token coordinates do not move.
 
-`--health duplication` requires complete successful collection. `--health auto` permits a validated module/native graph
-with explicitly unavailable, failed or incomplete duplication coverage; it never substitutes old observations or an empty
+Ordinary CLI builds request `--health auto`; programmatic `health_options=None` remains off and an explicit empty options
+object remains required collection. Native indexing is independently explicit. `--health duplication` requires complete
+successful collection. `--health auto` permits a validated module/native graph with explicitly unavailable, failed or
+incomplete duplication coverage; it never substitutes old observations or an empty
 successful report. `--health off` skips collection. Tool integrity failure refuses execution. Core input, physical-boundary,
 graph validation, superseded corpus and unknown internal failures still reject publication. Later health hashes cannot
 replace an earlier mandatory/native input identity: disagreement rejects the complete candidate. Known provider-local
 read/write failures report failed acquisition; bounded artifact limits report incomplete acquisition. Malformed evidence
-remains a validation failure. Required failures retain the previous map and committed settings. No-health ordinary
-extraction remains independent of Java and C++ content scans.
+remains a validation failure. Required failures retain the previous map and committed settings. Module extraction through
+`--health off` remains independent of Java and C++ content scans when native indexing is off.
 Structured outcomes use the existing [manifest coverage contract](graph-model.md#coverage); Review does not own acquisition.
 
 Input paths preserve source spelling because PMD sorts file IDs case-sensitively. Windows case folding is restricted to
@@ -298,6 +300,9 @@ The [provider](../../laniakea/unreal/cpd.py) resolves an omitted collection floo
 override those defaults. Changing the heap alone does not invalidate semantic reuse. Before a new JVM, Windows physical
 and commit availability must cover the heap, non-heap allowance and host headroom; unavailable or unreadable capacity
 refuses launch. This admission check is not a memory reservation or a guarantee against concurrent host pressure.
+Admission budgets the whole configured heap plus non-heap allowance, with a proportional host reserve bounded for small
+and large development machines. The [budget implementation](../../laniakea/unreal/cpd_budget.py) owns the numerical policy;
+the representative-host regressions cover feasible launches, physical/commit pressure and unavailable measurements.
 The JVM uses a bounded heap and processor-count setting, with a 15-minute timeout; its processor count is not an OS CPU
 quota. Resource refusal never changes thresholds, excludes files or partitions cross-module matching. Artifact size remains
 bounded to 32 MiB. Input snapshots and diagnostics remain in the run's ignored directory.

@@ -21,7 +21,7 @@ def memory():
 
 def require_headroom(heap_mib):
     total,available,commit=memory()
-    reserve=max(8*1024**3,total*15//100)
+    reserve=max(1024**3,min(4*1024**3,total//10))
     process=heap_mib*1024**2+1536*1024**2
     if available<process+reserve or commit<process+reserve:
         raise MemoryError(f'CPD needs {heap_mib} MiB heap plus JVM and host headroom; retry when resources are available')

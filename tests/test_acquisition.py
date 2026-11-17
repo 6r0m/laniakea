@@ -28,6 +28,20 @@ class Requests(unittest.TestCase):
         self.assertEqual(self.invoke('--name','invalid','--health-minimum-tokens','0'),2)
         self.assertIsNone(self.workspace.load('invalid'))
 
+    def test_default_build_reports_missing_tools_and_explicit_off_avoids_health_scans(self):
+        for args,status in [((),'unavailable'),(('--health','off'),'disabled')]:
+            with self.subTest(args=args), \
+                    patch('laniakea.unreal.cpd_tools.load',side_effect=AssertionError('no tool should be loaded')), \
+                    patch('laniakea.unreal.source_inputs.fingerprints',side_effect=AssertionError('no C++ scan')), \
+                    patch('laniakea.unreal.compiler.extract',side_effect=AssertionError('native must remain explicit')):
+                self.assertEqual(self.invoke(*args),0)
+                run=self.workspace.latest('sample')
+                manifest=__import__('json').loads((run/'manifest.json').read_text())
+                outcome=manifest['coverage']['acquisition']['source-duplication']
+                self.assertEqual(outcome['status'],status)
+                self.assertNotIn('health',manifest)
+        self.assertEqual(self.workspace.request('sample')['recipe']['health']['mode'],'off')
+
     def test_failed_target_selection_preserves_committed_settings_and_map(self):
         with recorded_ubt(self.project,self.engine):
             from laniakea import pipeline

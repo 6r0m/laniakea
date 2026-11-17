@@ -27,11 +27,14 @@ Documentation-only edits can use `python -m unittest discover -s tests -p test_d
 and durable/transient dependency checks. Run the privacy checks before publishing; follow [repository rules](../AGENTS.md).
 `test_cpd_contract.py` verifies mandatory-input preservation, provider-local refusal, precise coverage states, memory
 admission and cache reuse. With real CPD configured it also checks CLI default/override behavior through published evidence.
+`test_native_health.py`, enabled by both native and CPD inputs, runs real compiler workers and CPD through one CLI
+publication using synthetic Unreal receipts/actions. It proves combined reuse and rejection of edits after native indexing.
 
 | optional input | check enabled |
 |---|---|
 | `LANIAKEA_TEST_ENGINE=<engine root>` | Real-engine integration when the sample's engine does not otherwise resolve |
 | `LANIAKEA_TEST_LIBCLANG=<libclang.dll>` | Pinned LLVM 21.1.8 class/function, call-role, inheritance, override, ownership and edit regressions |
+| `LANIAKEA_TEST_CLANG_COMPILER=<clang-cl.exe>` | Native preprocessing cache, negative header probes and Windows response-file regressions |
 | `LANIAKEA_TEST_CLANGD_INDEXER=<clangd-indexer.exe>` | Pinned 21.1.8 compiler-argument/adjacent-PCH regression; not the production symbol extractor |
 | `LANIAKEA_TEST_CPD=<workspace>/tools/health/cpd` | Real pinned CPD matches/ranges, token identity, scope, corpus edits, reuse and refusal; offline reinstall also runs when the registered JDK compiler is available |
 

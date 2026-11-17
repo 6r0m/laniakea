@@ -1,6 +1,6 @@
 # Continuous useful analysis with safe reuse
 
-**Status:** IN PROGRESS - Gate 1 review corrections verified; automatic monitoring and Gates 2-3 remain paused
+**Status:** IN PROGRESS - Gate 1 complete; Gates 2-3 monitoring and browser adoption remain unfinished
 
 **Scope:** continuous monitoring, default code-health collection, safe reuse and validated live map updates  
 **Stable documentation owners:** [Unreal profile](../docs/architecture/unreal-profile.md),
@@ -57,6 +57,11 @@ state. Missing coverage and ongoing work remain visible; unchanged analysis is r
     and return measured cause/resource costs/solution for review before proceeding with Gates 2-3 or enabling defaults.
   - Reason: a hard-coded heap cap and upstream matching scalability may be the limit; lower-quality fallback is not approved.
   - Source: operator answer to Q2, 2026-11-17.
+- **D6:** Evaluate the Gate 1 closeout review and apply valid functionality/scalability corrections.
+  - Effect: verify memory-admission usability, ordinary-build automatic collection and relevant native integration;
+    preserve the accepted architecture and independently gated monitoring/adoption work.
+  - Reason: the operator requested correction against actual code and prior agreements.
+  - Source: operator review-and-fix request, 2026-11-17.
 
 ### Operator gates
 
@@ -74,7 +79,7 @@ state. Missing coverage and ongoing work remain visible; unchanged analysis is r
 - **A2 [ACTIVE]:** Automatically use the validated local CPD installation when present. Missing optional tooling is
   visible unavailability, not an instruction to download or install host software automatically.
 - **A3 [VERIFIED FOR THE MEASURED CORPUS]:** The strict 50-token floor passed complete frozen-corpus and independent
-  short-clone controls. Explicit health requests use that provider default; ordinary builds do not yet enable collection.
+  short-clone controls. Ordinary CLI builds use that provider default through automatic collection.
   Findings still require human review, and this evidence does not establish universal scalability or acceptable noise.
 - **A4 [ACTIVE]:** Identifier normalization is a separately labelled, opt-in collection mode only after a real usefulness
   gate. It is not an additional simultaneous default scan; literal normalization is excluded.
@@ -207,14 +212,11 @@ existing local tools. No production code, stable docs, tests or analysed-project
 
 ### Unverified areas
 
-The specific private-code examples in the pasted review were not supplied or analysed here. Their detection, a useful
-lower default on a representative real corpus, normalized-mode noise and Clang-Tidy's real-context value remain unproved.
-Monitoring, selective invalidation, resource bounds and live adoption are unimplemented; the API probe proves none of them.
-Ignored experiments are local supporting evidence; implementation must promote independent synthetic fixtures into tests.
-The earlier completed CPD work records a broad lexical failure followed by a successful explicitly bounded corpus.
-That is a default-usability risk: the next gate must exercise the proposed default corpus, not merely a chosen positive
-subset. Default optional collection must fail visibly without blocking an otherwise valid architecture map. Explicitly
-required collection retains its existing publication gate; the acquisition contract below distinguishes these cases.
+Gate 1 proves the selected strict collection floor on the measured real corpus, ordinary CLI acquisition and real
+LLVM-plus-CPD integration over synthetic build inputs. Admission on 16/32 GiB hosts is scenario-tested, not a benchmark on
+physical machines of those sizes. Lower collection floors, identifier normalization and Clang-Tidy remain outside that proof.
+Continuous monitoring, directory-notification reconciliation, owned-process shutdown and live adoption remain unimplemented;
+the earlier notification API probe does not prove them. Gates 2-3 retain their independent acceptance requirements.
 
 ## Current architecture and source of truth
 
@@ -530,22 +532,25 @@ remain implementation gates. No production process-owner or monitoring capabilit
 ## Implementation tasks
 
 Each gate has independent acceptance evidence. Passing one does not imply the later stages work. Keep monitoring opt-in
-until Gate 3 passes; do not enable a half-working automatic refresh path. Implementation still requires operator approval.
+until Gate 3 passes; do not enable a half-working automatic refresh path. D4 owns implementation authorization; D5-D6
+constrain its value/review checkpoints.
 
 ### Gate 1 - Default analysis and committed requests
 
-- [ ] Promote A/B/C/D into independent real-provider fixtures. Gate A3 on a representative authorized real corpus, comparing
-  strict 100/50/40/30, useful logic versus boilerplate, complete default scope, lexical failures and exact ranges. Record
-  cold/reused/edit costs privately for private inputs. Stop the lower-default decision if value or reliability is unproved.
-- [ ] Add schema-validated acquisition outcomes through existing manifest/coverage owners. Implement auto/off/required
+- [x] Promote A/B/C/D into independent real-provider fixtures. Under D5, compare strict 100/50 and gate the selected 50-token
+  floor on the complete authorized real corpus, useful logic versus boilerplate, lexical failures and exact ranges. Record
+  cold/reused/edit costs privately. Lower 40/30 floors are not promoted or required by D5's selected target.
+- [x] Add schema-validated acquisition outcomes through existing manifest/coverage owners. Ordinary CLI builds request auto;
+  tool absence stays visible without downloads, explicit off avoids collection and required retains its publication gate.
+  Implement auto/off/required
   behavior at the profile boundary, including CPD-only input failures before graph collection. Required failures keep their
   existing gate; automatic failures produce explicit failed coverage without a bogus health artifact or stale evidence.
-- [ ] Stage effective settings/recipe with the immutable run and use one latest-pointer commit. Remove CLI's pre-extraction
+- [x] Stage effective settings/recipe with the immutable run and use one latest-pointer commit. Remove CLI's pre-extraction
   target mutation; adapt all workspace consumers and prove old registrations remain readable. Inject failure/crash at each
   promotion boundary and prove target settings, recipe and graph always resolve to the same committed version.
-- [ ] Align default Review floor and triage semantics with invariants 5-6. Expose structured unavailable/failed/disabled/
+- [x] Align default Review floor and triage semantics with invariants 5-6. Expose structured unavailable/failed/disabled/
   incomplete status in existing CLI/Review controls, including older runs. Test complete build-to-Review, not just CPD XML.
-- [ ] Verify current native/corpus/Review reuse, required-mode refusal, ordinary exploration without LLVM/Java, unchanged
+- [x] Verify current native/corpus/Review reuse, required-mode refusal, ordinary exploration without LLVM/Java, unchanged
   user state and the real default corpus. Finish the relevant stable-owner updates. Gate 1 may retain current up behavior:
   it serves saved maps but may hash sources for startup freshness. It must not claim scan-free opening, continuous monitoring
   or live adoption. Guaranteed no-source-scan saved-only mode is delivered in Gate 2.
@@ -846,3 +851,36 @@ Only changes authorized after this review are implemented; no new services or sp
 - Stable profile, graph, Review and guide contracts describe the delivered behavior. The task stays active: continuous
   monitoring, automatic ordinary-build collection and live browser adoption remain unfinished. No real-project publication,
   Engine extraction, staging or commit is part of this correction round.
+
+### 2026-11-17 - Memory usability and ordinary-build Gate 1 closeout
+
+- F6 is valid: the universal large reserve rejected feasible budgets on representative development hosts. Retain the full
+  configured heap and JVM allowance, with a proportional host reserve bounded for small and large machines. The tests prove
+  admitted and refused 16/32/64 GiB scenarios, commit pressure, failed measurements and known zero capacity. These are policy
+  simulations; no physical 16/32 GiB-machine performance claim is made. Private measurements support the process allowance,
+  but an observed past peak is not treated as a bound for all future inputs. Admission remains an instantaneous check.
+- Normal CLI build/extract requests auto without health flags. Explicit off still avoids CPD tool loading/scanning; missing
+  tools are unavailable, never downloaded and never reported as successful zero findings. Optional threshold/heap/scope
+  overrides apply to the implicit auto request without requiring a redundant mode flag. Programmatic None remains off.
+- Regression-first proof: the old reserve refused the feasible scenarios and the old ordinary build produced no health
+  artifact. Both tests pass after their owning changes. Independent real-provider A/B/C/D cases now live in the ordinary
+  build-to-Review regression: the exact short pair crosses modules, renamed/different controls are excluded, both owners
+  remain truthful, and unchanged ordinary builds reuse without Java.
+- Real LLVM workers and CPD passed a combined CLI publication over synthetic receipts/exported actions, including native
+  and corpus cache reuse. Editing source after native indexing rejects publication before optional acquisition and retains
+  the prior request/run. All relevant native parser/preprocessing checks were enabled; only the legacy, non-production
+  clangd-indexer check is unavailable. Three real-Engine boundary tests passed.
+- Ordinary CLI analysis also passed on the current complete authorized real corpus in an isolated workspace, followed by
+  an unchanged build with no target/analyzer flags. Both produced completed coverage and Review findings at the selected
+  floor; the repeat launched no Java and preserved exact observations. This does not claim monitoring or live adoption.
+  Private evidence: [real ordinary builds](../workspace/tmp/gate1-closeout/real-default-results.json),
+  [admission scenarios](../workspace/tmp/gate1-closeout/memory-scenarios.json),
+  [native/regression checks](../workspace/tmp/gate1-closeout/python-results.json),
+  [Engine boundary checks](../workspace/tmp/gate1-closeout/engine-results.json).
+- Stable guide/profile/structure contracts now describe automatic one-shot acquisition and explicit opt-out; verification
+  docs include native preprocessing and combined health inputs. Gate 1 is complete within these proofs. The task remains
+  active for Gates 2-3; no matcher, cache framework, service, renderer or analyzer was added.
+- Final verification: 258 Python checks passed with one legacy clangd-indexer skip; all three real-Engine checks and all
+  173 JavaScript checks passed. The strengthened cross-module A/B/C/D and ordinary override regressions passed after their
+  final fixture changes. Published pointers, saved positions and triage remained byte-identical. The isolated real runs
+  were not promoted into the operator's workspace. No Git staging or commit was performed.

@@ -49,6 +49,15 @@ class Identity(unittest.TestCase):
 
 
 class MemorySample(unittest.TestCase):
+    def test_representative_hosts_admit_full_heap_without_consuming_host_headroom(self):
+        gib=1024**3
+        for total,available,allowed in [(16,8,True),(16,6,False),(32,10,True),(32,8,False),(64,12,True),(64,9,False)]:
+            with self.subTest(total=total,available=available), \
+                    patch.object(cpd_budget,'memory',return_value=(total*gib,available*gib,available*gib)):
+                if allowed:cpd_budget.require_headroom(4096)
+                else:
+                    with self.assertRaises(MemoryError):cpd_budget.require_headroom(4096)
+
     def test_windows_sample_validates_api_failure_and_preserves_known_zero_capacity(self):
         def zero_capacity(pointer):
             sample=pointer._obj
@@ -184,20 +193,65 @@ class ProviderFailures(unittest.TestCase):
             with self.assertRaisesRegex(LaniakeaError,'inputs changed'):self.invoke()
         self.assertEqual(self.workspace.latest('sample'),good)
 
-    def test_invalid_budget_or_unscoped_cli_override_refuses_before_ubt(self):
+    def test_invalid_budget_and_threshold_refuse_before_ubt(self):
         with patch('laniakea.unreal.ubt.query_targets',side_effect=AssertionError('must preflight')):
             for heap in (0,True,8193):
                 with self.subTest(heap=heap),self.assertRaises(LaniakeaError):
                     pipeline.extract(self.workspace,self.target,health_options={'heap_mib':heap})
         with contextlib.redirect_stdout(io.StringIO()),contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(cli.main(['--workspace',str(self.workspace.root),'build','sample',
-                                      '--health-minimum-tokens','100']),2)
+                                      '--health-minimum-tokens','0']),2)
 
 
 @unittest.skipUnless(os.environ.get('LANIAKEA_TEST_CPD'),'optional real pinned CPD installation')
 class CliThreshold(unittest.TestCase):
     setUp=fixture.Pipeline.setUp
     tearDown=fixture.Pipeline.tearDown
+
+    def test_ordinary_build_collects_and_reviews_short_clones_without_health_flags(self):
+        from laniakea import map_index
+        from laniakea.review_store import Review
+        tool=cpd_tools.load(Path(os.environ['LANIAKEA_TEST_CPD']))
+        (self.workspace.root/'tools/health/cpd').mkdir(parents=True)
+        folder=self.project/'Source/SampleProject'
+        body='''bool ReaderA(const ResourceList& resources) {
+    if (resources.empty()) return false;
+    for (const auto* resource : resources) {
+        if (!resource || !resource->IsReady()) {
+            return false;
+        }
+    }
+    return true;
+}
+'''
+        other=self.project/'Plugins/Sample/SampleGameplay/Source/SampleGameplay'
+        (folder/'First.cpp').write_text(body)
+        (other/'Second.cpp').write_text(body.replace('ReaderA','ReaderB'))
+        (folder/'Renamed.cpp').write_text(body.replace('ReaderA','ReaderC').replace('resources','entries').replace('resource','entry'))
+        (folder/'Different.cpp').write_text('int ReaderD(int value,int divisor) {int steps=0;while(divisor!=0) {'
+            'const int remainder=value%divisor;value=divisor;divisor=remainder;++steps;}return steps+value;}\n')
+        with recorded_ubt(self.project,self.engine),patch.object(cpd_tools,'load',return_value=tool), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(cli.main(['--workspace',str(self.workspace.root),'build',
+                str(self.project/'SampleProject.uproject'),'--engine',str(self.engine),'--name','sample']),0)
+        run=self.workspace.latest('sample');manifest=json.loads((run/'manifest.json').read_text())
+        data=health.load(run,manifest)
+        self.assertIsNotNone(data,'Ordinary build did not collect installed CPD evidence')
+        self.assertEqual(data['minimum_tokens'],50)
+        self.assertEqual(len(data['groups']),1)
+        self.assertEqual(data['groups'][0]['tokens'],50)
+        self.assertEqual({Path(o['path']).name for o in data['groups'][0]['occurrences']},{'First.cpp','Second.cpp'})
+        self.assertEqual(len({data['files'][o['path']]['owner'] for o in data['groups'][0]['occurrences']}),2)
+        graph=json.loads((run/'graph.json').read_text())
+        destination=run/'map-index';map_index.build(graph,destination)
+        report=Review(self.workspace,'sample',run,map_index.MapIndex(destination)).page({})
+        self.assertTrue(any(f['kind']=='duplication' for f in report['items']))
+        with recorded_ubt(self.project,self.engine),patch.object(cpd_tools,'load',return_value=tool), \
+                patch.object(cpd.subprocess,'run',side_effect=AssertionError('unchanged ordinary build launched Java')), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(cli.main(['--workspace',str(self.workspace.root),'build','sample']),0)
+        again=json.loads((self.workspace.latest('sample')/'manifest.json').read_text())
+        self.assertTrue(again['coverage']['acquisition']['source-duplication']['reused'])
 
     def test_cli_resolves_omitted_floor_once_and_preserves_explicit_override(self):
         tool=cpd_tools.load(Path(os.environ['LANIAKEA_TEST_CPD']))
@@ -209,7 +263,8 @@ class CliThreshold(unittest.TestCase):
         (folder/'First.cpp').write_text(body);(folder/'Second.cpp').write_text(body)
         for explicit,expected in [(None,50),(100,100)]:
             args=['--workspace',str(self.workspace.root),'build',str(self.project/'SampleProject.uproject'),
-                  '--engine',str(self.engine),'--name','sample','--health','auto','--health-heap-mib','512']
+                  '--engine',str(self.engine),'--name','sample','--health-heap-mib','512']
+            if explicit is None:args+=['--health','auto']
             if explicit is not None:args+=['--health-minimum-tokens',str(explicit)]
             with recorded_ubt(self.project,self.engine),patch.object(cpd_tools,'load',return_value=tool), \
                     contextlib.redirect_stdout(io.StringIO()):

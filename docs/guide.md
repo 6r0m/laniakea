@@ -144,11 +144,11 @@ decide a project's intended architecture. See [rule meaning, coverage and saved 
 ## Collect source duplication
 
 Supply the unpacked [PMD 7.29.0 distribution](https://docs.pmd-code.org/pmd-doc-7.29.0/pmd_userdocs_installation.html)
-and a JDK 11+ locally, then explicitly request strict C++ duplication:
+and a JDK 11+ locally. Ordinary builds collect strict C++ duplication once those tools are registered:
 
 ```text
 python laniakea.py setup-health --pmd <pmd-bin-7.29.0> --java <jdk>/bin/java.exe
-make build ARGS="--health duplication"
+make build
 make up
 ```
 
@@ -157,7 +157,7 @@ Use the build command's health-scope options to bound the scan and its minimum-t
 An omitted floor uses the provider default. `--health-heap-mib` overrides the Java heap ceiling; insufficient host headroom
 refuses a fresh JVM without reducing coverage. A valid unchanged result can still be reused without launching Java.
 With `--health duplication`, failed tools or source processing retain the last good map and identify the diagnostic log.
-Use `--health auto` to publish a valid architecture map even if duplication acquisition fails; coverage and Review report
+The default `--health auto` publishes a valid architecture map even if duplication acquisition fails; coverage and Review report
 the failed, incomplete, unavailable or disabled check instead of claiming zero findings. `--health off` skips collection.
 Narrow scope explicitly rather than silently ignoring a failed file.
 
@@ -166,8 +166,9 @@ Yellow **Duplication** candidates mark recorded files or modules. Click a marked
 inspect ownership before refactoring. A stale snapshot warns that current coordinates may have moved. No duplication
 wires are invented. Accept/reopen decisions use the existing Review workflow.
 
-Opening a map never runs PMD. Later extractions must request health again; ordinary module exploration needs neither
-Java nor LLVM. See [collection boundaries and costs](architecture/unreal-profile.md#source-duplication).
+Opening a map never runs PMD. Missing tools remain visible as unavailable; builds never download or install them.
+Use `--health off` for module exploration without Java; LLVM stays optional unless native symbols are requested.
+See [collection boundaries and costs](architecture/unreal-profile.md#source-duplication).
 
 ## Account for missing information
 
