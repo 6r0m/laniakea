@@ -32,6 +32,9 @@ its preprocessing guards. A verified unchanged automatic baseline creates no new
 repeatedly killing jobs.
 Typed external-build contention has bounded retries; other failures require changed inputs or explicit Retry. A failed target
 does not monopolize the queue. Refused writer locks leave the existing writer alone.
+An automatic snapshot's complete input identity remains the restart baseline even when provider coverage failed. Unchanged
+inputs retain that coverage without another extraction; relevant input, tool or recipe changes, or explicit Retry, permit
+another attempt. Reusing a snapshot never promotes failed coverage to completed analysis or zero findings.
 
 An unrecorded optional external header appearing outside watched inputs does not itself guarantee scheduling. Native
 preprocessing guards detect it on the next extraction; Retry, a build or another observed input change can initiate that

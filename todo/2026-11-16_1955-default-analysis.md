@@ -971,3 +971,24 @@ Only changes authorized after this review are implemented; no new services or sp
 - Final documentation, privacy, syntax and diff checks passed. The authenticated local viewer restart loaded its saved map
   with monitoring off, unchecked freshness visible, no JavaScript errors and no layout writes. Protected workspace files
   remained byte-identical. These results do not claim automatic browser adoption or discovery of unrecorded external paths.
+
+### 2026-11-17 - Gate 2 deterministic provider-failure reuse
+
+- F5 is valid. A real PMD lexical failure produced an automatic snapshot with failed provider coverage and a complete monitor
+  identity. Restarting unchanged attempted Java again. Removing only the worker's incomplete-coverage refresh condition still
+  failed: the scheduler also compared canonical inputs, which omit source-body hashes when optional acquisition fails.
+- The worker requests initial reconciliation only without a complete automatic baseline. Startup reuse compares complete
+  monitoring identities instead of requiring completed provider coverage or matching a partial canonical input set. No new
+  persistence, retry policy or provider classification was added. Existing typed external-build retries retain their bounds.
+- The regression passes with real CPD: unchanged restart starts neither extraction nor Java, preserves latest and failed
+  coverage, and both explicit Retry and a source edit independently start analysis. Missing-baseline configuration recovery,
+  candidate validation and owned-process cleanup remain covered by the affected suite.
+- Verification: 89 affected Python checks passed without skips, with real CPD and LLVM enabled. Scope includes monitoring,
+  provider contracts, combined native/health staging, HTTP contexts, Windows lifecycle, documentation and privacy. Evidence:
+  [pre-fix failure](../workspace/tmp/gate2-retry-review/red.log),
+  [worker-only correction still fails](../workspace/tmp/gate2-retry-review/partial-fix.log),
+  [affected checks](../workspace/tmp/gate2-retry-review/results.json).
+- Stable monitoring and verification owners describe failure reuse. Saved-only default and opt-in --watch remain unchanged;
+  Gate 3 stays pending and this todo stays active. No staging or commit was performed.
+- Documentation, privacy, syntax and whitespace checks passed. Protected saved files remained byte-identical. Authenticated
+  restart and the real saved-map browser smoke passed with monitoring off, no runtime errors and no layout writes.

@@ -20,12 +20,10 @@ def execute(workspace,target_id,operation,recipe=None):
     if operation=='discover':return profile.monitor_roots(workspace,target,manifest)
     if operation=='probe':
         recipe,result=profile.monitor_inputs(workspace,target,manifest,recipe)
-        outcome=manifest.get('coverage',{}).get('acquisition',{}).get('source-duplication',{})
         automatic=read_json(run/'automatic.json') if (run/'automatic.json').is_file() else {}
         return {**result,'recipe':recipe,
                 'previous_identity':automatic.get('identity'),
-                'needs_initial_refresh':not automatic.get('identity') or
-                    recipe['health']['mode']!='off' and result['source_bodies_monitored'] and outcome.get('status')!='completed'}
+                'needs_initial_refresh':not automatic.get('identity')}
     if operation=='prepare':
         schema.validate(manifest,'manifest')
         view,validation=map_index.validation(workspace,target_id,run)

@@ -197,8 +197,8 @@ class Monitor:
             force=state['force'];state['force']=False
             if not force and state['failure']==identity:
                 state.update(state='retry required');return
-            if not force and (identity==previous or previous is None and not result['changed'] and not result['needs_initial_refresh'] and \
-                    result.get('previous_identity') in (None,identity)):
+            if not force and (identity==previous or previous is None and not result['needs_initial_refresh'] and \
+                    result.get('previous_identity')==identity):
                 state.update(identity=identity,state='fresh');return
             state.update(identity=identity,failure=None,attempts=0,phase='stage',due=now,state='pending')
         elif job['phase']=='stage':

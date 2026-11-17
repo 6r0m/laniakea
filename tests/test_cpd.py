@@ -46,6 +46,57 @@ class CpdProcess(unittest.TestCase):
     setUp=pipeline_fixture.Pipeline.setUp
     tearDown=pipeline_fixture.Pipeline.tearDown
 
+    def test_failed_automatic_coverage_survives_restart_until_changed_or_explicit_retry(self):
+        from laniakea import map_index
+        from laniakea.monitor import Monitor
+        from laniakea.monitor_worker import execute
+        from laniakea.server import target_index
+        from laniakea.snapshots import Snapshots
+        from laniakea.unreal import cpd
+        from test_monitor import Watcher
+        from laniakea.workspace import read_json
+        source,_=self.clones();source.write_text('const char* text = "unterminated\n')
+        installed=cpd_tools.load(Path(os.environ['LANIAKEA_TEST_CPD']))
+        (self.workspace.root/'tools/health/cpd').mkdir(parents=True)
+        with recorded_ubt(self.project,self.engine),patch.object(cpd_tools,'load',return_value=installed):
+            pipeline.extract(self.workspace,self.target,health_options={'mode':'auto','heap_mib':512})
+            with self.workspace.extraction_lock('sample'):
+                candidate=execute(self.workspace,'sample','stage')
+                original=self.workspace.commit_run('sample',self.workspace.target_dir('sample')/'runs'/candidate['candidate'])
+            coverage=read_json(original/'manifest.json')['coverage']['acquisition']['source-duplication']
+            self.assertEqual((coverage['status'],coverage['code']),('failed','provider_exit'))
+            contexts=Snapshots(self.workspace,target_index(self.workspace,scan=False),
+                               {'sample':map_index.ensure(self.workspace,'sample',original)})
+            class Task:
+                def __init__(_self,workspace,target,operation,recipe):
+                    _self.result={'status':'completed','result':execute(workspace,target,operation,recipe)}
+                def poll(_self):return _self.result
+                def close(_self):pass
+            owner=Monitor(self.workspace,contexts,task_factory=Task,notifications=Watcher)
+            def settle():
+                for _ in range(15):
+                    owner.step()
+                    if not owner.current and not owner.states['sample']['phase']:return
+                self.fail('scheduler failed to settle')
+            try:
+                with patch.object(pipeline,'stage',wraps=pipeline.stage) as stages, \
+                        patch.object(cpd.subprocess,'run',side_effect=AssertionError('unchanged failure must not launch Java')):
+                    owner.activate('sample');settle()
+                    stages.assert_not_called()
+                self.assertEqual(self.workspace.latest('sample'),original)
+                self.assertEqual(contexts.latest('sample')['acquisition']['source-duplication'],coverage)
+                with patch.object(cpd.subprocess,'run',wraps=subprocess.run) as java:
+                    owner.retry('sample');settle();java.assert_called_once()
+                retried=self.workspace.latest('sample');self.assertNotEqual(retried,original)
+                source.write_text(source.read_text()+'// changed source\n')
+                with patch.object(cpd.subprocess,'run',wraps=subprocess.run) as java:
+                    with owner.condition:owner._dirty(owner.states['sample'])
+                    owner.states['sample']['due']=0;settle();java.assert_called_once()
+                self.assertNotEqual(self.workspace.latest('sample'),retried)
+                self.assertEqual(read_json(self.workspace.latest('sample')/'manifest.json')['coverage']['acquisition']
+                                 ['source-duplication']['status'],'failed')
+            finally:owner.stop()
+
     def test_watch_startup_reconciles_changed_config_even_with_completed_cpd(self):
         from laniakea.monitor import Monitor
         from laniakea.monitor_worker import execute

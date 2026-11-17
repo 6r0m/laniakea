@@ -31,6 +31,8 @@ admission and cache reuse. With real CPD configured it also checks CLI default/o
 publication using synthetic Unreal receipts/actions. It proves combined reuse and rejection of edits after native indexing.
 It also stages newly discovered native external headers and rejects subsequent drift. The real CPD suite verifies that a
 manual completed-health run still reconciles configuration edits made before monitoring starts.
+It also verifies that restarting an automatic failed-CPD snapshot launches neither extraction nor Java until an input change
+or explicit Retry, while preserving the failed coverage.
 `test_monitor.py` checks coalescing, contention, supersession, activation, fairness and bounded automatic history.
 `test_monitor_inputs.py` checks profile-selected inputs, changed receipt/product sets and unpublished staging. The server
 suite refuses a valid read index from another graph before context admission. `test_notifications.py` and
