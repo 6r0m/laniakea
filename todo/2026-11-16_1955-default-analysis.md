@@ -155,6 +155,11 @@ existing local tools. No production code, stable docs, tests or analysed-project
     can therefore leave new settings beside the old map. The prior recipe paragraph did not resolve crash consistency.
     A [synthetic CLI probe](../workspace/tmp/default-analysis-review/check.py) reproduced registration after an invalid
     health-option request returned 2 without publishing a map: [result](../workspace/tmp/default-analysis-review/settings-probe.json).
+15. The [Review isolation contract](../docs/architecture/review.md#lifetimes-and-failure-isolation) makes evaluation
+    independent of map serving/publication. Current Review construction binds a run/index; evaluation happens later in
+    [Review.load()](../laniakea/review_store.py). [Browser startup](../viewer/app.js) currently resolves no-URL selection
+    through remembered target state. [Startup target indexing](../laniakea/server.py) checks freshness for registrations;
+    saved-map viewing today is not a guarantee of no source scanning.
 
 ### Upstream evidence and reviewer assessment
 
@@ -314,6 +319,11 @@ Allow explicit same-origin activation/pause through existing target controls; se
 into analysis. Additional activation is deliberate and session-local, deduplicated across tabs. Closing a tab does not
 silently change activation; `down` clears the session. No persistent subscription registry or per-tab lease protocol.
 Activation accepts only registered target IDs under existing host/origin validation, never arbitrary source paths.
+Pass the launch-selected ID through existing server startup metadata to the browser. For initial opening, a valid explicit
+deep link wins, then the launch-selected ID, then valid remembered state/default fallback when no launch choice is present.
+Do not let stale browser-local memory override launch selection. Preserve the deep link's scope and subsequent Back/Forward
+behavior; displaying another explicitly linked target does not silently activate it. Test launch A with remembered B,
+and an explicit deep link to B while A remains the monitored target. Show that monitoring/display distinction clearly.
 When several targets are explicitly active, share physical watches and apply global fairness/resource limits. A refused
 activation leaves it inactive with a reason. Pause cancels that target's pending/owned work; it does not delete its map.
 
@@ -393,11 +403,18 @@ later changes are observed.
 Do not repeatedly retry deterministic failure for identical inputs. A new relevant source/tool/request change or explicit
 retry may schedule it again; periodic reconciliation alone must not create a failure loop. A bad target must not starve others.
 
-Publish through the existing validated partial-run/latest path. Then prepare an immutable server read context containing
-manifest, shards, topology, exact references and Review before advertising it as ready. Pin all multi-request reads to one
-generation; old in-flight readers finish on that context. Never return new reference IDs through an old URL. Expired
-contexts return explicit stale/reload responses. Validate layout and triage writes against their originating context,
-preserving independent user state when nodes temporarily disappear.
+Publish through the existing validated partial-run/latest path. Validate the canonical graph/read index and prepare an
+immutable read context containing manifest, shards, topology and exact references before advertising it as ready. Bind a
+lazy Review owner to that generation; do not require successful policy loading, cache generation, triage reading or Review
+evaluation for publication, context readiness or browser adoption. Review errors remain explicit in Review while the new
+map stays usable. Even Review-owner preparation failure must not gate the canonical map. This preserves the existing
+[failure-isolation contract](../docs/architecture/review.md#lifetimes-and-failure-isolation); required acquisition artifact
+validation still belongs to publication and is not bypassed by this rule.
+
+Pin all multi-request reads to one generation; old in-flight readers finish on that context. Never return new reference
+IDs through an old URL. Expired contexts return explicit stale/reload responses. Validate layout and triage writes against
+their originating context, preserving independent user state when nodes temporarily disappear. A late old-generation
+Review response/error cannot overwrite the new context or reopen closed inspection.
 
 The browser polls only small status/latest metadata at a modest bounded interval, reducing polling in hidden tabs. Stage
 the new run before swapping live state; invalidate reference/search/Review pages and ignore late responses. Reuse scene/
@@ -421,8 +438,16 @@ new starts/publication, signal cancellation and discard queued work. Check cance
 chunks as well as subprocess waits; a long source read or native executor shutdown cannot be allowed to hold the viewer.
 
 Run potentially blocking background preparation/extraction/index construction in one disposable owned job process. Contain
-it and its descendants in a Windows Job Object, established before execution can spawn children, with no breakaway and
-kill-on-close. Use a narrow standard-library process owner shared by UBT/Java/native cancellation, not a worker service.
+it and its descendants in a Windows Job Object with no breakaway and kill-on-close. Worker code must not execute before
+successful assignment, not merely before it spawns children. Prefer assignment as part of process creation on supported
+Windows; another launch sequence must prove equivalent pre-execution and controller-death safety or refuse background work.
+Assignment failure must leave no executable or orphaned suspended worker.
+
+The controller alone owns the controlling Job Object handle: create it non-inheritable, exclude it from inherited-handle
+lists and never duplicate it into worker/descendant handle tables. Job membership does not require such inheritance.
+Close temporary controller-side duplicates so final handle
+closure on controller death can trigger kill-on-close. Redirect only explicitly permitted I/O handles. Use a narrow
+standard-library process owner shared by UBT/Java/native cancellation, not a worker service.
 Allow at most 2 seconds cooperative grace; terminate the owned job if still running, then drain/reap children, worker futures
 and watch I/O within the remaining internal budget. Do not rely on Future.cancel() or executor shutdown(wait=False).
 Cancellation never becomes an optional-provider failure publication. If containment cannot be established, refuse background
@@ -440,7 +465,11 @@ target writer lock and permits the single commit only after successful worker co
 checks. Cancellation before that short commit leaves the old state. Do not acquire a second conflicting lock in the child.
 
 Microsoft documents [Job Object containment](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects),
-including descendant handling. Python documents that [executor cancellation](https://docs.python.org/3.9/library/concurrent.futures.html#concurrent.futures.Executor.shutdown)
+including descendant handling and last-handle termination. The
+[process-creation Job List attribute](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-updateprocthreadattribute)
+supports assignment during creation on Windows 10+. Do not silently raise the platform baseline; background work must
+refuse visibly if equivalent safe admission cannot be established, leaving saved-map exploration available.
+Python documents that [executor cancellation](https://docs.python.org/3.9/library/concurrent.futures.html#concurrent.futures.Executor.shutdown)
 does not stop running work. These support the proposed mechanism; real UBT/Java/native containment and nested-job behavior
 remain implementation gates. No production process-owner or monitoring capability is claimed by this plan.
 
@@ -479,6 +508,8 @@ remain implementation gates. No production process-owner or monitoring capabilit
 14. Committed target settings, recipe and run resolve through one publication pointer. A failed request changes none of them;
     structured optional failure is a successful graph publication only under the declared acquisition policy.
 15. Only explicitly session-active targets consume monitoring resources. History and mere cached browsing never activate work.
+16. Review evaluation is run-bound and independent of canonical map readiness. Its failures cannot block publication,
+    serving or adoption; stale Review callbacks cannot affect another generation.
 
 ## Implementation tasks
 
@@ -499,22 +530,28 @@ until Gate 3 passes; do not enable a half-working automatic refresh path. Implem
 - [ ] Align default Review floor and triage semantics with invariants 5-6. Expose structured unavailable/failed/disabled/
   incomplete status in existing CLI/Review controls, including older runs. Test complete build-to-Review, not just CPD XML.
 - [ ] Verify current native/corpus/Review reuse, required-mode refusal, ordinary exploration without LLVM/Java, unchanged
-  user state and the real default corpus. Finish the relevant stable-owner updates. Gate 1 may ship with saved-only up;
-  it must not claim continuous monitoring or live adoption.
+  user state and the real default corpus. Finish the relevant stable-owner updates. Gate 1 may retain current up behavior:
+  it serves saved maps but may hash sources for startup freshness. It must not claim scan-free opening, continuous monitoring
+  or live adoption. Guaranteed no-source-scan saved-only mode is delivered in Gate 2.
 
 ### Gate 2 - Monitoring, cancellation and publication
 
 - [ ] Add A9 activation, profile-derived roots and Windows notifications with SourceTree enforcement. Test actual atomic
   saves/renames/root replacement and deterministic event-loss/overflow recovery. Inactive history consumes no watch or
-  analysis resources. Add no-watch recovery and explicit session activation/pause/retry semantics.
+  analysis resources. Add guaranteed no-source-scan no-watch recovery and explicit session activation/pause/retry semantics.
+  Carry launch selection in startup metadata and prove it overrides remembered state without overriding explicit deep links.
 - [ ] Prove the owned process boundary before enabling jobs: worker plus descendants, UBT/Java/native/preprocessor waits,
   blocked copy/hash/index stages, nested-job refusal and stop within the existing 10-second confirmation wait. An unrelated
-  sentinel process remains alive. Do not use future cancellation or 900-second timeouts as shutdown proof.
+  sentinel process remains alive. Prove assignment before the worker's first instruction, parent-only non-inherited job
+  handle ownership and forced controller-death cleanup; assignment failure leaves no suspended orphan. Include a deliberate
+  leaked-handle or early-execution negative control that the containment test rejects. Do not use future cancellation or
+  900-second timeouts as shutdown proof.
 - [ ] Implement bounded debounce/generations, one coalesced pending request, global fairness and typed UBT contention with
   the bounded retry contract. Preserve the writer lock; the worker stages and the pipeline parent alone commits.
 - [ ] Serve cached maps before freshness scanning, prepare immutable read contexts and expose small status/latest metadata.
-  Pin manifest/shards/references/Review/write validation to the same context. Both background and manual publications use
-  that handoff. Protect active readers and user data during bounded automatic-artifact retention.
+  Pin manifest/shards/references and write validation to the same context; bind lazy Review without waiting for evaluation.
+  Block/fail Review during testing and prove canonical context readiness/serving still work. Both background and manual
+  publications use that handoff. Protect active readers and user data during bounded automatic-artifact retention.
 - [ ] Run failure/race/stop tests and real Windows save/context/header changes. Measure idle cost, queue stability and
   repeated-edit disk/memory/handle growth. Browser adoption is not yet claimed; existing tabs remain consistently pinned
   until Gate 3, with the new run available through its explicit context. Monitoring remains opt-in at this gate.
@@ -524,6 +561,7 @@ until Gate 3 passes; do not enable a half-working automatic refresh path. Implem
 - [ ] Adopt a staged ready context through existing scene/position/navigation owners, deferring for drag/pending saves/
   failures/drafts. Preserve camera, surviving IDs, filters, selection and Inspector intent. Cancel obsolete pages; test
   deep contextual files, removed focus fallback, multiple tabs and old/new writes without cross-run evidence mixing.
+  A blocked or failed Review evaluation must not delay adoption; show Review's error separately on the usable new map.
 - [ ] Show monitored target, job state and provider coverage without new permanent panels. Historical browsing stays
   inactive until explicit activation. Run affected Chromium scenarios and the real save-to-visible-update walkthrough.
 - [ ] Measure interaction p95/max while analysis runs; compare protected state and exact references. Only after Gates 1-3
@@ -551,6 +589,9 @@ measured need and complete-corpus equivalence proof.
 | inactive historical targets | require no source scans/watchers/analyzers until explicit activation, even when browsing a saved bookmark |
 | busy UBT and stop during a 900-second child | typed contention retries are bounded; owned descendants exit within the existing stop wait, foreign process survives |
 | incomplete Review coverage | button can say zero findings while a check is unavailable; require an explicit availability cue |
+| blocked/failed Review while a new graph is ready | graph publication, context readiness and adoption must proceed; Review alone reports its error |
+| remembered target B, launch target A | ordinary opening shows A; an explicit deep link to B retains B and its scope without activating it |
+| worker execution or leaked job handle before containment | reject early execution and inherited/duplicated controller handles; controller death must reap owned workers |
 | source edit while viewing | no monitor or live adoption exists; require saved edit -> validated run -> visible update |
 | same-target/new-run adoption | existing show/restore paths retain old map or reject the scene; require consistent replacement |
 | event loss or root replacement | synthetic lost events and actual Windows root replacement must recover by reconciliation |
@@ -587,12 +628,24 @@ all intended input files were processed. Reviewer judgements of usefulness are n
   already running, timeout, parent death, no Job Object support, and stop during UBT backoff. Verify no children survive a
   successful stop, no queued retry spawns after cancellation, and no commit occurs from a cancelled worker. Busy exit 10
   must differ from ordinary failures; retry exhaustion preserves dirty state without a polling retry loop.
+- Inject controller death around worker creation/assignment and after descendants start. Assert the worker's first
+  instruction cannot run outside its job, assignment refusal leaves no suspended orphan, and the controlling job handle
+  is neither inherited nor duplicated into children, including with redirected standard I/O. A deliberate handle leak or
+  early-execution control must falsify the claimed guarantee; successful graceful cleanup alone is insufficient evidence.
 - Register several unrelated historical targets; instrument input reads, watch creation and process starts. Default up
   touches source only for the launch-selected target. Browsing, activation refusal, explicit additional activation, pause,
   duplicate tabs and restart must obey the session policy; cached artifacts remain available for inactive targets.
+- Test startup metadata and real browser memory together: launch A/remembered B/no URL opens A; valid deep link to B opens
+  its exact scope; absent launch selection retains the existing fallback behavior. Back/Forward and cached browsing must
+  not change monitoring activation. Gate 2 no-watch must refuse any call to profile inputs/freshness or source traversal;
+  building disposable views from saved artifacts remains allowed.
 - Server/browser tests: cached opening before blocked freshness scan, consistent generation URLs for every artifact,
   old/new reference and triage requests, context expiry, multiple tabs, manual build adoption, failed read-index preparation,
   drag/save-error/draft deferral, deleted focus fallback and closed Inspector retention. No automatic camera fit.
+- Hold Review evaluation unresolved, then fail policy/cache/triage/evaluation separately. Validate/publish the new graph,
+  serve its topology/references and complete browser adoption without waiting for Review. Show a run-bound Review error;
+  recover through Review's existing retry/recheck path without source extraction or map rollback. Inject a late old report
+  and error to prove neither changes the new context. Canonical index/graph failures must still block readiness.
 - Real walkthrough: normal build needs no health flag when tools exist. Open the saved map, edit an authorized source,
   observe updating then validated adoption, inspect exact evidence and confirm exploration state remains. Repeat with shared
   header and descriptor/context edits, a provider failure and recovery, absent tools, saved-only opening and `down`/restart.
@@ -685,3 +738,19 @@ Only changes authorized after this review are implemented; no new services or sp
   monitor, process owner, outcome model or transaction. No real-project extraction was required for these planning fixes.
 - Implementation remains unapproved. Production code, tests and stable docs were not edited in this review pass; the Git
   index was preserved. The revised contracts and actual Windows runtime costs remain acceptance work after approval.
+
+### 2026-11-17 - Review isolation, process handles and launch handoff
+
+- Accepted the three localized findings and gate-wording correction. Current Review construction is lazy, so the prior
+  readiness wording was ambiguous rather than evidence of a current eager-evaluation bug. Explicitly require canonical
+  validation while making Review evaluation/failure independent of readiness, publication and adoption.
+- Require worker assignment before any worker code executes and controller-only, non-inherited Job Object handles.
+  Gate 2 proves controller-death cleanup and rejects handle-leak/early-execution controls; OS documentation alone does not
+  establish those runtime guarantees for Laniakea.
+- Carry launch target through startup metadata and test precedence against browser-local memory and explicit deep links.
+  Gate 1 retains current freshness-on-open behavior; guaranteed no-source-scan saved-only mode begins at Gate 2.
+- Only this todo is edited. Historical entries, task timestamp and operator decisions remain intact. Implementation is
+  still unapproved; no permission to begin Gate 1 is inferred from the reviewer's recommendation.
+- Verification: 2 documentation tests and the existing unavailable/invalid-policy Review regression passed, no skips.
+  ASCII, contents, historical-entry preservation, privacy and unchanged-index checks passed. These checks validate this
+  planning revision/current Review behavior; they do not prove future Windows containment or browser adoption.
