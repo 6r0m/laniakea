@@ -61,6 +61,11 @@ The manifest lists what was analysed, what was not (other targets, deeper hops, 
 counts. Missing analysis never establishes absence or proves that configuration disabled a node.
 Presentation is defined by the [viewer contract](viewer.md).
 
+Optional provider acquisition has schema-validated outcomes separate from findings: completed, unavailable, disabled,
+failed or incomplete. Only completed evidence supports a zero-finding claim. Reuse preserves completion with its original
+input/tool identity; it is not a separate coverage state. Older runs without outcomes remain unrecorded where their
+coverage cannot be established. The [Unreal profile](unreal-profile.md#source-duplication) owns provider-specific modes.
+
 ## Owner-local references
 
 A profile can classify an owner-local reference as internal to its normalized owner, including references whose endpoints
@@ -109,6 +114,12 @@ Each extraction writes `workspace/targets/<id>/runs/<utc>/` with the raw tool ou
 and `scopes/`, then points `latest.json` at it. The manifest records profile-defined sha256 input fingerprints before
 the export runs. At start the server recomputes them, and any difference marks the run stale, naming the changed inputs.
 The Unreal profile owns [which file contents and selection metadata participate](unreal-profile.md#build-context).
+
+New runs bind a validated extraction request by digest: target settings and collection intent are immutable parts of that
+run. The latest pointer selects the graph, effective settings and recipe together. Proposed CLI settings are not persisted
+before successful extraction. A failure before pointer replacement leaves the previous committed request authoritative;
+an unreferenced candidate is not a registration. Legacy target.json supplies registration only when no committed request
+exists. Optional acquisition failure may accompany a valid graph under its declared mode; required failures do not commit.
 
 The manifest's optional `timings_seconds` records elapsed phases. The profile supplies its extraction phases;
 the pipeline supplies profile execution, shard writing/validation and total time through graph serialization, before

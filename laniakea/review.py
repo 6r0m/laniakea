@@ -63,11 +63,15 @@ def loop(members, adjacency):
     return []
 
 
-def _duplication(data,rule,selected,check,emit):
+def _duplication(data,rule,selected,check,emit,acquisition=None):
     if data is None:
-        check.update(status='unavailable',detail='Source duplication was not recorded; explicitly request --health duplication.')
+        status=(acquisition or {}).get('status','unrecorded')
+        code=(acquisition or {}).get('code','no_observations')
+        check.update(status=status if status in {'failed','disabled'} else 'unavailable',
+                     detail=f'Source duplication {status} ({code}); inspect source-health coverage/setup or retry collection.')
         return
-    minimum=rule.get('minimum_tokens',100)
+    minimum=rule.get('minimum_tokens',data['minimum_tokens'])
+    rule={**rule,'minimum_tokens':minimum}
     if minimum<data['minimum_tokens']:
         check.update(status='unavailable',detail='Threshold is below collected coverage; extract health again with a lower collection threshold.')
         return
@@ -197,7 +201,8 @@ def evaluate(nodes, rows, manifest, policy, adapter=None, health_data=None):
         if check['status']=='unavailable':
             continue
         if rule['kind']=='duplication':
-            _duplication(health_data,rule,set(check['matched']['scope']),check,finding)
+            _duplication(health_data,rule,set(check['matched']['scope']),check,finding,
+                         manifest.get('coverage',{}).get('acquisition',{}).get('source-duplication'))
             continue
         if rule['kind']=='native':
             if not facts['native']:

@@ -274,8 +274,15 @@ See [third-party terms](../../THIRD_PARTY.md) and [operator commands](../guide.m
 
 The adapter uses CPD's own token images for strict-match fingerprints and exports exact line/column ranges without source
 text. Identifier/literal normalization is off. It verifies every input was processed and every match's token count and
-identity agree. Lexical errors, missing tools, timeout, changing corpus or invalid evidence fail the requested run;
-the previous published map remains available. No partial/empty-success fallback is permitted.
+identity agree. An absent terminal newline is supplied only in the isolated tool copy because PMD's preprocessor lexer
+requires it; original bytes still own hashes and existing token coordinates do not move.
+
+`--health duplication` requires complete successful collection. `--health auto` permits a validated module/native graph
+with explicitly unavailable, failed or incomplete duplication coverage; it never substitutes old observations or an empty
+successful report. `--health off` skips collection. Tool integrity failure refuses execution. Core input, physical-boundary,
+graph validation, superseded corpus and unknown internal failures still reject publication. Required failures retain the
+previous map and committed settings. No-health ordinary extraction remains independent of Java and C++ content scans.
+Structured outcomes use the existing [manifest coverage contract](graph-model.md#coverage); Review does not own acquisition.
 
 One corpus-wide result can be reused only for identical source hashes, membership/owners, scope, threshold and tool
 identity. Adding or removing a file invalidates reuse. Compilation changes affect triage context and the selected module

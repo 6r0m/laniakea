@@ -11,6 +11,7 @@ from .workspace import read_json, write_json
 def extract(workspace, target, *, symbols=False, health_options=None):
     """Run the target's profile into a new run. latest.json moves only after every file validated and was written."""
     with workspace.extraction_lock(target["id"]):
+        workspace.propose(target['id'], target)
         return _extract_locked(workspace, target, symbols, health_options)
 
 
@@ -47,6 +48,7 @@ def _extract_locked(workspace, target, symbols, health_options=None):
             "edge_types": fields["edge_types"] + summary_types,
             "sources": fields["sources"] + [{"id": "rollup", "name": "laniakea scope summaries", "version": __version__}],
             "entry": shards.ENTRY,
+            "request": workspace.stage_request(run, target, symbols, health_options),
             "timings_seconds": {**fields.get("timings_seconds", {}), "profile": profile_seconds,
                                 "shards": shards_seconds},
         }

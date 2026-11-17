@@ -32,7 +32,7 @@ def _target(workspace, reference, engine, name, target):
         return stored
     kept = stored or {}
     fields = profile.target_fields(project, engine or kept.get("engine_root"), target or kept.get("target"))
-    return workspace.register(target_id, fields)
+    return workspace.propose(target_id, fields)
 
 
 def _extract(args, workspace):
@@ -41,7 +41,8 @@ def _extract(args, workspace):
     print(f"laniakea: engine {target['engine_root']}")
     if not args.health and (args.health_scope or args.health_minimum_tokens!=100):
         raise LaniakeaError('--health-scope and --health-minimum-tokens require --health duplication')
-    options={'prefixes':args.health_scope,'minimum_tokens':args.health_minimum_tokens} if args.health else None
+    options={'mode':'required' if args.health=='duplication' else args.health,
+             'prefixes':args.health_scope,'minimum_tokens':args.health_minimum_tokens} if args.health else None
     run, manifest = pipeline.extract(workspace, target, symbols=args.symbols,health_options=options)
     counts = manifest["coverage"]["counts"]
     summary = ", ".join(f"{key.split('.', 1)[1]} {value}" for key, value in counts.items() if key.startswith("nodes."))
@@ -93,7 +94,7 @@ def parser():
         command.add_argument("--name", help="target id in the workspace; defaults to the project name")
         command.add_argument("--target", help="build target to export; defaults to the latest usable build receipt, then Editor")
         command.add_argument("--symbols", action="store_true", help="also analyse classes/functions with locally installed LLVM tools")
-        command.add_argument('--health',choices=['duplication'],help='explicitly collect strict C++ source clones with local CPD tools')
+        command.add_argument('--health',choices=['duplication','auto','off'],help='source clones: required duplication, optional auto, or off')
         command.add_argument('--health-scope',action='append',default=[],help='root-relative source prefix; repeat to bound the corpus')
         command.add_argument('--health-minimum-tokens',type=int,default=100,help='CPD collection floor; default 100')
 

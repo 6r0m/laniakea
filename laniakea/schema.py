@@ -77,6 +77,14 @@ def validate(value, definition=None):
         shown = "; ".join(problems[:5])
         more = f" (+{len(problems) - 5} more)" if len(problems) > 5 else ""
         raise LaniakeaError(f"{definition or 'graph'} does not match the schema: {shown}{more}")
+    if definition == 'manifest':
+        outcome=value['coverage'].get('acquisition',{}).get('source-duplication')
+        if outcome is not None:
+            completed=outcome['status']=='completed'
+            if completed != ('health' in value) or completed and outcome.get('artifact_sha256')!=value['health']['sha256']:
+                raise LaniakeaError('source-health outcome and validated artifact disagree')
+            if completed and not all(outcome.get(k) for k in ('tool_identity','input_identity')):
+                raise LaniakeaError('completed source-health outcome lacks input/tool identity')
     if definition == 'map':
         files, nodes = value.get('files', []), value['nodes']
         for file in files:

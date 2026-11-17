@@ -7,7 +7,7 @@ from pathlib import PurePosixPath
 
 DEFAULT = {'version': 1, 'rules': [{'id': 'module-cycles', 'kind': 'cycles'},
                                     {'id': 'native-direct-dependency', 'kind': 'native'},
-                                    {'id':'source-duplication','kind':'duplication','minimum_tokens':100}]}
+                                    {'id':'source-duplication','kind':'duplication'}]}
 
 
 def fields(value, allowed):

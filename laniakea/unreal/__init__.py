@@ -65,14 +65,13 @@ def _choose(targets, wanted):
 
 def extract(target, run_dir, previous_manifest=None, tools_dir=None, health_options=None):
     """Export the target's module graph into run_dir/ubt and build schema v1 from it."""
-    if health_options is not None:
-        from . import cpd
-        health_options=cpd.prepare(health_options)
+    from . import source_health
+    prepared=source_health.prepare(health_options)
     project = Path(target["project_file"])
     root = Path(target["engine_root"])
     out = Path(run_dir) / "ubt"
     out.mkdir(parents=True, exist_ok=True)
-    inputs_before = inputs(target, symbols=tools_dir is not None,health_options=health_options)
+    inputs_before = inputs(target, symbols=tools_dir is not None)
     start = perf_counter()
     targets = ubt.query_targets(root, project, out)
     timings = {"query_targets": perf_counter() - start}
@@ -142,13 +141,5 @@ def extract(target, run_dir, previous_manifest=None, tools_dir=None, health_opti
         unknown = compiler_result["unknown"]
         if any(unknown.values()):
             coverage["not_analysed"].append(f"unresolved compiler reference ownership: source={unknown['source']}, target={unknown['target']}")
-    if health_options is not None:
-        from . import cpd, cpd_tools
-        marker,result=cpd.extract(target,run_dir,built,exported,health_options,previous_manifest)
-        manifest['health']=marker
-        manifest['sources'].append({'id':'source-health','name':'PMD CPD strict C++ token clones','version':cpd_tools.VERSION})
-        timings['health_cpd']=result['seconds']
-        coverage['counts'].update({'health.files':result['files'],'health.groups':result['groups'],'health.reused':int(result['reused'])})
-        coverage['analysed'].append('strict authored-source C++ token duplication in the explicitly collected corpus')
-        coverage['not_analysed'].append('source clones do not prove semantic duplication, selected preprocessing branches or a SOLID violation')
+    source_health.collect(target,run_dir,built,exported,manifest,prepared,previous_manifest)
     return built, manifest

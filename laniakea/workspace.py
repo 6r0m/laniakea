@@ -2,6 +2,7 @@
 """The ignored workspace: the only place data about an analysed project is written."""
 
 import json
+import hashlib
 import os
 import re
 import shutil
@@ -60,8 +61,30 @@ class Workspace:
         return self.root / "targets" / target_id
 
     def load(self, target_id):
+        request = self.request(target_id)
+        if request is not None:
+            return request['target']
         path = self.target_dir(target_id) / "target.json"
         return read_json(path) if path.is_file() else None
+
+    def request(self, target_id):
+        """The request selected by the publication pointer; legacy registrations have no request."""
+        run = self.latest(target_id)
+        if run is None or not (run / 'manifest.json').is_file():
+            return None
+        marker = read_json(run / 'manifest.json').get('request')
+        if marker is None:
+            return None
+        from . import schema
+        schema.validate(marker, 'requestMarker')
+        raw = (run / 'request.json').read_bytes()
+        if len(raw) > 65536 or hashlib.sha256(raw).hexdigest() != marker['sha256']:
+            raise LaniakeaError('committed extraction request is invalid')
+        request = json.loads(raw)
+        schema.validate(request, 'extractionRequest')
+        if request['target']['id'] != target_id:
+            raise LaniakeaError('committed request belongs to another target')
+        return request
 
     def targets(self):
         base = self.root / "targets"
@@ -81,15 +104,29 @@ class Workspace:
 
     def register(self, target_id, fields):
         """Store a new target. An id already bound to another project file is refused."""
-        if not _ID.match(target_id):
+        target = self.propose(target_id, fields)
+        write_json(self.target_dir(target_id) / "target.json", target)
+        return target
+
+    def propose(self, target_id, fields):
+        """Validate an extraction request without changing committed registration or settings."""
+        if not _ID.fullmatch(target_id):
             raise LaniakeaError(f"target id {target_id!r} must be lower case letters, digits, '.', '_' or '-'")
         existing = self.load(target_id)
         if existing and not same_file(existing["project_file"], fields["project_file"]):
             raise LaniakeaError(
                 f"target id {target_id!r} already belongs to {existing['project_file']}; pick another with --name")
-        target = {**(existing or {}), **fields, "id": target_id}
-        write_json(self.target_dir(target_id) / "target.json", target)
-        return target
+        return {**(existing or {}), **fields, "id": target_id}
+
+    def stage_request(self, run, target, symbols, health_options):
+        from . import schema
+        self.propose(target['id'], target)
+        request = {'version': 1, 'target': target, 'recipe': {'symbols': symbols,
+                   'health': {'mode':'required',**health_options} if health_options is not None else {'mode': 'off'}}}
+        schema.validate(request, 'extractionRequest')
+        path = Path(run) / 'request.json'
+        write_json(path, request)
+        return {'version': 1, 'path': 'request.json', 'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
 
     def begin_run(self, target_id):
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")

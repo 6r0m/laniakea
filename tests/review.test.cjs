@@ -74,6 +74,9 @@ test('review starts enabled with a closed list, and closing that list retains an
     control.loading=false;control.error='Failed';control.status();assert.match(node('toggle-review').textContent,/failed/i);
     control.error=null;control.data={counts:{candidate:2,violation:0,acknowledged:0}};control.status();
     assert.match(node('toggle-review').textContent,/2 candidates/);
+    control.data={counts:{candidate:0,violation:0,acknowledged:0},checks:[
+      {status:'failed'},{status:'unavailable'},{status:'available'},{status:'disabled'}]};
+    control.status();assert.match(node('toggle-review').textContent,/0 findings \/ 2 checks unavailable/);
   } finally {global.$=previous;global.togglePanel=previousPanel;}
 });
 

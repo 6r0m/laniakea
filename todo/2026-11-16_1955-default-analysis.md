@@ -1,6 +1,7 @@
 # Continuous useful analysis with safe reuse
 
-**Status:** REVIEW REQUIRED  
+**Status:** IN PROGRESS - Gate 1 and bounded CPD bottleneck investigation; Gates 2-3 paused by D5
+
 **Scope:** continuous monitoring, default code-health collection, safe reuse and validated live map updates  
 **Stable documentation owners:** [Unreal profile](../docs/architecture/unreal-profile.md),
 [Review](../docs/architecture/review.md), [viewer](../docs/architecture/viewer.md), [guide](../docs/guide.md)
@@ -46,11 +47,25 @@ state. Missing coverage and ongoing work remain visible; unchanged analysis is r
   - Effect: revise the build-only recommendation to cover background work and safe live snapshot adoption.
   - Reason: not stated beyond the requested continuous, delta-based behavior.
   - Source: operator answer to Q1, 2026-11-16.
+- **D4:** Implement this approved plan with implement-approved-change.
+  - Effect: implement and verify the three delivery gates, respecting their value and safety gates.
+  - Reason: not stated.
+  - Source: explicit operator implementation request, 2026-11-17.
+- **D5:** Investigate the actual CPD bottleneck before choosing the default. Do not accept 100 as a fallback for the
+  failed short-clone gate; profile the same complete corpus at 50 with bounded 1/2/4 GB heaps, and 8 GB only if safe.
+  - Effect: preserve strict/global matching and exact evidence, examine pinned PMD and upstream work, check output limits,
+    and return measured cause/resource costs/solution for review before proceeding with Gates 2-3 or enabling defaults.
+  - Reason: a hard-coded heap cap and upstream matching scalability may be the limit; lower-quality fallback is not approved.
+  - Source: operator answer to Q2, 2026-11-17.
 
 ### Operator gates
 
 - **Q1 [CLOSED by D3]:** Should automatic source collection run on build, on opening, or continuously after edits?
   - D3 selects continuous monitoring; the lifecycle, publication and acceptance sections below now cover it.
+- **Q2 [CLOSED by D5]:** Retain 100 tokens as the automatic
+  default, or investigate a larger bounded CPD budget before selecting the default? The full real corpus completes at
+  100 after the isolated-input newline correction, while 50 exhausts the existing 1 GB Java heap. D5 selects investigation;
+  it does not authorize the fallback. Gates 2-3 wait for the requested evidence review.
 
 ### Working assumptions
 
@@ -754,3 +769,42 @@ Only changes authorized after this review are implemented; no new services or sp
 - Verification: 2 documentation tests and the existing unavailable/invalid-policy Review regression passed, no skips.
   ASCII, contents, historical-entry preservation, privacy and unchanged-index checks passed. These checks validate this
   planning revision/current Review behavior; they do not prove future Windows containment or browser adoption.
+
+### 2026-11-17 - Partial Gate 1 implementation and D5 measurement checkpoint
+
+- D4 authorized implementation. Gate 1 changes bind effective target settings and collection intent to the immutable run;
+  latest-pointer promotion commits them together. Explicit auto/required/off acquisition records structured coverage,
+  distinguishes provider failure from graph failure, and prevents older observations being presented as current.
+  Review uses the recorded collection floor when policy omits one and exposes unavailable checks. Ordinary builds remain
+  module-only without health collection; neither the production heap nor collection default has changed.
+- Regression-first proof: invalid CLI options and failed target selection previously wrote registration/settings before
+  successful publication. Focused regressions now pass, including interrupted pointer replacement. A real-provider EOF
+  fixture reproduced PMD's unterminated final preprocessor-directive error; supplying only the isolated copy's final newline
+  fixes it while preserving original hashes, source bytes and exact evidence ranges.
+- D5 investigation used one frozen, complete authorized corpus at strict 50 tokens. Phase traces locate the 1 GiB failure
+  in PMD MatchCollector.registerTokenMatch/BitSet expansion during MATCH, before fingerprint/export. The 2/4/8 GiB arms
+  completed without skipped files and produced identical fingerprints, token counts, occurrences and coordinates. Validated
+  evidence fits the existing group, occurrence and artifact limits. Synthetic exact-match and renamed/different negative
+  controls passed; unchanged corpus reuse invoked no Java process.
+- The untouched registered bridge reproduced the same full result at 4 GiB, controlling for diagnostic instrumentation.
+  A sampled manual audit found useful short cross-module logic as well as intentional boilerplate. Findings remain review
+  candidates; strict clones do not establish a design violation. Diagnostics and project-identifying measurements stay
+  private: [phase/heap sweep](../workspace/tmp/live-analysis-implementation/cpd-profile/sweep-audited.json),
+  [independent bridge and cache controls](../workspace/tmp/live-analysis-implementation/cpd-profile/controls.json),
+  [short-clone audit](../workspace/tmp/live-analysis-implementation/cpd-profile/short-clone-audit.json).
+- Upstream [issue 6145](https://github.com/pmd/pmd/issues/6145) supports the matching-memory diagnosis. The open
+  [optimization PR 6215](https://github.com/pmd/pmd/pull/6215) changes grouping behavior and is not adopted. Local bridge
+  retokenization adds later cost, but cannot explain the earlier matching failure. No new matcher/cache is justified here.
+- Proposed smallest next correction, pending D5 review: configurable bounded 4 GiB heap with memory-headroom admission and
+  bounded CPU. The measured 2 GiB arm operated near its ceiling; 8 GiB gave negligible timing benefit with higher memory
+  cost. Keep strict global 50-token analysis, complete processing and explicit incomplete/failed outcomes. This is a measured
+  candidate for this corpus, not a universal scalability guarantee. No fallback to 100, file suppression or module partition.
+- Verification so far: 70 focused Python tests passed with real CPD enabled; nine Review JavaScript tests passed, including
+  unavailable-check presentation. These are bounded implementation proofs, not continuous-monitor/browser-adoption acceptance.
+  Final regression envelope: 173 JavaScript tests and two documentation tests passed; local privacy, unchanged saved-layout
+  hashes, ASCII and unchanged-index checks passed. No live browser or new Unreal extraction is claimed for this checkpoint.
+  Stable graph/profile/Review contracts and operator guidance describe only delivered behavior. The working tree includes
+  code, schema, tests, documentation and this execution record; no staging or commit was performed.
+- D5 remains a review checkpoint: Gates 2-3 are paused, no default is promoted, and no real-project map is published by
+  these diagnostics. An unused process-containment prototype is parked in ignored scratch, outside the production diff.
+  Monitoring, default short-clone acquisition and live adoption remain unfinished. Keep this task active, not archived.

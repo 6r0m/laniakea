@@ -22,8 +22,13 @@ the [evaluator](../../laniakea/review.py) interprets validated observations as f
 It does not add canonical nodes or relationships. Evidence remains at file/module scope when the compiler has not proved
 unique function ownership; a nearby function name is insufficient. All matching ranges remain available in bounded pages,
 separate from dependency-reference paging. Raw source matches can span inactive branches or intentional boilerplate.
-The default Review threshold is 100 tokens per occurrence. Raising it filters recorded groups; lowering it below the
-collection floor reports unavailable evidence and requires explicit recollection. Missing observations mean not recorded.
+An omitted Review threshold uses the recorded collection floor. Explicit policy remains authoritative. Raising it filters
+recorded groups; lowering it below the collection floor reports unavailable evidence and requires explicit recollection.
+Missing observations mean not recorded.
+Structured acquisition failure, unavailability and disabled status remain distinct from successful zero findings. A new
+graph without current observations cannot reuse findings from an older health artifact; stored triage is retained.
+Effective policy is canonicalized before finding fingerprints, preserving unchanged implicit 100-token decisions on legacy
+100-token evidence.
 Policy scope selects participating recorded modules; at least two matching occurrences must remain in scope.
 
 The evaluator reads canonical payloads through the existing read index. It does not reason from bundled lines,

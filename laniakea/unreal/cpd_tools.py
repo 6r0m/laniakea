@@ -14,6 +14,10 @@ VERSION='7.29.0'
 BRIDGE=Path(__file__).with_name('CpdBridge.java')
 
 
+class ToolError(LaniakeaError):
+    """An optional installation could not be validated; it must never be executed."""
+
+
 def digest(path):
     result=hashlib.sha256()
     with Path(path).open('rb') as stream:
@@ -91,6 +95,6 @@ def load(directory):
         if not {'classes/CpdBridge.class',f'lib/pmd-cpp-{VERSION}.jar'}<=marker['files'].keys():
             raise ValueError('missing adapter or C++ analyzer')
     except (OSError,ValueError,KeyError,TypeError) as error:
-        raise LaniakeaError(f'CPD tools unavailable ({error}); run setup-health with PMD {VERSION} and a JDK 11+') from error
+        raise ToolError(f'CPD tools unavailable ({error}); run setup-health with PMD {VERSION} and a JDK 11+') from error
     identity=hashlib.sha256(str(sorted(marker['files'].items())).encode()+marker['bridge'].encode()+marker['java_sha256'].encode()).hexdigest()
     return {'directory':directory.resolve(),'java':java,'identity':identity}

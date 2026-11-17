@@ -79,7 +79,8 @@ class ArchitectureReview {
     const label=!this.target?.review_url?'unavailable':!this.enabled?'off':this.loading?'checking...':this.error?'failed':
       counts?[[counts.violation,'violation'],[counts.candidate,'candidate']].filter(([n])=>n)
         .map(([n,label])=>`${n} ${label}${n===1?'':'s'}`).join(' / ')||'0 findings':'checking...';
-    button.textContent='Review: '+label;button.disabled=!this.target?.review_url;
+    const unavailable=(this.data?.checks||[]).filter(check=>['unavailable','failed'].includes(check.status)).length;
+    button.textContent='Review: '+label+(unavailable?` / ${unavailable} checks unavailable`:'');button.disabled=!this.target?.review_url;
     button.title=this.error||'All modules in the recorded snapshot. Open for review counts, coverage and controls.';
     button.setAttribute('data-severity',counts?.violation?'violation':counts?.candidate?'candidate':'');
     $('review-enabled').checked=this.enabled;$('review-enabled').disabled=button.disabled;

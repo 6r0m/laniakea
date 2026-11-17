@@ -27,6 +27,7 @@ class Isolation(unittest.TestCase):
         with recorded_ubt(self.project,self.engine),patch('laniakea.unreal.cpd.extract',side_effect=AssertionError('must be explicit')):
             good,_=pipeline.extract(self.workspace,self.target)
             self.assertEqual(pipeline.freshness(self.workspace,self.target)[1],[])
+        (self.workspace.root/'tools/health/cpd').mkdir(parents=True)
         with recorded_ubt(self.project,self.engine),patch('laniakea.unreal.cpd.prepare',side_effect=lambda o:o), \
                 patch('laniakea.unreal.cpd.extract',side_effect=LaniakeaError('lexical failure')):
             with self.assertRaisesRegex(LaniakeaError,'lexical failure'):
@@ -47,6 +48,7 @@ class CpdProcess(unittest.TestCase):
 
     def extract(self):
         tool=cpd_tools.load(Path(os.environ['LANIAKEA_TEST_CPD']))
+        (self.workspace.root/'tools/health/cpd').mkdir(parents=True,exist_ok=True)
         with recorded_ubt(self.project,self.engine),patch('laniakea.unreal.cpd_tools.load',return_value=tool), \
                 patch('laniakea.unreal.compiler.extract',side_effect=AssertionError('CPD must not load LLVM')):
             return pipeline.extract(self.workspace,self.target,health_options={'prefixes':['Source'],'minimum_tokens':100})
@@ -55,6 +57,19 @@ class CpdProcess(unittest.TestCase):
         first=self.project/'Source/SampleProject/First.cpp';second=first.with_name('Second.cpp')
         first.write_text(body());second.write_text(body())
         return first,second
+
+    def test_final_preprocessor_directive_without_newline_keeps_exact_evidence(self):
+        first,second=self.clones()
+        first.write_bytes(first.read_bytes()+b'\n#undef SAMPLE_TOKEN')
+        second.write_bytes(second.read_bytes()+b'\n#undef SAMPLE_TOKEN\n')
+        before={p:p.read_bytes() for p in (first,second)}
+        run,manifest=self.extract()
+        data=health.load(run,manifest)
+        self.assertEqual(len(data['groups']),1)
+        self.assertTrue(all(o['end_line']==38 for o in data['groups'][0]['occurrences']))
+        self.assertEqual(before,{p:p.read_bytes() for p in (first,second)})
+        self.assertEqual(data['files'][first.relative_to(self.project).as_posix()]['sha256'],
+                         __import__('hashlib').sha256(before[first]).hexdigest())
 
     def test_exact_matches_and_comment_drift_use_provider_tokens_and_complete_ranges(self):
         first,second=self.clones();before={p:p.read_bytes() for p in (first,second)}

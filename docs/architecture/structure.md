@@ -47,7 +47,9 @@ The [main view](diagrams/main.md) owns the component relationships. Adapter inte
 [implemented profile](../../laniakea/unreal/__init__.py).
 
 Through the profile contract, extraction remains language-specific while validation and publication stay generic.
-Installing an optional tool does not authorize analysis; explicit collection failures retain the published map.
+Installing an optional tool does not authorize analysis. Required collection failures retain the publication;
+explicit automatic source-health requests may publish a valid graph with failed coverage under the
+[profile acquisition contract](unreal-profile.md#source-duplication).
 
 **Decision:** language profiles, with only the Unreal adapter built.
 **Why:** other languages can reuse the graph and viewer without importing Unreal semantics.

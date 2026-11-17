@@ -143,6 +143,7 @@
         "edge_types": {"type": "array", "items": {"$ref": "#/$defs/edgeType"}},
         "overview": {"$ref": "#/$defs/overview"},
         "health": {"$ref": "#/$defs/health"},
+        "request": {"$ref": "#/$defs/requestMarker"},
         "target": {"type": "object"},
         "timings_seconds": {"type": "object", "additionalProperties": {"type": "number"},
                             "description": "Elapsed seconds. Profile and total contain the named subphases; values are not additive. Total ends before manifest serialization and promotion."},
@@ -151,6 +152,20 @@
         "roots": {"type": "object", "additionalProperties": {"type": "string"}, "description": "Run-bound source-root aliases for declaration links. Absolute local paths remain in the ignored workspace."},
         "coverage": {"$ref": "#/$defs/coverage"},
         "entry": {"type": "string", "description": "The shard file the viewer opens first."}
+      }
+    },
+    "requestMarker": {
+      "type": "object", "required": ["version", "path", "sha256"], "additionalProperties": false,
+      "properties": {"version": {"const": 1}, "path": {"const": "request.json"}, "sha256": {"type": "string"}}
+    },
+    "extractionRequest": {
+      "type": "object", "required": ["version", "target", "recipe"], "additionalProperties": false,
+      "properties": {
+        "version": {"const": 1},
+        "target": {"type": "object", "required": ["id", "profile", "project_file"],
+          "properties": {"id": {"type": "string"}, "profile": {"type": "string"}, "project_file": {"type": "string"}}},
+        "recipe": {"type": "object", "required": ["symbols", "health"], "additionalProperties": false,
+          "properties": {"symbols": {"type": "boolean"}, "health": {"type": "object"}}}
       }
     },
     "health": {
@@ -183,6 +198,17 @@
         "status": {"enum": ["declared", "derived", "resolved", "partial"]}
       }
     },
+    "acquisition": {
+      "type": "object", "required": ["provider", "mode", "prefixes", "minimum_tokens", "status", "code"],
+      "additionalProperties": false,
+      "properties": {
+        "provider": {"type": "string"}, "mode": {"enum": ["auto", "required", "off"]},
+        "prefixes": {"type": "array", "items": {"type": "string"}}, "minimum_tokens": {"type": "integer"},
+        "status": {"enum": ["completed", "unavailable", "disabled", "failed", "incomplete"]},
+        "code": {"type": "string"}, "reused": {"type": "boolean"}, "tool_identity": {"type": "string"},
+        "artifact_sha256": {"type": "string"}, "input_identity": {"type": "string"}
+      }
+    },
     "coverage": {
       "type": "object",
       "required": ["analysed", "not_analysed", "counts"],
@@ -190,7 +216,8 @@
       "properties": {
         "analysed": {"type": "array", "items": {"type": "string"}},
         "not_analysed": {"type": "array", "items": {"type": "string"}},
-        "counts": {"type": "object", "additionalProperties": {"type": "integer"}}
+        "counts": {"type": "object", "additionalProperties": {"type": "integer"}},
+        "acquisition": {"type": "object", "additionalProperties": {"$ref": "#/$defs/acquisition"}}
       }
     }
   }

@@ -11,13 +11,30 @@ from .. import LaniakeaError, health
 from ..workspace import read_json, write_json
 from . import cpd_tools, source_inputs
 
+DEFAULT_MINIMUM=100
 
-def prepare(options):
+
+class Failure(LaniakeaError):
+    def __init__(self, message, code, status='failed'):
+        super().__init__(message)
+        self.code,self.status=code,status
+
+
+class Changed(LaniakeaError):
+    """The observed corpus was superseded; never publish it as a provider failure."""
+
+
+def options_for(options):
     try:scopes=health.prefixes(options.get('prefixes',[]))
     except ValueError as error:raise LaniakeaError(str(error)) from error
-    minimum=options.get('minimum_tokens',100)
+    minimum=options.get('minimum_tokens',DEFAULT_MINIMUM)
     if type(minimum) is not int or not 1<=minimum<=100000:raise LaniakeaError('invalid health collection threshold')
-    return {**options,'prefixes':scopes,'minimum_tokens':minimum,'installed':cpd_tools.load(options['tools'])}
+    return {**options,'prefixes':scopes,'minimum_tokens':minimum}
+
+
+def prepare(options):
+    options=options_for(options)
+    return {**options,'installed':cpd_tools.load(options['tools'])}
 
 
 def extract(target,run,graph,exported,options,previous=None):
@@ -33,9 +50,9 @@ def extract(target,run,graph,exported,options,previous=None):
         owner=next((identity for directory,identity in directories if path.is_relative_to(directory)),None)
         if owner is None:continue
         size=path.stat().st_size;total_bytes+=size
-        if size>16*1024*1024 or total_bytes>1024*1024*1024:raise LaniakeaError('CPD source size limit reached; narrow --health-scope')
+        if size>16*1024*1024 or total_bytes>1024*1024*1024:raise Failure('CPD source size limit reached; narrow --health-scope','source_limit','incomplete')
         selected[relative]={'owner':owner,'sha256':hashlib.sha256(path.read_bytes()).hexdigest()};paths[relative]=path
-    if not selected or len(selected)>50000:raise LaniakeaError('CPD needs 1-50000 authored files in selected in-target project modules')
+    if not selected or len(selected)>50000:raise Failure('CPD needs 1-50000 authored files in selected in-target project modules','corpus_limit','incomplete')
     data={'version':1,'provider':{'id':'pmd-cpd','version':cpd_tools.VERSION,'identity':tool['identity']},
           'minimum_tokens':minimum,'scope':{'prefixes':scopes,'modules':sorted({f['owner'] for f in selected.values()})},
           'files':selected,'groups':[]}
@@ -54,8 +71,11 @@ def extract(target,run,graph,exported,options,previous=None):
         for relative,path in paths.items():
             raw=path.read_bytes()
             if hashlib.sha256(raw).hexdigest()!=selected[relative]['sha256']:
-                raise LaniakeaError(f'CPD source changed during collection: {relative}; retry')
-            destination=copies/relative;destination.parent.mkdir(parents=True,exist_ok=True);destination.write_bytes(raw)
+                raise Changed(f'CPD source changed during collection: {relative}; retry')
+            # PMD's preprocessor lexer requires a terminating newline. Add it only to the isolated tool input;
+            # original bytes still own freshness and evidence hashes, and existing token coordinates do not move.
+            destination=copies/relative;destination.parent.mkdir(parents=True,exist_ok=True)
+            destination.write_bytes(raw if not raw or raw.endswith(b'\n') else raw+b'\n')
             mapping[os.path.normcase(str(destination.resolve()))]=relative
         request=folder/'request.json';output=folder/'observations.json'
         write_json(request,{'files':list(mapping),'minimum_tokens':minimum})
@@ -68,13 +88,13 @@ def extract(target,run,graph,exported,options,previous=None):
                 result=subprocess.run(command,stdout=stream,stderr=subprocess.STDOUT,timeout=900,
                                       creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0),
                                       env={**os.environ,'TEMP':str(folder.resolve()),'TMP':str(folder.resolve())})
-            if result.returncode:raise LaniakeaError(f'CPD failed ({result.returncode}); no partial report published; see {log}')
+            if result.returncode:raise Failure(f'CPD failed ({result.returncode}); no partial report published; see {log}','provider_exit')
         except (OSError,subprocess.TimeoutExpired) as error:
-            raise LaniakeaError(f'CPD could not finish: {error}; see {log}') from error
-        if output.stat().st_size>health.MAX_BYTES:raise LaniakeaError('CPD output limit reached; narrow --health-scope')
+            raise Failure(f'CPD could not finish: {error}; see {log}','timeout' if isinstance(error,subprocess.TimeoutExpired) else 'process_start') from error
+        if output.stat().st_size>health.MAX_BYTES:raise Failure('CPD output limit reached; narrow --health-scope','output_limit','incomplete')
         result=read_json(output)
         if {os.path.normcase(str(Path(p).resolve())) for p in result['processed']}!=set(mapping):
-            raise LaniakeaError(f'CPD did not process the complete requested corpus; see {log}')
+            raise Failure(f'CPD did not process the complete requested corpus; see {log}','partial_corpus','incomplete')
         for group in result['groups']:
             for occurrence in group['occurrences']:
                 key=os.path.normcase(str(Path(occurrence['path']).resolve()))
@@ -86,6 +106,6 @@ def extract(target,run,graph,exported,options,previous=None):
     current=source_inputs.files(project,scopes,target.get('excludes',[]))
     current={p:path for p,path in current.items() if any(path.is_relative_to(d) for d,_ in directories)}
     if set(current)!=set(paths) or any(hashlib.sha256(p.read_bytes()).hexdigest()!=selected[k]['sha256'] for k,p in current.items()):
-        raise LaniakeaError('CPD corpus changed during analysis; previous map retained, retry')
+        raise Changed('CPD corpus changed during analysis; previous map retained, retry')
     marker=health.write(run,data,graph['nodes'])
     return marker,{'seconds':perf_counter()-start,'reused':reused,'files':len(selected),'groups':len(data['groups'])}

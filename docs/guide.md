@@ -154,8 +154,10 @@ make up
 
 Add `--symbols` to retain native classes/functions in a newly extracted map. Without it, the new map is module-only.
 Use the build command's health-scope options to bound the scan and its minimum-token option to choose the collection floor.
-Failed tools or source processing retain the last good map and identify the diagnostic log. Narrow scope explicitly
-rather than silently ignoring a failed file.
+With `--health duplication`, failed tools or source processing retain the last good map and identify the diagnostic log.
+Use `--health auto` to publish a valid architecture map even if duplication acquisition fails; coverage and Review report
+the unavailable check instead of claiming zero findings. `--health off` skips collection. Narrow scope explicitly rather
+than silently ignoring a failed file.
 
 Yellow **Duplication** candidates mark recorded files or modules. Click a marked item or Review-list entry, then open
 **Exact evidence** for paged source ranges and editor links. These matches can be intentional or in inactive branches;
