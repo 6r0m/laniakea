@@ -23,9 +23,16 @@ class Commands(unittest.TestCase):
         build.assert_not_called();serve.assert_called_once()
 
     def test_up_refuses_build_options_instead_of_silently_downgrading_a_map(self):
-        for argv in (['up','sample'],['up','--symbols'],['up','--health','duplication']):
+        for argv in (['up','--symbols'],['up','--health','duplication']):
             with self.subTest(argv=argv),contextlib.redirect_stderr(io.StringIO()):
                 with self.assertRaises(SystemExit):cli.parser().parse_args(argv)
+
+    def test_viewer_target_selection_and_monitoring_are_independent_of_build_options(self):
+        args=cli.parser().parse_args(['up','sample','--watch'])
+        self.assertEqual(args.target_id,'sample');self.assertTrue(args.watch)
+        self.assertFalse(cli.parser().parse_args(['up','--no-watch']).watch)
+        with contextlib.redirect_stderr(io.StringIO()),self.assertRaises(SystemExit):
+            cli.parser().parse_args(['up','--watch','--no-watch'])
 
     def test_build_only_dispatches_analysis_and_forwards_explicit_options(self):
         with patch.object(cli,'_extract') as build,patch.object(cli,'_serve') as serve:

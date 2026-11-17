@@ -20,6 +20,13 @@ options and defaults, run `python laniakea.py --help` or `python laniakea.py <co
 
 `up` stays in the foreground. Stop it with Ctrl+C or `make down` from another terminal. After source changes, run
 `make build`; restart an already running viewer with `make down`, then `make up` to display the new snapshot.
+Saved-only opening does not scan sources. An optional registered target ID selects what opens; an explicit browser
+deep link still wins over that launch selection.
+
+Experimental `python laniakea.py up <target-id> --watch` monitors that target with its committed analysis recipe. Other
+registered targets remain inactive. It updates saved runs in the background; existing browser pages stay pinned, so reopen
+the server to display the result. `--no-watch` explicitly selects scan-free saved exploration. Monitor status and session
+activation/pause/retry are available through the local server; automatic browser adoption and its user controls are pending.
 
 The displayed target/configuration describes the selected [build context](architecture/unreal-profile.md#build-context).
 Check it before interpreting the map: a saved run does not prove that current sources compiled.

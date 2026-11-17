@@ -55,28 +55,45 @@ def _extract(args, workspace):
 def _serve(args, workspace):
     if not any(workspace.latest(t['id']) for t in workspace.targets()):
         raise LaniakeaError('no saved map; run python laniakea.py build <project> first')
+    selected=args.target_id or workspace.last()['id']
+    if not workspace.load(selected) or not workspace.latest(selected):
+        raise LaniakeaError('viewer target must name a registered saved map')
+    args.target_id=selected
     with service.running(workspace) as owner:
         _run_server(args,workspace,owner)
 
 
 def _run_server(args,workspace,owner):
     started = perf_counter()
-    print('laniakea: checking freshness and preparing map views...', flush=True)
-    server = make_server(workspace, args.port)
+    print('laniakea: preparing saved map views without source scanning...', flush=True)
+    server = make_server(workspace, args.port,scan=False,launch_target=args.target_id)
+    monitor=None
     try:
+        if args.watch:
+            from .monitor import Monitor
+            monitor=Monitor(workspace,server.snapshots)
+            server.monitor=monitor;monitor.activate(args.target_id)
+            print(f'laniakea: monitoring {args.target_id} (experimental; existing tabs remain pinned)',flush=True)
         print(f'laniakea: viewer preparation: {perf_counter()-started:.3f}s')
         url = f"http://{HOST}:{server.server_address[1]}/"
         for entry in server.index:
-            state = f"STALE, {entry['changed_count']} build input(s) changed" if entry["stale"] else "fresh"
+            state = 'freshness not checked' if entry.get('freshness')=='unknown' else \
+                f"STALE, {entry['changed_count']} build input(s) changed" if entry["stale"] else "fresh"
             print(f"laniakea: {entry['id']}: run {entry['run']} ({state})")
         if not args.no_browser:webbrowser.open(url)
         print(f"laniakea: serving {url} (Ctrl+C or python laniakea.py down stops)",flush=True)
         owner.ready(server)
+        if monitor:monitor.start()
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
-        server.server_close()
+        try:
+            if monitor:
+                try:monitor.stop()
+                except (OSError,TimeoutError,LaniakeaError) as error:
+                    owner.failed(error);raise LaniakeaError(f'background shutdown was not confirmed: {error}') from error
+        finally:server.server_close()
 
 
 def parser():
@@ -98,6 +115,10 @@ def parser():
         command.add_argument('--health-heap-mib',type=int,help='override the bounded CPD Java heap budget in MiB')
 
     def serve_options(command):
+        command.add_argument('target_id',nargs='?',help='registered target to open; most recently built when omitted')
+        watch=command.add_mutually_exclusive_group()
+        watch.add_argument('--watch',action='store_true',help='experimental session monitoring; existing browser maps stay pinned')
+        watch.add_argument('--no-watch',action='store_true',help='saved maps only, without source scanning (default)')
         command.add_argument("--port", type=int, default=DEFAULT_PORT,
                              help=f"port on 127.0.0.1; default {DEFAULT_PORT}, 0 picks a free one")
         command.add_argument("--no-browser", action="store_true", help="do not open a browser")

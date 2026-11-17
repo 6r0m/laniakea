@@ -6,12 +6,16 @@ import json
 import subprocess
 from pathlib import Path
 
-from .. import LaniakeaError
+from .. import AnalysisBusy,LaniakeaError
 from ..workspace import same_file
 from . import engine
 
 CONFLICTING_INSTANCE = 10  # EpicGames.Core CompilationResult.ConflictingInstance
 TIMEOUT_SECONDS = 900
+
+
+class Busy(AnalysisBusy):
+    """UBT's typed conflicting-instance result; other failures are never contention."""
 
 
 def _run(engine_root, args, out_dir, name):
@@ -28,7 +32,7 @@ def _run(engine_root, args, out_dir, name):
         except subprocess.TimeoutExpired as error:
             raise LaniakeaError(f"UnrealBuildTool {name} did not finish within {TIMEOUT_SECONDS} s; see {log}") from error
     if result.returncode == CONFLICTING_INSTANCE:
-        raise LaniakeaError("another UnrealBuildTool is running (a build or the editor); run extract again when it ends")
+        raise Busy("another UnrealBuildTool is running (a build or the editor); run extract again when it ends")
     if result.returncode != 0:
         raise LaniakeaError(f"UnrealBuildTool {name} failed with exit code {result.returncode}; see {log}")
 

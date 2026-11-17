@@ -10,6 +10,10 @@ flowchart LR
         CLI -->|"viewer lifetime"| Lifecycle["local viewer lifecycle"]
         Lifecycle -->|"instance identity and ownership lease"| Workspace
         Lifecycle -->|"authenticated local stop"| Server
+        Lifecycle -->|"explicit session activation and bounded stop"| Monitor["background analysis"]
+        Monitor -->|"consumed inputs and staging in owned worker"| Profile
+        Monitor -->|"writer lock and validated promotion"| Workspace
+        Monitor -->|"prepared immutable contexts"| Server
         CLI -->|"run folders, latest.json"| Workspace[("workspace/ (ignored)")]
         Profile -->|"schema v1 graph"| Shards["shards"]
         Shards -->|"schema v1 shards"| Workspace

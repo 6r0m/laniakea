@@ -6,3 +6,7 @@ __version__ = "0.1.0"
 
 class LaniakeaError(Exception):
     """A failure the user can act on. The CLI prints it without a traceback."""
+
+
+class AnalysisBusy(LaniakeaError):
+    """A profile reports contention with an external analysis/build owner."""

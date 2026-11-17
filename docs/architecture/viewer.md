@@ -409,3 +409,4 @@ Node hover and inspection also explain that only recorded structure is available
 configuration disabled the node; the viewer does not infer that cause from target absence.
 
 The staleness warning stays visible as a compact summary; its disclosure retains changed paths, the run and recovery action.
+Saved-only opening labels unchecked source freshness in the coverage footer rather than implying that the snapshot is fresh.

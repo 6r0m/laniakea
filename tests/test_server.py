@@ -21,6 +21,66 @@ from support import copy_sample, fake_engine, recorded_ubt
 
 
 class Server(unittest.TestCase):
+    def test_closed_clients_do_not_trigger_a_second_error_response_or_hide_other_io_failures(self):
+        from laniakea.server import Handler
+        handler=object.__new__(Handler);handler.command='GET';handler.close_connection=False
+        handler.send_response=lambda *_:None;handler.send_header=lambda *_:None;handler.end_headers=lambda:None
+        class Output:
+            def write(self,_body):raise ConnectionAbortedError(10053,'peer closed the page')
+        handler.wfile=Output()
+        self.assertFalse(handler._send(200,b'old response'))
+        self.assertTrue(handler.close_connection)
+        class Failed:
+            def write(self,_body):raise OSError(13,'unrelated write failure')
+        handler.wfile=Failed()
+        with self.assertRaises(OSError):handler._send(200,b'response')
+
+    def test_run_context_does_not_read_newer_committed_target_settings(self):
+        from laniakea import map_index
+        workspace=self.server.workspace_for_tests;target=workspace.load('sample')
+        target={**target,'roots':{**target['roots'],'synthetic-sdk':'first-context'}}
+        with recorded_ubt(Path(target['project_file']).parent,Path(target['engine_root'])):
+            first,_=pipeline.extract(workspace,target)
+            second={**target,'roots':{**target['roots'],'synthetic-sdk':'second-context'}}
+            pipeline.extract(workspace,second)
+        view=map_index.ensure(workspace,'sample',first)
+        context=self.server.snapshots.prepare('sample',first,view.root.name)
+        self.assertEqual(context.entry['roots']['synthetic-sdk'],'first-context')
+        from laniakea.server import target_index
+        with patch.object(workspace,'targets',return_value=[target]):
+            self.assertEqual(target_index(workspace,scan=False)[0]['roots']['synthetic-sdk'],'second-context')
+
+    def test_saved_only_start_never_fingerprints_sources_and_review_preparation_is_nonblocking(self):
+        workspace=self.server.workspace_for_tests
+        with patch('laniakea.server.pipeline.freshness',side_effect=AssertionError('saved-only source scan')), \
+                patch('laniakea.snapshots.Review',side_effect=LaniakeaError('policy unavailable')):
+            server=make_server(workspace,scan=False,launch_target='sample')
+            try:
+                self.assertEqual(server.index[0]['freshness'],'unknown')
+                self.assertEqual(server.launch_target,'sample')
+                self.assertIsNone(server.reviews['sample'].current)
+                with self.assertRaisesRegex(LaniakeaError,'policy unavailable'):server.reviews['sample'].page({})
+                self.assertTrue(server.views['sample'].root.is_dir())
+            finally:server.server_close()
+
+    def test_new_context_keeps_old_urls_pinned_and_layout_writes_use_originating_ids(self):
+        from laniakea import map_index
+        workspace=self.server.workspace_for_tests;target=workspace.load('sample')
+        original=self.server.index[0];old_manifest=self.get('/data/sample/manifest.json')[1]
+        with recorded_ubt(Path(target['project_file']).parent,Path(target['engine_root'])):
+            run,manifest=pipeline.extract(workspace,target)
+        view=map_index.ensure(workspace,'sample',run)
+        entry=self.server.snapshots.admit('sample',run,view.root.name)
+        status,raw=self.get(entry['data_url']+'manifest.json')
+        self.assertEqual(status,200);self.assertEqual(json.loads(raw)['run'],manifest['run'])
+        self.assertEqual(self.get('/data/sample/manifest.json')[1],old_manifest)
+        self.assertEqual(self.server.index[0],original)
+        self.assertEqual(self.get(entry['map_url'])[0],200)
+        self.assertEqual(self.post(entry['layout_url']+'entry.json',{'layout':'snapshot_probe','positions':{}})[0],200)
+        self.assertEqual(self.get(entry['review_url'])[0],200)
+        self.assertEqual(entry['acquisition'],manifest['coverage'].get('acquisition',{}))
+        self.assertEqual(self.get(entry['data_url'].replace(run.name,'expired')+'manifest.json')[0],410)
+
     def test_post_refusal_delivers_response_with_an_unread_body(self):
         before=self.get('/layout/sample/entry.json')
         payload=json.dumps({'padding':'x'*(64*1024)}).encode()
@@ -197,7 +257,8 @@ class Server(unittest.TestCase):
             self.assertEqual(self.get(path)[0], 404, path)
 
     def test_refuses_a_foreign_host(self):
-        self.assertEqual(self.get("/data/targets.json", host=f"evil.example:{self.port}")[0], 403)
+        for path in ('/data/targets.json','/snapshot/sample/expired/data/manifest.json'):
+            self.assertEqual(self.get(path, host=f"evil.example:{self.port}")[0], 403)
 
     def test_a_second_server_cannot_take_a_port_in_use(self):
         with self.assertRaisesRegex(LaniakeaError, f"port {self.port} on 127.0.0.1 is in use"):

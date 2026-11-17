@@ -123,18 +123,22 @@ def ensure(workspace, target, run):
                                     Path(__file__).with_name('source_files.py').read_bytes()).hexdigest()
     root = workspace.target_dir(target) / 'views'
     final = root / (source_hash+'-'+generator_hash[:16])
+    automatic=(Path(run)/'automatic.json').is_file()
+    if automatic and Path(run).name.endswith('.partial'):
+        marker=read_json(Path(run)/'automatic.json')
+        write_json(Path(run)/'automatic.json',{**marker,'view':final.name})
     if final.is_dir():
         return MapIndex(final, source_hash, generator_hash, verify=True)
     with writer_lock(root / 'writer.lock', 'another process is preparing this target map index'):
         if final.is_dir():
             return MapIndex(final, source_hash, generator_hash, verify=True)
-        partial = root / (final.name+'.partial-'+uuid.uuid4().hex)
+        partial = root / (final.name+('.auto-partial-' if automatic else '.partial-')+uuid.uuid4().hex)
         try:
             build(json.loads(raw), partial, source_hash, generator_hash)
             os.replace(partial, final)
         except BaseException:
             if partial.is_dir():
-                os.replace(partial, partial.with_name(partial.name.replace('.partial-', '.failed-')))
+                os.replace(partial, partial.with_name(partial.name.replace('partial-', 'failed-')))
             raise
     return MapIndex(final, source_hash, generator_hash)
 

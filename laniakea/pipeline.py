@@ -16,12 +16,19 @@ def extract(workspace, target, *, symbols=False, health_options=None):
 
 
 def _extract_locked(workspace, target, symbols, health_options=None):
+    run,manifest=stage(workspace,target,symbols=symbols,health_options=health_options)
+    return workspace.commit_run(target['id'],run),manifest
+
+
+def stage(workspace, target, *, symbols=False, health_options=None, automatic=False):
+    """Validate a candidate without publication. The caller must hold the target writer lock."""
     profile = profiles.get(target["profile"])
     start = perf_counter()
     latest = workspace.latest(target["id"])
     previous = read_json(latest / "manifest.json") if latest else None
     run = workspace.begin_run(target["id"])
     try:
+        if automatic:write_json(run/'automatic.json',{'version':1})
         profile_start = perf_counter()
         options={'health_options':{**health_options,'tools':workspace.root/'tools/health/cpd'}} if health_options is not None else {}
         graph, fields = profile.extract(target, run, previous,
@@ -63,9 +70,9 @@ def _extract_locked(workspace, target, symbols, health_options=None):
     except BaseException as error:
         failed = workspace.fail_run(run)
         if isinstance(error, LaniakeaError):
-            raise LaniakeaError(str(error).replace(str(run), str(failed))) from error
+            error.args=(str(error).replace(str(run),str(failed)),)
         raise
-    return workspace.commit_run(target["id"], run), manifest
+    return run, manifest
 
 
 def freshness(workspace, target):

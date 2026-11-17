@@ -2,8 +2,8 @@
 """The loopback file server: the viewer, plus each target's last good run.
 
 It binds 127.0.0.1 only and answers only requests addressed to that host, so a web page cannot reach it through a
-rebound DNS name. Validated positions and review decisions are written only in the ignored workspace. Freshness is computed
-once at start.
+rebound DNS name. Validated positions and review decisions are written only in the ignored workspace. Source scanning is
+explicit; generation-bound contexts keep old reads stable when new runs are published.
 """
 
 import json
@@ -20,6 +20,7 @@ from . import LaniakeaError, map_index, pipeline, service
 from .layouts import LayoutStore
 from .review_store import Review, Conflict
 from .workspace import read_json
+from .snapshots import Snapshots
 
 VIEWER = Path(__file__).resolve().parent.parent / "viewer"
 HOST = "127.0.0.1"
@@ -29,21 +30,26 @@ DEFAULT_PORT = 8737
 _TYPES = {".json": "application/json", ".js": "text/javascript", ".css": "text/css", ".html": "text/html"}
 
 
-def target_index(workspace):
+def target_index(workspace, *, scan=True):
     """What the viewer needs to pick a target. Absolute roots stay on this machine: they build source links."""
     index = []
     for target in workspace.targets():
-        run, changed = pipeline.freshness(workspace, target)
+        run, changed = pipeline.freshness(workspace, target) if scan else (workspace.latest(target['id']),[])
         if run is None:
             continue
+        request=workspace.request_at(target['id'],run)
+        settings=request['target'] if request is not None else target
+        manifest=read_json(run/'manifest.json')
         index.append({
             "id": target["id"],
             "project": Path(target["project_file"]).stem,
             "run": run.name,
-            "roots": {**target.get("roots", {}), **read_json(run / 'manifest.json').get('roots', {})},
+            "roots": {**settings.get("roots", {}), **manifest.get('roots', {})},
+            "acquisition": manifest['coverage'].get('acquisition',{}),
             "stale": bool(changed),
             "changed": changed[:20],
             "changed_count": len(changed),
+            "freshness": "checked" if scan else "unknown",
         })
     return index
 
@@ -75,13 +81,19 @@ class Handler(BaseHTTPRequestHandler):
                     body+=b'\nRequest body was incomplete; connection closed.\n'
                 finally:
                     self.connection.settimeout(timeout)
-        self.send_response(status)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
-        self.send_header("X-Content-Type-Options", "nosniff")
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            self.wfile.write(body)
+        except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError):
+            # A cancelled page cannot receive another error response; context leases still close in dispatch.
+            self.close_connection=True
+            return False
+        return True
 
     def _body(self, length):
         self._body_consumed=True
@@ -102,8 +114,30 @@ class Handler(BaseHTTPRequestHandler):
         if len(parts)!=3:
             return None
         target,key,name = parts
-        index = self.server.views.get(target)
+        context=getattr(self,'context',None)
+        index = context.view if context else self.server.views.get(target)
         return (index,name) if index is not None and key==index.root.name else None
+
+    def _review(self,target):
+        context=getattr(self,'context',None)
+        return context.review if context else self.server.reviews[target]
+
+    def _dispatch(self,method):
+        if not self._local() or self.command=='POST' and self.headers.get('Origin')!=f"http://{self.headers.get('Host')}":
+            return self._send(403,b'forbidden origin or host\n')
+        original=self.path;index=self.index
+        parsed=urlsplit(original)
+        with self.server.snapshots.route(unquote(parsed.path)) as (context,path):
+            if context is False:return self._send(410,b'snapshot expired; reopen the ready map\n')
+            self.context=context
+            if context:
+                self.index=[context.entry]
+                self.path=path+('?' + parsed.query if parsed.query else '')
+            try:return method()
+            finally:self.path=original;self.index=index;self.context=None
+
+    def do_POST(self):return self._dispatch(self._POST)
+    def do_GET(self):return self._dispatch(self._GET)
 
     def _references(self, index, query):
         allowed = {'node','direction','source','target','source_tree','target_tree','group','groups','types','cursor','limit','boundary'}
@@ -133,21 +167,42 @@ class Handler(BaseHTTPRequestHandler):
             return None
         manifest = read_json(run / "manifest.json")
         if scope == manifest["entry"]:
-            # The advertised run is immutable for this server's lifetime.
-            with self.server.layout_ids_lock:
-                if run not in self.server.layout_node_ids:
-                    self.server.layout_node_ids[run] = self.server.views[target].node_ids()
-                allowed = self.server.layout_node_ids[run]
+            context=getattr(self,'context',None)
+            if context:
+                with context.lock:
+                    if context.node_ids is None:context.node_ids=context.view.node_ids()
+                    allowed=context.node_ids
+            else:
+                with self.server.layout_ids_lock:
+                    if run not in self.server.layout_node_ids:self.server.layout_node_ids[run]=self.server.views[target].node_ids()
+                    allowed = self.server.layout_node_ids[run]
         else:
             allowed = {node["id"] for node in read_json(shard)["nodes"]}
         return target, scope, allowed
 
-    def do_POST(self):
+    def _POST(self):
         if not self._local() or self.headers.get("Origin") != f"http://{self.headers.get('Host')}":
             return self._send(403, b"forbidden origin or host\n")
         try:
             path = unquote(urlsplit(self.path).path)
             if path==service.STOP:return service.control(self,stop=True)
+            if path=='/monitor/control':
+                monitor=getattr(self.server,'monitor',None)
+                if monitor is None:return self._send(409,b'monitoring is off; restart with --watch\n')
+                if self.headers.get('Content-Type','').split(';',1)[0]!='application/json':
+                    return self._send(415,b'expected application/json\n')
+                length=self.headers.get('Content-Length','')
+                if not length.isdecimal() or not 0<int(length)<=4096 or self.headers.get('Transfer-Encoding'):
+                    return self._send(413,b'expected bounded monitor control\n')
+                try:
+                    body=json.loads(self._body(int(length)))
+                    if not isinstance(body,dict) or set(body)!={'action','target'} or \
+                            body['action'] not in {'activate','pause','retry'} or \
+                            not isinstance(body['target'],str) or not any(e['id']==body['target'] for e in self.server.index):
+                        raise ValueError('invalid monitor control')
+                    getattr(monitor,body['action'])(body['target'])
+                except (ValueError,UnicodeError) as error:return self._send(400,str(error).encode())
+                return self._send(200,json.dumps(monitor.status()).encode(),'application/json')
             if path.startswith('/map/'):
                 view = self._view(path)
                 if view is None or view[1] not in {'references','review'}:
@@ -160,7 +215,7 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     body=json.loads(self._body(int(length)))
                     if view[1]=='review':
-                        owner=self.server.reviews[path.split('/')[2]]
+                        owner=self._review(path.split('/')[2])
                         data=owner.update(body)
                         return self._send(200,json.dumps(data).encode(),'application/json')
                     return self._references(view[0],body)
@@ -185,11 +240,19 @@ class Handler(BaseHTTPRequestHandler):
         except (OSError, LaniakeaError) as error:
             self._send(500, str(error).encode())
 
-    def do_GET(self):
+    def _GET(self):
         if not self._local():
             return self._send(403, b"forbidden host\n")
         path = unquote(urlsplit(self.path).path)
         if path==service.INSTANCE:return service.control(self)
+        if path=='/data/startup.json':
+            return self._send(200,json.dumps({'target':self.server.launch_target,
+                               'monitoring':getattr(self.server,'monitor',None) is not None}).encode(),'application/json')
+        if path=='/monitor/status':
+            monitor=getattr(self.server,'monitor',None)
+            data=monitor.status() if monitor else {'targets':[{'id':e['id'],'active':False,'state':'saved',
+                  'ready':self.server.snapshots.latest(e['id'])} for e in self.server.index]}
+            return self._send(200,json.dumps(data).encode(),'application/json')
         if path.startswith('/map/'):
             view = self._view(path)
             if view is None:
@@ -213,7 +276,7 @@ class Handler(BaseHTTPRequestHandler):
                             if query[flag] not in {'true','false'}:
                                 raise ValueError('invalid review flag')
                             query[flag]=query[flag]=='true'
-                    data=self.server.reviews[path.split('/')[2]].page(query)
+                    data=self._review(path.split('/')[2]).page(query)
                     return self._send(200,json.dumps(data,separators=(',',':')).encode(),'application/json')
                 except Conflict as error:
                     return self._send(409,str(error).encode())
@@ -273,9 +336,9 @@ class _Server(ThreadingHTTPServer):
         super().server_bind()
 
 
-def make_server(workspace, port=0):
+def make_server(workspace, port=0, *, scan=True, launch_target=None):
     """A bound server that has not started serving; port 0 picks a free port."""
-    index = target_index(workspace)
+    index = target_index(workspace,scan=scan)
     views = {}
     for entry in index:
         run = workspace.target_dir(entry['id']) / 'runs' / entry['run']
@@ -290,8 +353,9 @@ def make_server(workspace, port=0):
                             "or pass --port <n> (0 picks a free one)") from error
     server.index = index
     server.views = views
-    server.reviews = {entry['id']:Review(workspace,entry['id'],workspace.target_dir(entry['id'])/'runs'/entry['run'],
-                                       views[entry['id']]) for entry in index}
+    server.snapshots=Snapshots(workspace,index,views)
+    server.reviews={entry['id']:server.snapshots.contexts[entry['id'],entry['run']].review for entry in index}
+    server.launch_target=launch_target
     server.layouts = LayoutStore(workspace)
     server.layout_node_ids = {}
     server.layout_ids_lock = threading.Lock()

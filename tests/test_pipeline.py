@@ -60,6 +60,23 @@ class Pipeline(unittest.TestCase):
         self.assertTrue({"depends.rollup", "requires.rollup"} <= types, "summary types are described")
         self.assertIn("rollup", {s["id"] for s in manifest["sources"]})
 
+    def test_background_staging_cannot_publish_and_parent_can_commit_after_validation(self):
+        good,_=self.extract()
+        with self.workspace.extraction_lock('sample'),recorded_ubt(self.project,self.engine):
+            staged,manifest=pipeline.stage(self.workspace,self.target)
+            self.assertTrue(staged.name.endswith('.partial'))
+            self.assertEqual(self.workspace.latest('sample'),good)
+            self.assertEqual(read_json(staged/'manifest.json'),manifest)
+            published=self.workspace.commit_run('sample',staged)
+        self.assertEqual(self.workspace.latest('sample'),published)
+
+    def test_typed_external_build_contention_survives_staging_cleanup(self):
+        from laniakea.unreal.ubt import Busy
+        good,_=self.extract()
+        with recorded_ubt(self.project,self.engine,export_error=Busy('external build')):
+            with self.assertRaises(Busy):pipeline.extract(self.workspace,self.target)
+        self.assertEqual(self.workspace.latest('sample'),good)
+
     def test_overview_hints_are_profile_owned_and_invalid_hints_keep_the_previous_run(self):
         good, manifest = self.extract()
         self.assertEqual(manifest.get('overview'),{'anchor':'engine','configuration_types':['requires']})

@@ -1,6 +1,6 @@
 # Continuous useful analysis with safe reuse
 
-**Status:** IN PROGRESS - Gate 1 complete; Gates 2-3 monitoring and browser adoption remain unfinished
+**Status:** IN PROGRESS - Gates 1-2 complete within recorded acceptance; Gate 3 browser adoption remains unfinished
 
 **Scope:** continuous monitoring, default code-health collection, safe reuse and validated live map updates  
 **Stable documentation owners:** [Unreal profile](../docs/architecture/unreal-profile.md),
@@ -557,23 +557,23 @@ constrain its value/review checkpoints.
 
 ### Gate 2 - Monitoring, cancellation and publication
 
-- [ ] Add A9 activation, profile-derived roots and Windows notifications with SourceTree enforcement. Test actual atomic
+- [x] Add A9 activation, profile-derived roots and Windows notifications with SourceTree enforcement. Test actual atomic
   saves/renames/root replacement and deterministic event-loss/overflow recovery. Inactive history consumes no watch or
   analysis resources. Add guaranteed no-source-scan no-watch recovery and explicit session activation/pause/retry semantics.
   Carry launch selection in startup metadata and prove it overrides remembered state without overriding explicit deep links.
-- [ ] Prove the owned process boundary before enabling jobs: worker plus descendants, UBT/Java/native/preprocessor waits,
+- [x] Prove the owned process boundary before enabling jobs: worker plus descendants, UBT/Java/native/preprocessor waits,
   blocked copy/hash/index stages, nested-job refusal and stop within the existing 10-second confirmation wait. An unrelated
   sentinel process remains alive. Prove assignment before the worker's first instruction, parent-only non-inherited job
   handle ownership and forced controller-death cleanup; assignment failure leaves no suspended orphan. Include a deliberate
   leaked-handle or early-execution negative control that the containment test rejects. Do not use future cancellation or
   900-second timeouts as shutdown proof.
-- [ ] Implement bounded debounce/generations, one coalesced pending request, global fairness and typed UBT contention with
+- [x] Implement bounded debounce/generations, one coalesced pending request, global fairness and typed UBT contention with
   the bounded retry contract. Preserve the writer lock; the worker stages and the pipeline parent alone commits.
-- [ ] Serve cached maps before freshness scanning, prepare immutable read contexts and expose small status/latest metadata.
+- [x] Serve cached maps before freshness scanning, prepare immutable read contexts and expose small status/latest metadata.
   Pin manifest/shards/references and write validation to the same context; bind lazy Review without waiting for evaluation.
   Block/fail Review during testing and prove canonical context readiness/serving still work. Both background and manual
   publications use that handoff. Protect active readers and user data during bounded automatic-artifact retention.
-- [ ] Run failure/race/stop tests and real Windows save/context/header changes. Measure idle cost, queue stability and
+- [x] Run failure/race/stop tests and real Windows save/context/header changes. Measure idle cost, queue stability and
   repeated-edit disk/memory/handle growth. Browser adoption is not yet claimed; existing tabs remain consistently pinned
   until Gate 3, with the new run available through its explicit context. Monitoring remains opt-in at this gate.
 
@@ -585,6 +585,8 @@ constrain its value/review checkpoints.
   A blocked or failed Review evaluation must not delay adoption; show Review's error separately on the usable new map.
 - [ ] Show monitored target, job state and provider coverage without new permanent panels. Historical browsing stays
   inactive until explicit activation. Run affected Chromium scenarios and the real save-to-visible-update walkthrough.
+  Preserve useful narrow-screen map space: the existing viewer acceptance fails its map-height check on the unchanged
+  baseline as well as this patch. Resolve that demonstrated limitation when adding compact live status/controls.
 - [ ] Measure interaction p95/max while analysis runs; compare protected state and exact references. Only after Gates 1-3
   pass may normal up enable A9 monitoring and safe adoption by default. Update stable docs, report limitations and archive.
 
@@ -884,3 +886,56 @@ Only changes authorized after this review are implemented; no new services or sp
   173 JavaScript checks passed. The strengthened cross-module A/B/C/D and ordinary override regressions passed after their
   final fixture changes. Published pointers, saved positions and triage remained byte-identical. The isolated real runs
   were not promoted into the operator's workspace. No Git staging or commit was performed.
+
+### 2026-11-17 - Gate 1 PASS verification and opt-in Gate 2 delivery
+
+- The supplied Gate 1 PASS agrees with code and executable evidence. It does not establish continuous browser adoption,
+  universal problem detection or analysis without installed providers. No further Gate 1 matcher, threshold or memory-policy
+  correction was justified. This round continued the separately authorized Gate 2 under D4 after the D5 evidence review.
+- Scope accounting: this is monitoring implementation, not a planning-only or Gate 1-only patch. The controller, disposable
+  worker, Windows process/notification adapters, immutable read contexts and tagged automatic retention are separate owners.
+  The CLI, pipeline, workspace, server and profile integrate them through their existing responsibilities. Native depth,
+  global CPD matching, graph facts, source boundaries and user stores retain their contracts.
+- Regression-first evidence: a replaced directory incorrectly inherited a refusal delay, delaying its next live edit until
+  reconciliation. The focused Windows test failed before the fix and passes with refusal budgets bound to directory identity.
+  Context preparation also read newer target settings through latest; its failing regression now passes using a run-bound,
+  digest-validated request. Cancelled automatic read-index work has an owned namespace; its failed cleanup regression now
+  proves deferral while another index writer is active and preserves manual work. Rejected/superseded stages never publish.
+- Real UBT and installed CPD passed ordinary build, body/header/build-rule changes, source-root replacement, unchanged-byte
+  no-op, manual-publication handoff and pinned old HTTP reads on a disposable sample. The fixed next edit after replacement
+  published without waiting for reconciliation. Source analysis is complete for the selected synthetic corpus at the
+  existing strict floor; this is not a full private-project monitoring scalability claim.
+- Windows ownership checks cover descendants, forced controller death, foreign-process survival and refusal before the first
+  instruction. Separate real Java, native compiler and UBT cancellation probes confirmed owned-tree termination. Job accounting
+  can reach zero shortly before a process handle signals; the probe waits for actual termination within the stop budget.
+  Authenticated down during deliberately blocked work released the writer lease and retained protected state. An unconfirmed
+  cleanup leaves a failed owner record and cannot be reported as a successful stop or silently discarded on restart.
+- Repeated edits retained bounded automatic runs and task diagnostics; the initial pinned context is additionally protected.
+  Controller private memory changed by less than 0.1 MiB across the measured sample edits; handle counts stayed within one
+  handle of the baseline. A short idle CPU sample and a longer unchanged-input reconciliation created no new publication.
+  These are bounded sample observations, not guarantees for all corpora or host loads.
+- Verification: the full non-Engine run passed 281 checks with one legacy clangd-indexer skip; all three Engine checks and
+  173 JavaScript checks passed. Final owner-specific checks include the new generation, retention and refusal regressions.
+  Eleven Chromium scenarios passed, including startup precedence, inactive browsing and origin-safe session controls.
+  The existing viewer suite's narrow-map-height assertion failed identically with the unchanged viewer baseline; it is not
+  attributed to monitoring. An initial Windows directory-promotion access error in an existing CPD test did not reproduce in
+  its focused rerun or the succeeding full run. The first live harness was corrected to observe HTTP readiness rather than
+  race a marker replacement.
+- Private evidence: [live monitoring](../workspace/tmp/gate2/live-results.json),
+  [replacement recovery](../workspace/tmp/gate2/root-recovery-results.json),
+  [owned tool cancellation](../workspace/tmp/gate2/tool-stop-results.json),
+  [resource observations](../workspace/tmp/gate2/resource-results.json),
+  [Python checks](../workspace/tmp/gate2/python-results.json),
+  [Engine checks](../workspace/tmp/gate2/engine-results.json),
+  [JavaScript checks](../workspace/tmp/gate2/javascript.log),
+  [unchanged narrow-view baseline](../workspace/tmp/gate2/baseline-browser-result.json).
+- Stable architecture, guide and verification owners describe the delivered opt-in behavior. Default up remains saved-only;
+  --no-watch guarantees no source scans and the browser labels unchecked freshness. --watch activates the launch-selected
+  target only. Session controls and ready metadata are available locally; existing browser pages remain pinned. Gate 3 must
+  implement safe adoption and its visible controls before monitoring becomes the default. The task remains active.
+- Final closeout checks passed 99 affected owner checks after the run-bound-settings, cancelled-index ownership and HTTP
+  refusal/disconnect corrections. Private execution links in transient tasks no longer require ignored workspace files to
+  ship with a checkout; durable documents still cannot depend on those files. Metadata distinguishes watched source bodies
+  from actual provider acquisition outcomes. The restarted local viewer loaded the saved real map without runtime errors
+  or position writes, with monitoring off and unchecked freshness visible. Protected publication/user-state files remained
+  byte-identical. No staging or commit was performed.

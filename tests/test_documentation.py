@@ -80,6 +80,10 @@ def _issues(root):
             except ValueError:
                 issues.append((source.as_posix(), link, "outside repository"))
                 continue
+            if relative.parts and relative.parts[0].casefold()=='workspace':
+                # Private execution evidence in transient tasks is not shipped with a clean checkout.
+                if durable:issues.append((source.as_posix(),link,'temporary dependency'))
+                continue
             if durable and relative.parts and relative.parts[0].casefold() == "todo" and target != path:
                 issues.append((source.as_posix(), link, "temporary dependency"))
             if not target.exists():
@@ -90,6 +94,14 @@ def _issues(root):
 
 
 class Documentation(unittest.TestCase):
+    def test_private_execution_evidence_is_not_a_shipped_dependency(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);(root/'todo').mkdir();(root/'docs').mkdir()
+            (root/'todo/task.md').write_text('[local evidence](../workspace/tmp/run.json)\n',encoding='ascii')
+            self.assertEqual(_issues(root),[])
+            (root/'docs/contract.md').write_text('[private evidence](../workspace/tmp/run.json)\n',encoding='ascii')
+            self.assertIn('temporary dependency',{issue[2] for issue in _issues(root)})
+
     def test_local_links_resolve_without_durable_dependencies_on_todos(self):
         self.assertEqual(_issues(ROOT), [])
 

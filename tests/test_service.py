@@ -7,6 +7,9 @@ import io
 import json
 import tempfile
 import threading
+import time
+import subprocess
+import sys
 import unittest
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
@@ -19,6 +22,61 @@ from support import copy_sample,fake_engine,recorded_ubt
 
 
 class ViewerLifecycle(unittest.TestCase):
+    def test_unconfirmed_background_cleanup_is_not_reported_as_stopped_or_silently_restarted(self):
+        from laniakea.monitor import Monitor
+        server=make_server(self.workspace,scan=False)
+        with patch('laniakea.monitor.Monitor') as monitor,patch.object(cli,'make_server',return_value=server), \
+                patch.object(server,'serve_forever',side_effect=KeyboardInterrupt), \
+                contextlib.redirect_stdout(io.StringIO()),contextlib.redirect_stderr(io.StringIO()):
+            monitor.return_value.stop.side_effect=TimeoutError('owned children not confirmed')
+            self.assertEqual(cli.main(['--workspace',str(self.workspace.root),'up','--watch','--no-browser']),2)
+        self.assertEqual(read_json(self.workspace.root/'server.json')['state'],'failed')
+        with self.assertRaisesRegex(LaniakeaError,'not confirmed'):service.stop(self.workspace,HOST)
+        with self.assertRaisesRegex(LaniakeaError,'not confirmed'):
+            with service.running(self.workspace):self.fail('uncertain cleanup must not be discarded')
+
+    def test_down_cancels_owned_blocked_analysis_reaps_descendants_and_releases_writer(self):
+        from laniakea.monitor import Monitor
+        from laniakea.owned_process import Process,exited
+        from laniakea.workspace import WriterBusy
+        root=self.workspace.root/'tmp/blocked';root.mkdir(parents=True)
+        marker=root/'descendant.json';started=threading.Event();children=[]
+        descendant=f'import os,json,time;from pathlib import Path;Path({str(marker)!r}).write_text(json.dumps(os.getpid()));time.sleep(900)'
+        program=f'import subprocess,sys,time;subprocess.Popen([sys.executable,"-c",{descendant!r}]);time.sleep(900)'
+        class Blocked:
+            def __init__(_self,*_args):
+                _self.process=Process([sys.executable,'-c',program],root/'worker.log')
+                children.append(_self.process.pid);started.set()
+            def poll(_self):return None
+            def close(_self):_self.process.close()
+        foreign=subprocess.Popen([sys.executable,'-c','import time;time.sleep(900)'],creationflags=subprocess.CREATE_NO_WINDOW)
+        self.addCleanup(lambda:(foreign.kill(),foreign.wait(timeout=3)))
+        lease=service.running(self.workspace);owner=lease.__enter__();server=make_server(self.workspace,scan=False)
+        monitor=Monitor(self.workspace,server.snapshots,task_factory=Blocked)
+        monitor.activate('sample');monitor.states['sample']['phase']='stage';server.monitor=monitor;owner.ready(server)
+        errors=[]
+        def run():
+            try:
+                monitor.start();server.serve_forever(poll_interval=.05)
+            except BaseException as error:errors.append(error)
+            finally:
+                monitor.stop();server.server_close();lease.__exit__(None,None,None)
+        worker=threading.Thread(target=run,daemon=True);worker.start()
+        try:
+            self.assertTrue(started.wait(3))
+            deadline=time.monotonic()+3
+            while not marker.exists() and time.monotonic()<deadline:time.sleep(.01)
+            self.assertTrue(marker.exists());grandchild=read_json(marker)
+            with self.assertRaises(WriterBusy):
+                with self.workspace.extraction_lock('sample'):pass
+            start=time.monotonic();self.assertTrue(service.stop(self.workspace,HOST));worker.join(timeout=1)
+            self.assertLess(time.monotonic()-start,8);self.assertFalse(worker.is_alive());self.assertEqual(errors,[])
+            self.assertTrue(exited(children[0]));self.assertTrue(exited(grandchild));self.assertIsNone(foreign.poll())
+            with self.workspace.extraction_lock('sample'):pass
+            self.assertEqual({p:p.read_bytes() for p in self.protected},self.protected)
+        finally:
+            if worker.is_alive():monitor.request_stop();server.shutdown();worker.join(timeout=8)
+
     def setUp(self):
         temporary=tempfile.TemporaryDirectory();self.addCleanup(temporary.cleanup)
         root=Path(temporary.name);project=copy_sample(root);engine=fake_engine(root)

@@ -42,6 +42,21 @@ def default_id(project):
     return Path(project).stem.lower()
 
 
+def monitor_inputs(workspace,target,manifest,recipe=None):
+    from . import monitor
+    recipe=recipe if recipe is not None else monitor.recipe(workspace,target,manifest)
+    return recipe,monitor.inspect(workspace,target,manifest,recipe)
+
+
+def monitor_roots(workspace,target,manifest):
+    from . import monitor,source_health
+    recipe=monitor.recipe(workspace,target,manifest)
+    health=source_health.prepare({**recipe['health'],'tools':workspace.root/'tools/health/cpd'})
+    roots=monitor.watches(workspace,target,manifest,descriptors.project_plugins(Path(target['project_file']).parent),
+                          recipe['symbols'] or health[1]['status']=='pending',recipe)
+    return {'recipe':recipe,'watches':roots}
+
+
 def inputs(target, manifest=None, *, symbols=False, health_options=None):
     native = symbols or any(source['id'] == 'compiler' for source in (manifest or {}).get('sources', []))
     health_scope=health_options if health_options is not None else (manifest or {}).get('health')

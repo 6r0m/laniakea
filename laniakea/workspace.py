@@ -2,6 +2,7 @@
 """The ignored workspace: the only place data about an analysed project is written."""
 
 import json
+import errno
 import hashlib
 import os
 import re
@@ -14,6 +15,10 @@ from . import LaniakeaError
 
 DEFAULT_ROOT = Path(__file__).resolve().parent.parent / "workspace"
 _ID = re.compile(r"^[a-z0-9][a-z0-9_.-]*$")
+
+
+class WriterBusy(LaniakeaError):
+    """The byte lock is held by another local writer."""
 
 
 def write_json(path, value):
@@ -44,7 +49,8 @@ def writer_lock(path, message):
         try:
             msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
         except OSError as error:
-            raise LaniakeaError(message) from error
+            if error.errno in (errno.EACCES,errno.EAGAIN,errno.EDEADLK):raise WriterBusy(message) from error
+            raise
         try:
             yield
         finally:
@@ -69,7 +75,10 @@ class Workspace:
 
     def request(self, target_id):
         """The request selected by the publication pointer; legacy registrations have no request."""
-        run = self.latest(target_id)
+        return self.request_at(target_id,self.latest(target_id))
+
+    def request_at(self,target_id,run):
+        """Validate settings against this immutable run, independently of a later pointer replacement."""
         if run is None or not (run / 'manifest.json').is_file():
             return None
         marker = read_json(run / 'manifest.json').get('request')

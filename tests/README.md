@@ -29,6 +29,10 @@ and durable/transient dependency checks. Run the privacy checks before publishin
 admission and cache reuse. With real CPD configured it also checks CLI default/override behavior through published evidence.
 `test_native_health.py`, enabled by both native and CPD inputs, runs real compiler workers and CPD through one CLI
 publication using synthetic Unreal receipts/actions. It proves combined reuse and rejection of edits after native indexing.
+`test_monitor.py` checks coalescing, contention, supersession, activation, fairness and bounded automatic history.
+`test_monitor_inputs.py` checks profile-selected inputs and unpublished staging. `test_notifications.py` and
+`test_owned_process.py` exercise real Windows directory replacement, cancellation, controller death and pre-execution
+containment refusal. The lifecycle suite verifies authenticated shutdown during blocked owned work and foreign-process survival.
 
 | optional input | check enabled |
 |---|---|
@@ -60,6 +64,7 @@ Source-file fixtures must use the normal pipeline/read index/server and real exa
 | [review.browser.js](review.browser.js) | [Review fixture](test_review.py): direct explanation, exact evidence, triage, refused writes, late close and pins |
 | [inspector.browser.js](inspector.browser.js) | Review fixture: accessible tabs, separate findings/details, retained drafts/evidence/scroll, lazy references, late responses and narrow panels |
 | [health.browser.js](health.browser.js) | `test_health.browser_fixture`: source evidence paging, file badges, triage/reopen, late-close, narrow layout and pin preservation |
+| [monitor.browser.js](monitor.browser.js) | Two registered sample targets: launch/deep-link precedence, inactive browsing and same-origin session controls |
 
 Other functions use the served [sample](../sample/SampleProject/SampleProject.uproject), with synthetic overlays.
 Keep real-project screenshots outside the clone and other observations in the ignored workspace.

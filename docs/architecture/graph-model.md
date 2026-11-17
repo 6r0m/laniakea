@@ -113,7 +113,10 @@ available to other consumers and do not limit the references available to the vi
 
 Each extraction writes `workspace/targets/<id>/runs/<utc>/` with the raw tool output, `graph.json`, `manifest.json`
 and `scopes/`, then points `latest.json` at it. The manifest records profile-defined sha256 input fingerprints before
-the export runs. At start the server recomputes them, and any difference marks the run stale, naming the changed inputs.
+the export runs. Saved-only startup does not scan sources and leaves freshness unknown. Explicit session monitoring
+reconciles consumed inputs in a background worker; publishing does not change an open page's immutable context.
+The [background-analysis contract](monitoring.md) owns scheduling and handoff. Explicit freshness checks recompute the
+recorded fingerprints and name changed inputs.
 The Unreal profile owns [which file contents and selection metadata participate](unreal-profile.md#build-context).
 
 New runs bind a validated extraction request by digest: target settings and collection intent are immutable parts of that

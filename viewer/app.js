@@ -50,6 +50,8 @@ function hashFor(id, file) { return `#/${encodeURIComponent(id)}/${encodeURIComp
 async function start() {
   document.querySelector('.skip').onclick = event => { event.preventDefault(); $('map').focus(); };
   state.targets = await getJson('/data/targets.json');
+  try { state.startup = await getJson('/data/startup.json'); }
+  catch (error) { if (error.status !== 404) throw error; state.startup = {}; }
   if (!state.targets.length) {
     $('graph').append(el('p', 'No saved map yet. Run: python laniakea.py build <path to .uproject>, then python laniakea.py up', { class: 'empty' }));
     for (const id of ['target', 'layout', 'find', 'inspect-project']) $(id).disabled = true;
@@ -116,7 +118,7 @@ async function start() {
   });
   document.addEventListener('keydown', onKey);
   const wanted = route();
-  const id = known(wanted.target);
+  const id = known(state.targets.some(target => target.id === wanted.target) ? wanted.target : state.startup.target);
   await show(id, wanted.target === id ? wanted.file : null, 'replace');
 }
 
@@ -901,7 +903,8 @@ function label(id) {
 function renderCoverage() {
   const m = state.manifest;
   const footer = $('coverage');
-  footer.replaceChildren(el('span', `${m.project} / ${m.target.name} / ${m.target.platform} ${m.target.configuration}`));
+  const freshness = state.target.freshness === 'unknown' ? ' / freshness not checked' : '';
+  footer.replaceChildren(el('span', `${m.project} / ${m.target.name} / ${m.target.platform} ${m.target.configuration}${freshness}`));
   const coverage = el('details');
   coverage.append(el('summary', `Analysis coverage / ${m.coverage.not_analysed.length} limitations`),
     el('p', `Run ${m.run} / ${m.tool.name} ${m.tool.version}`));

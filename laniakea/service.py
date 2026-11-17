@@ -15,10 +15,25 @@ STOP='/control/stop'
 HEADER='X-Laniakea-Control'
 
 
+def _failed_shutdown(workspace):
+    try:
+        with (workspace.root/'server.json').open('rb') as stream:raw=stream.read(4097)
+    except FileNotFoundError:return False
+    if len(raw)>4096:return False
+    try:state=json.loads(raw)
+    except ValueError:return False
+    return isinstance(state,dict) and state.get('state')=='failed'
+
+
 class Owner:
     def __init__(self,workspace):
         self.path=workspace.root/'server.json'
         self.token=secrets.token_hex(32)
+        self.failure=None
+
+    def failed(self,error):
+        self.failure=str(error)
+        write_json(self.path,{'version':1,'state':'failed','error':self.failure})
 
     def ready(self,server):
         server.control_token=self.token
@@ -28,12 +43,14 @@ class Owner:
 @contextmanager
 def running(workspace):
     with writer_lock(workspace.root/'server.lock','Laniakea is already starting or running in this workspace; run python laniakea.py down first.'):
+        if _failed_shutdown(workspace):
+            raise LaniakeaError('previous background shutdown was not confirmed; inspect workspace server.json and worker logs before restarting')
         owner=Owner(workspace)
         try:
             write_json(owner.path,{'version':1,'state':'starting'})
             yield owner
         finally:
-            owner.path.unlink(missing_ok=True)
+            if owner.failure is None:owner.path.unlink(missing_ok=True)
 
 
 def control(handler,stop=False):
@@ -51,6 +68,8 @@ def control(handler,stop=False):
     if handler.headers.get('Content-Length')!='2' or handler.headers.get('Transfer-Encoding'):
         return handler._send(413,b'expected empty JSON object\n')
     if handler._body(2)!=b'{}':return handler._send(400,b'expected empty JSON object\n')
+    monitor=getattr(handler.server,'monitor',None)
+    if monitor:monitor.request_stop()
     handler._send(200,b'{"stopping":true}','application/json')
     handler.server.shutdown()
 
@@ -69,6 +88,8 @@ def idle(workspace,clean=False):
 
 def stop(workspace,host):
     try:
+        if _failed_shutdown(workspace):
+            raise ValueError('previous shutdown was not confirmed; inspect server.json before restarting')
         if idle(workspace,clean=True):return False
         with (workspace.root/'server.json').open('rb') as stream:raw=stream.read(4097)
         if len(raw)>4096:raise ValueError('oversized server state')
@@ -99,6 +120,7 @@ def stop(workspace,host):
         while not idle(workspace):
             if time.monotonic()>=deadline:raise ValueError('stop requested but shutdown is not confirmed')
             time.sleep(.05)
+        if _failed_shutdown(workspace):raise ValueError('background shutdown was not confirmed; inspect server.json')
     except (OSError,ValueError,http.client.HTTPException) as error:
         raise LaniakeaError(f'cannot stop viewer: {error}') from error
     return True
