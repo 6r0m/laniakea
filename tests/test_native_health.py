@@ -35,7 +35,7 @@ class NativeHealth(unittest.TestCase):
             (folder/(name+'.cpp')).write_text('#include "SampleTypes.h"\nint Read'+name+'(int value) { int total=0;'+
                 ''.join(f'total+=value*{i};' for i in range(1,9))+'return total;}\n')
 
-    def invoke(self,expected=0):
+    def invoke(self,expected=0,stage=False):
         def exported(_engine,project,*_):return recorded(Path(project).parent,self.engine)['export']
         def actions(_engine,project,_target,_configuration,_out,workspace):
             project_copy.check(project,workspace)
@@ -49,11 +49,43 @@ class NativeHealth(unittest.TestCase):
                 patch('laniakea.unreal.ubt.build_actions',side_effect=actions), \
                 patch.object(tools,'load',return_value=self.native),patch.object(cpd_tools,'load',return_value=self.cpd), \
                 contextlib.redirect_stdout(io.StringIO()),contextlib.redirect_stderr(errors):
+            if stage:
+                from laniakea.monitor_worker import execute
+                with self.workspace.extraction_lock('sample'):
+                    result=execute(self.workspace,'sample','stage')
+                candidate=self.workspace.target_dir('sample')/'runs'/result['candidate']
+                return result,json.loads((candidate/'manifest.json').read_text())
             self.assertEqual(cli.main(['--workspace',str(self.workspace.root),'build',
                 str(self.project/'SampleProject.uproject'),'--engine',str(self.engine),'--name','sample','--symbols']),expected)
         if expected:return None,errors.getvalue()
         run=self.workspace.latest('sample')
         return run,json.loads((run/'manifest.json').read_text())
+
+    def test_background_stage_accepts_new_external_inputs_and_rejects_their_subsequent_drift(self):
+        from laniakea import pipeline
+        original,manifest=self.invoke()
+        header=self.engine/'Engine/Source/Runtime/Core/Public/SampleExternal.h'
+        header.parent.mkdir(parents=True,exist_ok=True)
+        header.write_text('inline int SampleExternalValue(){return 17;}\n')
+        def external_key(key):return key.startswith('external:') and Path(key[len('external:'):]).resolve()==header.resolve()
+        self.assertFalse(any(external_key(key) for key in manifest['inputs']))
+        source=self.project/'Source/SampleProject/First.cpp'
+        source.write_text(f'#include "{header.as_posix()}"\n'+source.read_text()+'\nint ReadExternal(){return SampleExternalValue();}\n')
+        result,candidate=self.invoke(stage=True)
+        key=next(key for key in candidate['inputs'] if external_key(key))
+        self.assertEqual(candidate['inputs'][key],tools.digest(header))
+        path=self.workspace.target_dir('sample')/'runs'/result['candidate']
+        jobs=json.loads((path/'compiler/progress.json').read_text())['jobs']
+        self.assertTrue(jobs);self.assertTrue(all(job['errors']==0 for job in jobs))
+        self.assertEqual(self.workspace.latest('sample'),original)
+        stage=pipeline.stage
+        def changed(*args,**kwargs):
+            value=stage(*args,**kwargs)
+            header.write_text('inline int SampleExternalValue(){return 19;}\n')
+            return value
+        with patch.object(pipeline,'stage',side_effect=changed):
+            with self.assertRaisesRegex(LaniakeaError,'recorded inputs changed'):self.invoke(stage=True)
+        self.assertEqual(self.workspace.latest('sample'),original)
 
     def test_native_and_automatic_health_publish_reuse_and_reject_superseded_native_inputs(self):
         first,manifest=self.invoke()

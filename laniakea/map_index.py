@@ -115,12 +115,16 @@ def build(graph, destination, source_hash=None, generator_hash=None):
         'files': {'topology.json': _digest(path), 'references.sqlite': _digest(database)}})
 
 
+def generator_identity():
+    return hashlib.sha256(Path(__file__).read_bytes()+schema.SCHEMA_FILE.read_bytes()+
+                          Path(__file__).with_name('source_files.py').read_bytes()).hexdigest()
+
+
 def ensure(workspace, target, run):
     source = Path(run) / 'graph.json'
     raw = source.read_bytes()
     source_hash = hashlib.sha256(raw).hexdigest()
-    generator_hash = hashlib.sha256(Path(__file__).read_bytes()+schema.SCHEMA_FILE.read_bytes()+
-                                    Path(__file__).with_name('source_files.py').read_bytes()).hexdigest()
+    generator_hash = generator_identity()
     root = workspace.target_dir(target) / 'views'
     final = root / (source_hash+'-'+generator_hash[:16])
     automatic=(Path(run)/'automatic.json').is_file()
@@ -141,6 +145,29 @@ def ensure(workspace, target, run):
                 os.replace(partial, partial.with_name(partial.name.replace('partial-', 'failed-')))
             raise
     return MapIndex(final, source_hash, generator_hash)
+
+
+def validation(workspace,target,run):
+    """Full graph/index validation belongs in the owned worker; its result is bound to this manifest."""
+    view=ensure(workspace,target,run)
+    return view,{'run':Path(run).name.removesuffix('.partial'),'manifest':_digest(Path(run)/'manifest.json'),
+                 'cache':read_json(view.root/'cache.json')}
+
+
+def from_validation(workspace,target,run,name,proof):
+    """Check an owned worker's validated identities without repeating large graph/index reads in the controller."""
+    if not isinstance(proof,dict) or set(proof)!={'run','manifest','cache'} or \
+            proof['run']!=Path(run).name.removesuffix('.partial') or proof['manifest']!=_digest(Path(run)/'manifest.json'):
+        raise LaniakeaError('read-index validation does not match the run context')
+    cache=proof['cache'];generator=generator_identity()
+    if not isinstance(cache,dict) or cache.get('generator')!=generator or not isinstance(cache.get('source'),str) or \
+            len(cache['source'])!=64 or any(char not in '0123456789abcdef' for char in cache['source']) or \
+            name!=cache['source']+'-'+generator[:16]:
+        raise LaniakeaError('read-index identity does not match the validated graph')
+    view=MapIndex(workspace.target_dir(target)/'views'/name,cache['source'],generator)
+    if read_json(view.root/'cache.json')!=cache:
+        raise LaniakeaError('read-index identity changed after worker validation')
+    return view
 
 
 class MapIndex:

@@ -21,6 +21,25 @@ from support import copy_sample, fake_engine, recorded_ubt
 
 
 class Server(unittest.TestCase):
+    def test_a_valid_index_for_another_graph_is_refused_before_context_admission(self):
+        from laniakea import map_index
+        workspace=self.server.workspace_for_tests;target=workspace.load('sample')
+        original=workspace.latest('sample');old=self.server.views['sample']
+        with workspace.extraction_lock('sample'),recorded_ubt(Path(target['project_file']).parent,Path(target['engine_root'])) as data:
+            data['export']['Modules']['SampleGameplay']['PublicDependencyModules'].remove('SampleCore')
+            candidate,_=pipeline.stage(workspace,target)
+        actual=map_index.ensure(workspace,'sample',candidate)
+        self.assertNotEqual(old.root.name,actual.root.name)
+        with self.assertRaisesRegex(LaniakeaError,'index.*(identity|context|match)'):
+            self.server.snapshots.prepare('sample',candidate,old.root.name)
+        _,validation=map_index.validation(workspace,'sample',candidate)
+        with patch.object(map_index,'ensure',side_effect=AssertionError('heavy validation belongs in the worker')):
+            with self.assertRaisesRegex(LaniakeaError,'index.*(identity|context|match)'):
+                self.server.snapshots.prepare('sample',candidate,old.root.name,validation)
+            context=self.server.snapshots.prepare('sample',candidate,actual.root.name,validation)
+            self.assertEqual(context.view.root,actual.root)
+        self.assertEqual(workspace.latest('sample'),original)
+
     def test_closed_clients_do_not_trigger_a_second_error_response_or_hide_other_io_failures(self):
         from laniakea.server import Handler
         handler=object.__new__(Handler);handler.command='GET';handler.close_connection=False

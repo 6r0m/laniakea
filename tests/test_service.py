@@ -22,6 +22,37 @@ from support import copy_sample,fake_engine,recorded_ubt
 
 
 class ViewerLifecycle(unittest.TestCase):
+    def test_scheduler_poll_failure_reaps_owned_tree_and_releases_writer_without_down(self):
+        from laniakea.monitor import Monitor
+        from laniakea.owned_process import Process,exited
+        root=self.workspace.root/'tmp/poll-failure';root.mkdir(parents=True)
+        marker=root/'child.json';armed=threading.Event();children=[]
+        descendant=f'import os,json,time;from pathlib import Path;Path({str(marker)!r}).write_text(json.dumps(os.getpid()));time.sleep(900)'
+        program=f'import subprocess,sys,time;subprocess.Popen([sys.executable,"-c",{descendant!r}]);time.sleep(900)'
+        class FailedPoll:
+            def __init__(_self,*_args):
+                _self.process=Process([sys.executable,'-c',program],root/'worker.log');children.append(_self.process.pid)
+            def poll(_self):
+                if armed.is_set():raise RuntimeError('injected polling failure')
+                return None
+            def close(_self):_self.process.close()
+        server=make_server(self.workspace,scan=False)
+        monitor=Monitor(self.workspace,server.snapshots,task_factory=FailedPoll)
+        monitor.activate('sample');monitor.states['sample']['phase']='stage';monitor.start()
+        try:
+            deadline=time.monotonic()+3
+            while not marker.exists() and time.monotonic()<deadline:time.sleep(.01)
+            self.assertTrue(marker.exists());pid=read_json(marker);armed.set()
+            monitor.thread.join(timeout=4);self.assertFalse(monitor.thread.is_alive())
+            self.assertIn('injected polling failure',monitor.status()['error'])
+            deadline=time.monotonic()+1
+            while not exited(pid) and time.monotonic()<deadline:time.sleep(.01)
+            self.assertTrue(exited(pid));self.assertTrue(exited(children[0]));self.assertIsNone(monitor.current)
+            self.assertFalse(monitor.watcher.thread.is_alive())
+            with self.workspace.extraction_lock('sample'):pass
+            self.assertEqual({p:p.read_bytes() for p in self.protected},self.protected)
+        finally:monitor.stop();server.server_close()
+
     def test_unconfirmed_background_cleanup_is_not_reported_as_stopped_or_silently_restarted(self):
         from laniakea.monitor import Monitor
         server=make_server(self.workspace,scan=False)

@@ -81,6 +81,16 @@ def inspect(workspace,target,manifest,request):
             'source_bodies_monitored':bool(code)}
 
 
+def validate(target,manifest):
+    from . import inputs
+    if inputs(target,manifest)!=manifest['inputs']:
+        raise LaniakeaError('recorded inputs changed during background analysis; candidate was not published')
+    roots={'project':Path(target['project_file']).parent,'engine':Path(target['engine_root'])}
+    for product in manifest.get('target',{}).get('build_context',{}).get('products',[]):
+        if builds._product({key:product[key] for key in ('root','path')},roots)!=product:
+            raise LaniakeaError('recorded linked product changed during background analysis; candidate was not published')
+
+
 def watches(workspace,target,manifest,plugins,code,request):
     root=Path(target['project_file']).parent;tree=SourceTree(root,plugins);found={}
     def add(path,recursive=False,suffixes=(),names=(),directories=False):

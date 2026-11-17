@@ -29,10 +29,15 @@ and durable/transient dependency checks. Run the privacy checks before publishin
 admission and cache reuse. With real CPD configured it also checks CLI default/override behavior through published evidence.
 `test_native_health.py`, enabled by both native and CPD inputs, runs real compiler workers and CPD through one CLI
 publication using synthetic Unreal receipts/actions. It proves combined reuse and rejection of edits after native indexing.
+It also stages newly discovered native external headers and rejects subsequent drift. The real CPD suite verifies that a
+manual completed-health run still reconciles configuration edits made before monitoring starts.
 `test_monitor.py` checks coalescing, contention, supersession, activation, fairness and bounded automatic history.
-`test_monitor_inputs.py` checks profile-selected inputs and unpublished staging. `test_notifications.py` and
+`test_monitor_inputs.py` checks profile-selected inputs, changed receipt/product sets and unpublished staging. The server
+suite refuses a valid read index from another graph before context admission. `test_notifications.py` and
 `test_owned_process.py` exercise real Windows directory replacement, cancellation, controller death and pre-execution
 containment refusal. The lifecycle suite verifies authenticated shutdown during blocked owned work and foreign-process survival.
+It also injects polling failure with a real worker descendant and verifies process, notification and lease cleanup without
+calling down first.
 
 | optional input | check enabled |
 |---|---|

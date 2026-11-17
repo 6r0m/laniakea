@@ -46,6 +46,45 @@ class CpdProcess(unittest.TestCase):
     setUp=pipeline_fixture.Pipeline.setUp
     tearDown=pipeline_fixture.Pipeline.tearDown
 
+    def test_watch_startup_reconciles_changed_config_even_with_completed_cpd(self):
+        from laniakea.monitor import Monitor
+        from laniakea.monitor_worker import execute
+        from laniakea.server import target_index
+        from laniakea.snapshots import Snapshots
+        from laniakea import map_index
+        from test_monitor import Watcher
+        self.clones()
+        config=self.project/'Config/DefaultEngine.ini';config.parent.mkdir(exist_ok=True)
+        config.write_text('[Synthetic]\nValue=before\n')
+        original,manifest=self.extract()
+        self.assertEqual(manifest['coverage']['acquisition']['source-duplication']['status'],'completed')
+        self.assertNotIn('compiler',{source['id'] for source in manifest['sources']})
+        config.write_text('[Synthetic]\nValue=after\n')
+        contexts=Snapshots(self.workspace,target_index(self.workspace,scan=False),
+                           {'sample':map_index.ensure(self.workspace,'sample',original)})
+        class Task:
+            def __init__(_self,workspace,target,operation,recipe):
+                _self.result={'status':'completed','result':execute(workspace,target,operation,recipe)}
+            def poll(_self):return _self.result
+            def close(_self):pass
+        owner=Monitor(self.workspace,contexts,task_factory=Task,notifications=Watcher)
+        installed=cpd_tools.load(Path(os.environ['LANIAKEA_TEST_CPD']))
+        try:
+            with recorded_ubt(self.project,self.engine),patch.object(cpd_tools,'load',return_value=installed):
+                owner.activate('sample')
+                for _ in range(12):
+                    owner.step()
+                    if owner.states['sample']['state']=='fresh':break
+                self.assertEqual(owner.states['sample']['state'],'fresh')
+                self.assertNotEqual(self.workspace.latest('sample'),original)
+                probe=execute(self.workspace,'sample','probe')
+                self.assertFalse(probe['needs_initial_refresh'])
+                self.assertEqual(probe['previous_identity'],probe['identity'])
+                config.write_text('[Synthetic]\nValue=next-stopped-session\n')
+                changed=execute(self.workspace,'sample','probe')
+                self.assertNotEqual(changed['previous_identity'],changed['identity'])
+        finally:owner.stop()
+
     def extract(self):
         tool=cpd_tools.load(Path(os.environ['LANIAKEA_TEST_CPD']))
         (self.workspace.root/'tools/health/cpd').mkdir(parents=True,exist_ok=True)

@@ -2,6 +2,7 @@
 """Only authorized, consumed inputs affect a target's automatic generation."""
 
 from pathlib import Path
+import os
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -47,6 +48,45 @@ class Inputs(unittest.TestCase):
         candidate=self.workspace.target_dir('sample')/'runs'/staged['candidate']
         self.assertTrue(candidate.name.endswith('.partial'))
         self.assertEqual(read_json(candidate/'automatic.json')['identity'],staged['identity'])
+
+    def receipt_update(self):
+        from test_build_context import BuildContext
+        BuildContext.receipt(self,'SampleProjectEditor','Development',timestamp=10)
+        with recorded_ubt(self.project,self.engine):
+            self.run,self.manifest=pipeline.extract(self.workspace,self.target,health_options={'mode':'off'})
+        extra=self.project/'Binaries/Win64/SampleAdditional.dll';extra.write_bytes(b'new linked product')
+        os.utime(extra,ns=(19_000_000_000,19_000_000_000))
+        BuildContext.receipt(self,'SampleProjectEditor','DebugGame',timestamp=20,BuildProducts=[
+            {'Path':'$(ProjectDir)/Binaries/Win64/SampleProjectEditor.dll','Type':'DynamicLibrary'},
+            {'Path':'$(ProjectDir)/Binaries/Win64/SampleAdditional.dll','Type':'DynamicLibrary'}])
+        return extra
+
+    def test_settled_receipt_and_linked_product_change_is_a_valid_new_contract(self):
+        self.receipt_update()
+        with self.workspace.extraction_lock('sample'),recorded_ubt(self.project,self.engine):
+            result=execute(self.workspace,'sample','stage')
+        candidate=self.workspace.target_dir('sample')/'runs'/result['candidate']
+        manifest=read_json(candidate/'manifest.json')
+        self.assertEqual(manifest['target']['configuration'],'DebugGame')
+        self.assertEqual(len(manifest['target']['build_context']['products']),2)
+        self.assertEqual(self.workspace.latest('sample'),self.run)
+        self.assertEqual(read_json(candidate/'automatic.json')['identity'],result['identity'])
+
+    def test_newly_recorded_linked_product_must_still_match_its_capture(self):
+        extra=self.receipt_update();original=pipeline.stage
+        def changed(*args,**kwargs):
+            result=original(*args,**kwargs);extra.write_bytes(extra.read_bytes()+b' changed after capture');return result
+        with self.workspace.extraction_lock('sample'),recorded_ubt(self.project,self.engine),patch.object(pipeline,'stage',side_effect=changed):
+            with self.assertRaisesRegex(Exception,'linked product'):execute(self.workspace,'sample','stage')
+        self.assertEqual(self.workspace.latest('sample'),self.run)
+
+    def test_manual_snapshot_has_no_complete_monitoring_baseline_after_config_changes(self):
+        config=self.project/'Config/DefaultEngine.ini';config.parent.mkdir(exist_ok=True)
+        config.write_text('[Synthetic]\nValue=before\n')
+        with recorded_ubt(self.project,self.engine):
+            self.run,_=pipeline.extract(self.workspace,self.target,health_options={'mode':'off'})
+        config.write_text('[Synthetic]\nValue=after\n')
+        self.assertTrue(execute(self.workspace,'sample','probe')['needs_initial_refresh'])
 
     def test_missing_automatic_provider_does_not_scan_a_previously_recorded_cpp_corpus(self):
         manifest={**self.manifest,'inputs':{**self.manifest['inputs'],'Source/Old.cpp':'a'*64}}

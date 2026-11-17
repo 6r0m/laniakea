@@ -48,6 +48,11 @@ def monitor_inputs(workspace,target,manifest,recipe=None):
     return recipe,monitor.inspect(workspace,target,manifest,recipe)
 
 
+def validate_monitor_inputs(target,manifest):
+    from . import monitor
+    monitor.validate(target,manifest)
+
+
 def monitor_roots(workspace,target,manifest):
     from . import monitor,source_health
     recipe=monitor.recipe(workspace,target,manifest)

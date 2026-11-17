@@ -44,9 +44,11 @@ class Snapshots:
             context=Context(workspace,target,run,views[target],copy.deepcopy(entry))
             self.contexts[target,run.name]=context;self.baseline[target]=run.name;self.newest[target]=run.name
 
-    def prepare(self,target,run,view_name):
+    def prepare(self,target,run,view_name,validation=None):
         if Path(view_name).name!=view_name:raise LaniakeaError('invalid read-index context')
-        view=map_index.MapIndex(self.workspace.target_dir(target)/'views'/view_name)
+        if validation is None:
+            _,validation=map_index.validation(self.workspace,target,run)
+        view=map_index.from_validation(self.workspace,target,run,view_name,validation)
         manifest=read_json(run/'manifest.json')
         entry=next(item for item in self.index if item['id']==target)
         request=self.workspace.request_at(target,run)
@@ -55,9 +57,9 @@ class Snapshots:
                         'acquisition':manifest['coverage'].get('acquisition',{}),
                         'roots':{**roots,**manifest.get('roots',{})}})
 
-    def admit(self,target,run,view_name,prepared=None):
+    def admit(self,target,run,view_name,prepared=None,validation=None):
         with self.lock:
-            context=prepared or self.prepare(target,run,view_name)
+            context=prepared or self.prepare(target,run,view_name,validation)
             context.run=run;context.review.args=(self.workspace,target,run,context.view)
             base=f'/snapshot/{target}/{run.name}'
             context.entry.update(data_url=base+'/data/',layout_url=base+'/layout/',

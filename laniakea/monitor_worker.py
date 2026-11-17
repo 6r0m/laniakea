@@ -24,26 +24,25 @@ def execute(workspace,target_id,operation,recipe=None):
         automatic=read_json(run/'automatic.json') if (run/'automatic.json').is_file() else {}
         return {**result,'recipe':recipe,
                 'previous_identity':automatic.get('identity'),
-                'needs_initial_refresh':recipe['symbols'] and not automatic or
+                'needs_initial_refresh':not automatic.get('identity') or
                     recipe['health']['mode']!='off' and result['source_bodies_monitored'] and outcome.get('status')!='completed'}
     if operation=='prepare':
         schema.validate(manifest,'manifest')
-        view=map_index.ensure(workspace,target_id,run)
-        return {'run':run.name,'view':view.root.name}
+        view,validation=map_index.validation(workspace,target_id,run)
+        return {'run':run.name,'view':view.root.name,'validation':validation}
     if operation!='stage':raise ValueError('unknown monitor operation')
     recipe,before=profile.monitor_inputs(workspace,target,manifest,recipe)
     staged=None
     try:
         staged,candidate=pipeline.stage(workspace,target,symbols=recipe['symbols'],health_options=recipe['health'],automatic=True)
-        view=map_index.ensure(workspace,target_id,staged)
+        view,validation=map_index.validation(workspace,target_id,staged)
         _,after=profile.monitor_inputs(workspace,target,candidate,recipe)
-        if before['identity']!=after['identity']:
+        _,settled=profile.monitor_inputs(workspace,target,manifest,recipe)
+        if before['identity']!=settled['identity']:
             raise LaniakeaError('inputs changed during background analysis; candidate was not published')
-        current=profile.inputs(target,candidate)
-        if current!=candidate['inputs']:
-            raise LaniakeaError('recorded inputs changed during background analysis; candidate was not published')
+        profile.validate_monitor_inputs(target,candidate)
         write_json(staged/'automatic.json',{'version':1,'identity':after['identity'],'view':view.root.name})
-        return {**after,'recipe':recipe,'candidate':staged.name,'view':view.root.name}
+        return {**after,'recipe':recipe,'candidate':staged.name,'view':view.root.name,'validation':validation}
     except BaseException:
         if staged is not None and staged.exists():workspace.fail_run(staged)
         raise

@@ -55,7 +55,7 @@ class Monitor:
     def __init__(self,workspace,contexts,*,task_factory=Task,clock=time.monotonic,notifications=Notifications):
         self.workspace=workspace;self.contexts=contexts;self.task_factory=task_factory;self.clock=clock
         self.condition=threading.Condition(threading.RLock());self.states={};self.current=None
-        self.stopping=False;self.error=None;self.cursor=0
+        self.stopping=False;self.error=None;self.cleanup_error=None;self.cursor=0
         self.watcher=notifications(self._event)
         self.thread=None
 
@@ -151,6 +151,17 @@ class Monitor:
             path=self.workspace.target_dir(target_id)/'runs'/candidate
             if path.exists():self.workspace.fail_run(path)
 
+    def _close_current(self):
+        job=self.current
+        if job is None:return
+        try:
+            job['task'].close()
+            if job['lease']:job['lease'].__exit__(None,None,None)
+        except BaseException as error:
+            self.cleanup_error=str(error)
+            raise
+        self.current=None
+
     def _finish(self,job,response):
         target_id=job['target'];state=self.states[target_id];now=self.clock()
         result=response.get('result',{})
@@ -175,7 +186,8 @@ class Monitor:
             state.update(recipe=result['recipe'],watches=result['watches'],phase='probe',due=now)
             self._watches()
         elif job['phase']=='prepare':
-            self.contexts.admit(target_id,self.workspace.target_dir(target_id)/'runs'/result['run'],result['view'])
+            self.contexts.admit(target_id,self.workspace.target_dir(target_id)/'runs'/result['run'],result['view'],
+                                validation=result['validation'])
             state.update(run=result['run'],identity=None,failure=None,phase='discover',due=now)
         elif job['phase']=='probe':
             identity=result['identity'];previous=state['identity']
@@ -195,7 +207,7 @@ class Monitor:
                 raise LaniakeaError('worker returned an invalid candidate')
             partial=self.workspace.target_dir(target_id)/'runs'/candidate
             # Prepare the canonical context before the one authoritative commit; Review remains lazy and independent.
-            prepared=self.contexts.prepare(target_id,partial,result['view'])
+            prepared=self.contexts.prepare(target_id,partial,result['view'],result['validation'])
             run=self.workspace.commit_run(target_id,partial)
             self.contexts.admit(target_id,run,result['view'],prepared=prepared)
             state.update(run=run.name,identity=result['identity'],failure=None,attempts=0,state='fresh',
@@ -212,15 +224,12 @@ class Monitor:
             if self.current:
                 job=self.current;state=self.states[job['target']]
                 if self.stopping or not state['active']:
-                    job['task'].close();self.current=None
-                    if job['lease']:job['lease'].__exit__(None,None,None)
+                    self._close_current()
                 else:
                     response=job['task'].poll()
                     if response is not None:
                         try:self._finish(job,response)
-                        finally:
-                            job['task'].close();self.current=None
-                            if job['lease']:job['lease'].__exit__(None,None,None)
+                        finally:self._close_current()
             if self.stopping:return
             now=self.clock()
             for target_id,state in self.states.items():
@@ -247,12 +256,23 @@ class Monitor:
                         self.condition.wait(.1)
             except BaseException as error:
                 with self.condition:self.error=str(error);self.request_stop()
+            finally:
+                with self.condition:
+                    try:self._close_current()
+                    except BaseException as error:
+                        self.error=f'{self.error or "monitor stopped"}; cleanup not confirmed: {error}'
+                try:self.watcher.stop(3)
+                except BaseException as error:
+                    with self.condition:
+                        self.cleanup_error=str(error)
+                        self.error=f'{self.error or "monitor stopped"}; notification cleanup not confirmed: {error}'
         self.thread=threading.Thread(target=run,name='laniakea-monitor',daemon=True);self.thread.start()
 
     def stop(self,timeout=8):
         started=time.monotonic();self.request_stop()
         if self.thread:
-            self.thread.join(max(0,timeout-3))
+            self.thread.join(max(0,timeout-(time.monotonic()-started)))
             if self.thread.is_alive():raise TimeoutError('background analysis did not stop')
         if self.current:self.step()
         self.watcher.stop(max(.1,timeout-(time.monotonic()-started)))
+        if self.cleanup_error:raise TimeoutError(f'background cleanup was not confirmed: {self.cleanup_error}')

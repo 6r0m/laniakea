@@ -19,6 +19,8 @@ Activation applies only to registered saved targets. Browsing another target doe
 the baseline probe; notifications mark a coalesced generation dirty. Content identities decide whether extraction is needed.
 Provider availability and the committed recipe determine whether C++ bodies participate. Historical inactive targets consume
 no source scanning or analysis work. Source mounts are revalidated before reads; notifications never authorize a new root.
+Manual and older runs without a complete automatic input identity require initial reconciliation. Matching canonical source
+hashes alone cannot establish that configuration, tools and all monitored inputs are unchanged.
 
 Events are hints, not a durable log. Overflow, failed watches and malformed events expose degraded monitoring. Periodic
 reconciliation recovers missed edits. Replacing a directory changes its watch identity and does not inherit the old
@@ -26,18 +28,27 @@ directory's refusal delay. Engine/toolchain inputs have narrow watches; assets, 
 recursively watched. Review policy, triage and positions do not trigger source extraction.
 
 Required build preparation still runs for changed inputs. CPD retains its complete-corpus cache and native indexing retains
-its preprocessing guards. Unchanged bytes create no new run. Continuous edits coalesce rather than repeatedly killing jobs.
+its preprocessing guards. A verified unchanged automatic baseline creates no new run. Continuous edits coalesce rather than
+repeatedly killing jobs.
 Typed external-build contention has bounded retries; other failures require changed inputs or explicit Retry. A failed target
 does not monopolize the queue. Refused writer locks leave the existing writer alone.
 
+An unrecorded optional external header appearing outside watched inputs does not itself guarantee scheduling. Native
+preprocessing guards detect it on the next extraction; Retry, a build or another observed input change can initiate that
+extraction. Recorded external inputs are monitored. This is a trigger limitation, not permission to reuse invalid native facts.
+
 ## Publication and shutdown
 
-The controller holds the existing extraction lock while a worker stages and validates a candidate. Input identity and
-observed generations are checked before promotion. The controller alone replaces the latest pointer; cancellation and known
-supersession retain the last good map. Filesystem edits are not globally locked, so a later observed edit makes work pending.
+The controller holds the existing extraction lock while a worker stages and validates a candidate. Before/after identity
+checks use the same prior input contract. Newly discovered candidate inputs and selected linked products are separately
+validated against their captured state; the accepted candidate retains its new identity. Observed generations are checked
+before promotion. The controller alone replaces the latest pointer; cancellation and known supersession retain the last good
+map. Filesystem edits are not globally locked, so a later observed edit makes work pending.
 
-The canonical graph/read index must be ready before promotion. Review is lazy and independent: policy or triage failures
-cannot block a usable map. Versioned snapshot URLs pin manifest, topology, exact-reference pages and layout/triage validation
+The worker validates the canonical graph/read index before promotion. Its result binds the run and manifest to the verified
+source, generator and cache identities; the controller checks those bindings without repeating large index reads. A valid
+index belonging to another graph cannot be admitted. Review is lazy and independent: policy or triage failures cannot block
+a usable map. Versioned snapshot URLs pin manifest, topology, exact-reference pages and layout/triage validation
 to the same generation. Old URLs never acquire new reference identities. Expired contexts return HTTP 410. Active readers,
 the initial context and the latest/recovery contexts protect their artifacts from cleanup. Manual runs and user stores are
 never automatically removed; disposable automatic history is tagged separately.
@@ -46,6 +57,8 @@ Workers enter their Job Object during process creation, before execution. The co
 kill-on-close handle. Containment refusal cannot launch an uncontained fallback. Stop prevents starts/publication, cancels
 owned descendants and drains notification I/O within the existing viewer-stop budget. Ports and process names never
 authorize termination. A cleanup failure remains observable rather than reporting confirmed shutdown.
+An unexpected scheduler failure performs the same owned-job and notification cleanup and releases its writer lease without
+requiring a later stop request. Unconfirmed cleanup remains an error.
 
 Saved-only startup reads workspace artifacts without source scanning. Monitoring remains explicit, and existing tabs remain
 pinned until reopened; preparing a newer context does not itself change exploration state.

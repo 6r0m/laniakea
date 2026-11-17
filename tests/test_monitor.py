@@ -29,7 +29,10 @@ class Scheduler(unittest.TestCase):
         target=self.workspace.register('sample',target_fields(self.project/'SampleProject.uproject',self.engine))
         self.recording=recorded_ubt(self.project,self.engine);self.recording.__enter__()
         self.addCleanup(lambda:self.recording.__exit__(None,None,None))
-        self.run,_=pipeline.extract(self.workspace,target,health_options={'mode':'off'})
+        self.manual,_=pipeline.extract(self.workspace,target,health_options={'mode':'off'})
+        with self.workspace.extraction_lock('sample'):
+            candidate=execute(self.workspace,'sample','stage')
+            self.run=self.workspace.commit_run('sample',self.workspace.target_dir('sample')/'runs'/candidate['candidate'])
         index=target_index(self.workspace,scan=False)
         views={'sample':map_index.ensure(self.workspace,'sample',self.run)}
         self.contexts=Snapshots(self.workspace,index,views);self.now=0;self.started=[];self.targets_started=[];self.responses=[];self.hold=False
@@ -107,9 +110,9 @@ class Scheduler(unittest.TestCase):
         for number in range(7):
             rule.write_bytes(rule.read_bytes()+f'\n// edit {number}\n'.encode())
             self.dirty();self.settle()
-        self.assertTrue(self.run.is_dir());self.assertEqual(user.read_bytes(),protected)
+        self.assertTrue(self.run.is_dir());self.assertTrue(self.manual.is_dir());self.assertEqual(user.read_bytes(),protected)
         automatic=[path for path in (target_dir/'runs').iterdir() if (path/'automatic.json').is_file()]
-        self.assertLessEqual(len(automatic),2)
+        self.assertLessEqual(len(automatic),3)
         self.assertLessEqual(len(self.contexts.contexts),3)
 
     def test_event_loss_marks_unknown_and_manual_publication_prepares_new_pinned_context(self):
@@ -119,7 +122,9 @@ class Scheduler(unittest.TestCase):
         self.now+=2;self.settle()
         target=self.workspace.load('sample');run,_=pipeline.extract(self.workspace,target,health_options={'mode':'off'})
         self.monitor.step();self.assertEqual(self.monitor.current['phase'],'prepare')
-        self.settle();self.assertEqual(self.contexts.latest('sample')['run'],run.name)
+        self.monitor.step();self.assertEqual(self.contexts.latest('sample')['run'],run.name)
+        self.settle();self.assertEqual(self.contexts.latest('sample')['run'],self.workspace.latest('sample').name)
+        self.assertTrue(run.is_dir())
         self.assertIn(('sample',self.run.name),self.contexts.contexts)
 
     def test_history_is_inactive_until_requested_and_multiple_active_targets_make_progress(self):

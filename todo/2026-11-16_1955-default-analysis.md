@@ -1,6 +1,6 @@
 # Continuous useful analysis with safe reuse
 
-**Status:** IN PROGRESS - Gates 1-2 complete within recorded acceptance; Gate 3 browser adoption remains unfinished
+**Status:** IN PROGRESS - Gate 1 complete; Gate 2 review corrections verified; Gate 3 remains pending
 
 **Scope:** continuous monitoring, default code-health collection, safe reuse and validated live map updates  
 **Stable documentation owners:** [Unreal profile](../docs/architecture/unreal-profile.md),
@@ -939,3 +939,35 @@ Only changes authorized after this review are implemented; no new services or sp
   from actual provider acquisition outcomes. The restarted local viewer loaded the saved real map without runtime errors
   or position writes, with monitoring off and unchecked freshness visible. Protected publication/user-state files remained
   byte-identical. No staging or commit was performed.
+
+### 2026-11-17 - Gate 2 reviewer corrections
+
+- All four findings are valid; the prior Gate 2 acceptance missed these cases. F1 now compares the same prior input contract
+  before/after staging, independently validates the candidate's new external inputs and captured linked products, and retains
+  the candidate identity. A settled new receipt/product set passes. Actual LLVM/CPD workers accept a newly discovered external
+  header; changing it or a newly selected product after capture rejects the candidate without moving latest.
+- F2 treats a missing complete automatic baseline as unknown and reconciles it once. A manual completed-CPD run without native
+  indexing cannot imply unchanged configuration. The CLI --watch route with real UBT/CPD published a new automatic snapshot
+  after a stopped-session config edit. Subsequent probes reuse its complete identity; old HTTP contexts remain pinned.
+- F3 reuses full graph/index validation in the owned worker, binding its result to the run, manifest, source, generator and
+  cache identities. The controller checks those bindings before commit. Pairing a candidate with another graph's valid index
+  failed before the fix and is refused afterward. Repeating heavy validation in the controller would violate cancellation;
+  it remains in the disposable worker rather than introducing a second validator.
+- F4 cleans up owned work and notification I/O on fatal scheduler exit. A failing poll with a real worker/descendant reproduced
+  the leak before the fix. It now terminates both, stops notifications and releases the writer lease without down. Unconfirmed
+  cleanup remains observable and cannot become a successful stop. Protected publication and user-state checks pass.
+- Verification: 295 non-Engine Python checks passed with one legacy clangd-indexer skip, with real LLVM and CPD enabled.
+  All three Engine checks and 173 JavaScript checks passed. The real CLI/browser monitoring scenario passed launch selection,
+  explicit links, inactive browsing and same-origin controls; authenticated shutdown completed within the existing budget.
+  Evidence: [Python](../workspace/tmp/gate2-review/python-results.json),
+  [Engine](../workspace/tmp/gate2-review/engine-results.json),
+  [CLI](../workspace/tmp/gate2-review/live-results.json),
+  [browser](../workspace/tmp/gate2-review/browser-results.json).
+- The additional optional-header observation remains a trigger limitation: an absent external input appearing outside watched
+  paths does not itself guarantee scheduling. Existing native negative-header guards passed on the next extraction. Retry,
+  a build or another observed change can initiate it. No broader Engine watch or new discovery subsystem was added.
+- Stable monitoring and verification documentation describe these boundaries. Monitoring remains opt-in; saved-only default
+  opening and existing pins/triage are preserved. Gate 3 is unfinished and this todo stays active. No staging or commit.
+- Final documentation, privacy, syntax and diff checks passed. The authenticated local viewer restart loaded its saved map
+  with monitoring off, unchecked freshness visible, no JavaScript errors and no layout writes. Protected workspace files
+  remained byte-identical. These results do not claim automatic browser adoption or discovery of unrecorded external paths.
