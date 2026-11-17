@@ -7,6 +7,9 @@ This README explains the lifecycle only. It contains no task list or links to in
 Active task files live directly in this directory. Before closing one, record its outcome, verification and remaining
 limitations, and move lasting contracts, decisions and operational knowledge to their stable owner.
 
+Name new tasks `YYYY-MM-DD_HHMM-<concise-change-name>.md` using their creation date and time. Keep the prefix unchanged
+when revising or archiving a task.
+
 Move completed task files into `done/` and mark them DONE. Preserve their decision and execution history; do not delete
 a completed plan as part of closure. Rebase relative links when moving it.
 
