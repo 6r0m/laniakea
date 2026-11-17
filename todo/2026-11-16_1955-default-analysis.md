@@ -14,6 +14,7 @@
 - [Current architecture and source of truth](#current-architecture-and-source-of-truth)
 - [Problem and root cause](#problem-and-root-cause)
 - [Decision](#decision)
+- [Acquisition outcomes and failure policy](#acquisition-outcomes-and-failure-policy)
 - [Monitoring and snapshot handoff](#monitoring-and-snapshot-handoff)
 - [Required invariants](#required-invariants)
 - [Implementation tasks](#implementation-tasks)
@@ -65,10 +66,12 @@ state. Missing coverage and ongoing work remain visible; unchanged analysis is r
   actionable findings and cost remain unproved. Installed executables are not automatically supported providers.
 - **A6 [ACTIVE]:** Use Windows directory notifications through a narrow Python standard-library adapter. Events mark
   inputs dirty; content verification, not event history or timestamps, controls reuse. Reconcile missed events explicitly.
-- **A7 [ACTIVE]:** `up` owns monitoring for registered targets with saved maps, with globally bounded, fair work. No
+- **A7 [REJECTED by evidence - F5]:** `up` owns monitoring for registered targets with saved maps, with globally bounded, fair work. No
   unrelated project discovery or background lifetime after `down`. Provide an explicit saved-only opening mode.
 - **A8 [ACTIVE]:** Keep one effective analysis recipe per target. Automatic jobs retain previously selected native
   depth, target/configuration policy and health options instead of silently downgrading a symbol map to modules.
+- **A9 [ACTIVE]:** Monitor one launch-selected target by default. Historical registrations remain available as saved maps;
+  further targets require explicit session activation. Activation is not inferred from registration or an old browser tab.
 
 ## Non-goals
 
@@ -138,6 +141,20 @@ existing local tools. No production code, stable docs, tests or analysed-project
     directory watch. This proves local API availability, not event decoding, overflow recovery or production performance.
     [Probe](../workspace/tmp/continuous-monitor-investigation/native_probe.py),
     [result](../workspace/tmp/continuous-monitor-investigation/native-probe.json).
+12. [Unreal collection](../laniakea/unreal/__init__.py) fingerprints requested health sources before collecting the graph;
+    a later CPD error also propagates through the whole pipeline. [Coverage schema](../schema/graph.v1.schema.json)
+    presently has prose lists and counts, not structured acquisition outcomes. Existing fail-closed behavior is correct for
+    explicitly required analysis, but cannot become the default optional-provider policy unchanged.
+13. [UBT](../laniakea/unreal/ubt.py), [CPD](../laniakea/unreal/cpd.py) and
+    [native workers](../laniakea/unreal/compiler.py) use blocking subprocess calls with 900-second timeouts. Native
+    preprocessing has its own [180-second timer](../laniakea/unreal/symbol_cache.py); cancelling a future does not stop a
+    running child. [Service stop](../laniakea/service.py) waits up to 10 seconds after the stop acknowledgement for lease
+    release. These are different limits; the current analysis paths cannot promise bounded viewer shutdown.
+14. [CLI target selection](../laniakea/cli.py) writes registration/settings before health-option validation and extraction.
+    [Workspace publication](../laniakea/workspace.py) later replaces the latest pointer separately. A failed extraction
+    can therefore leave new settings beside the old map. The prior recipe paragraph did not resolve crash consistency.
+    A [synthetic CLI probe](../workspace/tmp/default-analysis-review/check.py) reproduced registration after an invalid
+    health-option request returned 2 without publishing a map: [result](../workspace/tmp/default-analysis-review/settings-probe.json).
 
 ### Upstream evidence and reviewer assessment
 
@@ -175,8 +192,8 @@ Monitoring, selective invalidation, resource bounds and live adoption are unimpl
 Ignored experiments are local supporting evidence; implementation must promote independent synthetic fixtures into tests.
 The earlier completed CPD work records a broad lexical failure followed by a successful explicitly bounded corpus.
 That is a default-usability risk: the next gate must exercise the proposed default corpus, not merely a chosen positive
-subset. Under the failure policy below, an installed provider's error can block a normal build; explicit off is the
-recovery path. Do not silently change that into partial successful collection.
+subset. Default optional collection must fail visibly without blocking an otherwise valid architecture map. Explicitly
+required collection retains its existing publication gate; the acquisition contract below distinguishes these cases.
 
 ## Current architecture and source of truth
 
@@ -225,12 +242,55 @@ Give up per-keystroke immediacy and monitoring while the viewer is stopped. `bui
 |---|---|---|
 | keep explicit collection, improve its button text only | no new mechanism, but still requires expert flags | insufficient for D1 |
 | build-time defaults using current providers/caches | fewest parts, but no updates during viewing | A1 not selected by D3 |
-| Windows notifications inside viewer lifetime | one adapter, bounded coordinator and safe snapshot handoff; no package/service | recommended under A6-A8 |
+| Windows notifications inside viewer lifetime | one adapter, bounded coordinator and safe snapshot handoff; no package/service | recommended under A6, A8-A9 |
 | watchfiles or watchdog | external dependency lifecycle; watchfiles latest also raises Python floor | not selected under current core contract |
 | periodic full source scans as primary trigger | no OS adapter, but recurring hash cost even when idle | recovery only, not primary trigger |
 | Windows USN journal / external watch service | volume cursors, permissions or another runtime owner | unnecessary for session-scoped monitoring |
 | per-module CPD reports | requires extra cross-module reconciliation and risks missed clones | reject; module boundaries do not partition clone relationships |
 | new generic analyzer/cache framework | duplicates existing ownership without a second proven provider | reject |
+
+## Acquisition outcomes and failure policy
+
+Extend the existing manifest coverage contract, not a provider registry or second report store. The schema owns structured
+outcome shapes; the profile produces them, the pipeline validates them, and CLI/Review/viewer consume them. Prose coverage
+and summaries derive from the same outcomes. Health continues to own artifact validation only, not Review interpretation.
+
+For each supported requested provider, record effective acquisition mode, requested scope/options, status and a bounded
+reason code. Bind completed results to tool/input identity and their validated artifact. Reuse is a completed result with
+reuse provenance, not another status. Diagnostic links stay root-relative within the private run; do not expose raw logs
+as status messages. Do not invent successful identities for inputs that could not be read.
+
+| outcome | evidence and presentation contract |
+|---|---|
+| completed | complete validated requested corpus; counts and findings available, including a genuine zero |
+| unavailable | supported tool genuinely absent or capability unsupported; no claimed findings or clean result |
+| disabled | explicitly off; no provider work or implied source coverage |
+| failed | classified provider-local acquisition failure; reason/retry route, no successful health artifact |
+| incomplete | requested scope was not fully processed; no partial findings accepted as a complete result |
+
+Older manifests without outcomes remain readable: show unrecorded status where coverage cannot be established; do not
+guess disabled from a missing health artifact. Runtime queued/running/cancelled states belong to the coordinator, not a
+completed immutable artifact. Cancellation or superseded inputs abort that candidate, regardless of provider mode.
+
+| acquisition mode / failure | publication policy |
+|---|---|
+| automatic CPD, classified tool/corpus/lexical/size/timeout failure | publish an otherwise validated current graph with explicit failed/incomplete CPD outcome; no current CPD findings |
+| automatic CPD, missing tool | publish graph with unavailable outcome |
+| explicitly required CPD or native analysis fails | retain the complete previous publication and its effective settings/recipe |
+| health off | publish graph with disabled outcome; skip CPD |
+| core build inputs, source boundary, graph/schema validation or unknown internal failure | fail the candidate; no reduced-success fallback |
+
+This deliberately changes the previous blanket-failure proposal, not the required-mode safeguard. Isolate only typed,
+provider-local failures; never catch every LaniakeaError as optional absence. An invalid tool inventory must refuse tool
+execution, even in automatic mode. Corrupt published artifacts still fail validation rather than being silently discarded.
+Separate CPD-only input capture from mandatory graph/native inputs so an optional unreadable CPD file cannot abort the
+graph before the provider boundary. Core or physical-boundary failures still abort. Recheck mandatory inputs before commit.
+
+Never attach an older health artifact to a new graph. Keep its exact evidence available only through its original run,
+clearly historical. New failed/unavailable outcomes must invalidate current health findings without erasing triage. The
+Review summary must say health failed/unavailable, not just zero candidates. Monitoring follows the requested recipe even
+when no health artifact was produced. Unknown provider input identity is neither a cache hit nor fresh coverage.
+Do not republish identical failures on every reconciliation tick; retry rules are owned below.
 
 ## Monitoring and snapshot handoff
 
@@ -245,11 +305,40 @@ the baseline and retain intervening dirty generations to close the startup scan 
 are not a persistent log. The first project still needs an explicit `build` to register source/engine context; do not infer
 projects from the browser or discover unrelated repositories.
 
-Persist the effective recipe through the workspace owner, serialized with extraction. Successful manual builds record
-their actual requested modes; failed builds do not replace the last working recipe. Seed older registrations from their
-validated latest manifest when unambiguous, preserving native depth and collection scope. Otherwise show automatic refresh
-as unavailable rather than guessing. The recipe is collection intent; artifacts record what succeeded. Missing optional
-tools are explicit coverage limits. Ordinary module exploration remains possible without LLVM or Java.
+### Active targets
+
+Use A9 instead of A7. Proposed `up <target-id>` activates that registered target; without an argument, select the existing
+workspace.last() target and open that target by default. Print/show which target is monitored. All other registrations
+remain cached browsing only: no source scan, watchers, UBT, Java or LLVM merely because they exist or a bookmark opens them.
+Allow explicit same-origin activation/pause through existing target controls; selecting a cached map alone does not opt it
+into analysis. Additional activation is deliberate and session-local, deduplicated across tabs. Closing a tab does not
+silently change activation; `down` clears the session. No persistent subscription registry or per-tab lease protocol.
+Activation accepts only registered target IDs under existing host/origin validation, never arbitrary source paths.
+When several targets are explicitly active, share physical watches and apply global fairness/resource limits. A refused
+activation leaves it inactive with a reason. Pause cancels that target's pending/owned work; it does not delete its map.
+
+### Effective settings and recipe commit
+
+The workspace owns one committed extraction request: effective target settings plus collection recipe, selected by the
+same latest pointer as its graph. Stage that request with the immutable candidate run; validate it before publication.
+The recipe records intent, including auto/off/required and native depth; acquisition outcomes record actual coverage.
+Do not persist proposed settings through CLI _target()/register() before validation or extraction succeeds.
+
+Under the existing per-target writer lock, validate request, identity collision and tool options, build the candidate,
+validate all required artifacts, then rename the run and atomically replace the latest pointer once. That pointer is the
+commit point for run, settings and recipe. An automatic CPD failed outcome may be a successful graph publication under
+the preceding policy; a required-provider failure is not. No second authoritative target.json or recipe write follows it.
+Existing target.json may remain a legacy registration input or derived projection, never override a newer committed
+request. Update Workspace load/targets/last/find_project, CLI, server and freshness consumers to resolve the same committed
+state. New targets become registered/visible only at successful publication; failed attempts may leave ignored diagnostics.
+
+Seed older targets from validated legacy settings and the latest manifest when unambiguous, preserving native depth and
+health scope; otherwise require explicit refresh configuration. Migrate on the next successful publication, not on read.
+Crash before pointer replacement leaves old state authoritative; after replacement all readers resolve new state.
+Unreferenced candidate runs are not committed registrations. Validate this with failure/crash injection around both renames,
+reopening Workspace after each case. Atomic pointer replacement is not a claim of a multi-file or power-loss transaction.
+
+### Watch inputs
 
 Profiles derive physical watch roots and input classes using existing boundary owners: authored sources, descriptors,
 build rules, selected context inputs and declared plugin mounts. Watch recorded external compiler inputs and tool markers
@@ -301,8 +390,8 @@ writer or a tight retry loop. Capture recipe/input generations and validate inpu
 coalesce into the next generation. Do not present a known superseded candidate as fresh; keep the last good map and
 reconcile again. Filesystem edits cannot be globally locked: record captured input identity and show pending/stale when
 later changes are observed.
-Do not repeatedly retry deterministic failure for identical inputs. Retry only a classified transient condition within a
-bounded observable budget, a new verified input generation, or an explicit user retry. A bad target must not starve others.
+Do not repeatedly retry deterministic failure for identical inputs. A new relevant source/tool/request change or explicit
+retry may schedule it again; periodic reconciliation alone must not create a failure loop. A bad target must not starve others.
 
 Publish through the existing validated partial-run/latest path. Then prepare an immutable server read context containing
 manifest, shards, topology, exact references and Review before advertising it as ready. Pin all multi-request reads to one
@@ -324,21 +413,46 @@ predecessor. Never automatically delete manual history or positions/policy/triag
 ownership is unambiguous; retire unpinned contexts explicitly, allowing slow tabs to request adoption again. Measure disk
 growth over repeated edits before accepting retention limits.
 
-On `down`, Ctrl+C or startup failure: stop scheduling, cancel queued work and owned analyzer children, drain cancelled
-watch I/O and release the service lease after cleanup. Never kill unrelated UBT or another process by PID/port.
-Cancellation retains the last validated publication; startup/stop states remain truthful.
+### Cancellation and external contention
+
+The 900-second execution timeout is not a cancellation budget. Keep the existing 10-second post-acknowledgement stop wait;
+plan internal cleanup to finish within 8 seconds, leaving headroom. On stop, acknowledge promptly, expose stopping, prevent
+new starts/publication, signal cancellation and discard queued work. Check cancellation between bounded copy/hash/index
+chunks as well as subprocess waits; a long source read or native executor shutdown cannot be allowed to hold the viewer.
+
+Run potentially blocking background preparation/extraction/index construction in one disposable owned job process. Contain
+it and its descendants in a Windows Job Object, established before execution can spawn children, with no breakaway and
+kill-on-close. Use a narrow standard-library process owner shared by UBT/Java/native cancellation, not a worker service.
+Allow at most 2 seconds cooperative grace; terminate the owned job if still running, then drain/reap children, worker futures
+and watch I/O within the remaining internal budget. Do not rely on Future.cancel() or executor shutdown(wait=False).
+Cancellation never becomes an optional-provider failure publication. If containment cannot be established, refuse background
+work visibly. If cleanup cannot be confirmed, keep truthful stopping/failed status; down must not claim success or kill a
+foreign process. The runtime gate must prove lease release within the existing stop wait on supported Windows.
+
+Represent UBT's existing CONFLICTING_INSTANCE result as a typed busy outcome, not prose matching. Keep the dirty request
+coalesced and show waiting for the external build. Retry at most three times after cancel-aware delays of 2, 5 and 10 seconds;
+then retain the pending request with Retry guidance. A new relevant receipt/context change or explicit retry starts another
+budget; polling alone does not. Other exit codes/timeouts are failures, not contention. No source/Engine rebuild, mutex
+bypass, or termination of an externally started UBT. Check cancellation before any retry can create a child.
+
+The worker stages/validates artifacts; it never replaces latest or committed settings. The pipeline parent retains the
+target writer lock and permits the single commit only after successful worker completion and input/request generation
+checks. Cancellation before that short commit leaves the old state. Do not acquire a second conflicting lock in the child.
+
+Microsoft documents [Job Object containment](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects),
+including descendant handling. Python documents that [executor cancellation](https://docs.python.org/3.9/library/concurrent.futures.html#concurrent.futures.Executor.shutdown)
+does not stop running work. These support the proposed mechanism; real UBT/Java/native containment and nested-job behavior
+remain implementation gates. No production process-owner or monitoring capability is claimed by this plan.
 
 ## Required invariants
 
 1. No edits to analysed sources or project configuration; preserve the existing declared-source physical boundary.
 2. Under D3, only the owned coordinator launches background analysis; hover/wheel handlers and HTTP status reads never
    launch analyzers. Native indexing remains explicit initially, and automatic jobs preserve the effective recipe.
-3. Validate supplied options before availability decisions. Automatic mode may skip a genuinely absent installation
-   with explicit coverage. Corrupt/partial installations, unreadable inputs, lexical failures and timeouts remain errors;
-   retain the previous published map, never substitute an empty successful analysis. Explicit required collection still fails
-   on missing tools. Explicit health-off avoids CPD and its source scans, but not native-required scans. Saved-only opening
-   avoids source monitoring and scanning altogether. Missing tools for an existing required native recipe fail visibly;
-   automatic refresh must not silently publish reduced coverage.
+3. Validate options before work. Use the acquisition-mode table: auto CPD failures leave explicit failed coverage on an
+   otherwise valid graph; required-provider, core and validation failures retain the previous publication. Never substitute
+   an empty successful health artifact. Off avoids CPD scans, not native-required scans. Saved-only opening avoids all source
+   scanning/monitoring. Required native depth cannot be silently dropped. No old health evidence becomes current by copying.
 4. Health observations remain independent of graph edges, canonical identities, user positions and Review policy.
 5. Default Review must display evidence collected at the effective default floor. Explicit user policy remains authoritative;
    a policy below collected coverage is unavailable and requires recollection. Define the acquisition floor once in the
@@ -362,50 +476,63 @@ Cancellation retains the last validated publication; startup/stop states remain 
     input/recipe generations at publication and never advertise a known superseded result as current.
 13. All served artifacts and pending pages bind to one immutable run. Adoption preserves user work and camera; stale
     requests cannot mutate a new context or reopen closed inspection. Automatic cleanup never deletes independent user data.
+14. Committed target settings, recipe and run resolve through one publication pointer. A failed request changes none of them;
+    structured optional failure is a successful graph publication only under the declared acquisition policy.
+15. Only explicitly session-active targets consume monitoring resources. History and mere cached browsing never activate work.
 
 ## Implementation tasks
 
-- [ ] Promote the A/B/C/D probe into independent synthetic fixtures and tests in the existing CPD/health test owners.
-- [ ] Gate A3 against a representative authorized real C++/Unreal corpus. Compare strict 100/50/40/30, inspect actual
-  duplicated logic and intentional boilerplate, and verify exact editor ranges. Record cold/unchanged/edit time, hashing
-  cost, peak memory and artifact sizes privately when the corpus is private. Exercise the entire proposed default corpus
-  and its lexical-error behavior. If automatic collection or the lower floor is not useful/reliable there, stop that
-  decision for review rather than selecting a convenient subset or claiming the short-clone goal is met by the old threshold.
-- [ ] Extend the existing build health option with automatic, off and required behavior; keep existing explicit duplication
-  requests supported. Resolve defaults in the profile/provider, not a new registry. Preserve programmatic pipeline callers'
-  explicit collection contract unless deliberately adapted and covered.
-- [ ] In the Unreal adapter, preflight only its trusted local CPD installation. Missing tooling adds a named coverage limit
-  without scanning C++ or breaking ordinary module extraction. Publish an artifact only after complete successful collection.
-- [ ] Align default Review floor resolution and semantic fingerprinting with invariants 5-6. Test the collected 50-token
-  clone through the complete build-to-Review route, not only a command-line CPD report.
-- [ ] Add the effective recipe to the existing target owner with migration from validated manifest data, exact native/health
-  intent and writer-lock coordination. Prove failed requests preserve the recipe and map. Explicit one-shot builds remain
-  available; automatic work uses the same pipeline and cannot silently downgrade depth.
-- [ ] Implement a narrow Windows notification adapter and profile-owned root selection. Prove atomic saves, UTF-16 paths,
-  duplicate/rename events, root replacement, authorized mounts, lost notifications, cancellation completion and no leaked
-  handles. Reuse SourceTree for physical boundaries; keep event decoding independent of analyzer logic.
-- [ ] Add the bounded coordinator under the existing service lifetime: startup reconciliation, debounce, generation checks,
-  one pending latest request per target, global fairness, failure reporting and bounded recovery. Reuse existing locks and
-  provider caches. `down` must stop owned work without killing unrelated tools or leaving the service lease held.
-- [ ] Make cached opening independent of full freshness hashing. Introduce generation-pinned server read contexts and
-  lightweight status/latest discovery. Serve manifest, topology, references, Review and write validation consistently;
-  prepare the candidate context before advertising it. Adopt successful manual builds through the same path.
-- [ ] Add browser adoption through existing scene/navigation/position owners, with save/draft/drag deferral and cancellation
-  of obsolete requests. Preserve surviving camera/IDs/filters and Inspector intent; cover root and deep contextual files.
-  Add proposed saved-only opening and explicit monitor pause/retry routes without new permanent UI panels.
-- [ ] In existing Review controls, summarize unavailable/incomplete checks alongside finding counts and provide the existing
-  setup/coverage route. A fresh ordinary build must not look fully checked when native or source analysis is unavailable.
-- [ ] Preserve and measure whole-corpus reuse. Do not add historical lookup, persistent token caches or changed-module-only
-  scans unless measured real reuse cost supplies a separate reason and equivalent complete-corpus results are proved.
-- [ ] Bound automatic-run/cache retention with explicit ownership and active-context protection. Measure repeated-edit
-  disk/memory/handle growth, idle overhead and analysis queue age. No-op events must create no runs. Do not expand cleanup
-  into existing manual history or user data. Record remaining UBT/preprocessing costs honestly.
-- [ ] Gate A4 on useful renamed clones versus boilerplate before implementing it. If it passes, add one labelled alternate
-  mode through the existing artifact/collector/evaluator path, with validated versioning for old strict runs. It must not
-  silently discard or mix modes, reinterpret strict fingerprints, merge distinct overlapping groups or add a default pass.
-- [ ] Run synthetic and real source-evidence acceptance, compare saved positions/policy/triage, update their stable owners,
-  and perform final architectural review. A5 remains outside this delivery. Finish the default-provider gate before enabling
-  it in automatic jobs; finish publication/adoption gates before turning monitoring on by default.
+Each gate has independent acceptance evidence. Passing one does not imply the later stages work. Keep monitoring opt-in
+until Gate 3 passes; do not enable a half-working automatic refresh path. Implementation still requires operator approval.
+
+### Gate 1 - Default analysis and committed requests
+
+- [ ] Promote A/B/C/D into independent real-provider fixtures. Gate A3 on a representative authorized real corpus, comparing
+  strict 100/50/40/30, useful logic versus boilerplate, complete default scope, lexical failures and exact ranges. Record
+  cold/reused/edit costs privately for private inputs. Stop the lower-default decision if value or reliability is unproved.
+- [ ] Add schema-validated acquisition outcomes through existing manifest/coverage owners. Implement auto/off/required
+  behavior at the profile boundary, including CPD-only input failures before graph collection. Required failures keep their
+  existing gate; automatic failures produce explicit failed coverage without a bogus health artifact or stale evidence.
+- [ ] Stage effective settings/recipe with the immutable run and use one latest-pointer commit. Remove CLI's pre-extraction
+  target mutation; adapt all workspace consumers and prove old registrations remain readable. Inject failure/crash at each
+  promotion boundary and prove target settings, recipe and graph always resolve to the same committed version.
+- [ ] Align default Review floor and triage semantics with invariants 5-6. Expose structured unavailable/failed/disabled/
+  incomplete status in existing CLI/Review controls, including older runs. Test complete build-to-Review, not just CPD XML.
+- [ ] Verify current native/corpus/Review reuse, required-mode refusal, ordinary exploration without LLVM/Java, unchanged
+  user state and the real default corpus. Finish the relevant stable-owner updates. Gate 1 may ship with saved-only up;
+  it must not claim continuous monitoring or live adoption.
+
+### Gate 2 - Monitoring, cancellation and publication
+
+- [ ] Add A9 activation, profile-derived roots and Windows notifications with SourceTree enforcement. Test actual atomic
+  saves/renames/root replacement and deterministic event-loss/overflow recovery. Inactive history consumes no watch or
+  analysis resources. Add no-watch recovery and explicit session activation/pause/retry semantics.
+- [ ] Prove the owned process boundary before enabling jobs: worker plus descendants, UBT/Java/native/preprocessor waits,
+  blocked copy/hash/index stages, nested-job refusal and stop within the existing 10-second confirmation wait. An unrelated
+  sentinel process remains alive. Do not use future cancellation or 900-second timeouts as shutdown proof.
+- [ ] Implement bounded debounce/generations, one coalesced pending request, global fairness and typed UBT contention with
+  the bounded retry contract. Preserve the writer lock; the worker stages and the pipeline parent alone commits.
+- [ ] Serve cached maps before freshness scanning, prepare immutable read contexts and expose small status/latest metadata.
+  Pin manifest/shards/references/Review/write validation to the same context. Both background and manual publications use
+  that handoff. Protect active readers and user data during bounded automatic-artifact retention.
+- [ ] Run failure/race/stop tests and real Windows save/context/header changes. Measure idle cost, queue stability and
+  repeated-edit disk/memory/handle growth. Browser adoption is not yet claimed; existing tabs remain consistently pinned
+  until Gate 3, with the new run available through its explicit context. Monitoring remains opt-in at this gate.
+
+### Gate 3 - Browser adoption and default activation
+
+- [ ] Adopt a staged ready context through existing scene/position/navigation owners, deferring for drag/pending saves/
+  failures/drafts. Preserve camera, surviving IDs, filters, selection and Inspector intent. Cancel obsolete pages; test
+  deep contextual files, removed focus fallback, multiple tabs and old/new writes without cross-run evidence mixing.
+- [ ] Show monitored target, job state and provider coverage without new permanent panels. Historical browsing stays
+  inactive until explicit activation. Run affected Chromium scenarios and the real save-to-visible-update walkthrough.
+- [ ] Measure interaction p95/max while analysis runs; compare protected state and exact references. Only after Gates 1-3
+  pass may normal up enable A9 monitoring and safe adoption by default. Update stable docs, report limitations and archive.
+
+A4 is a separate optional extension after its real usefulness gate, not required for the three delivery gates. If adopted,
+version its artifact/lexer/fingerprint semantics and prove old strict reading and acknowledgement stability; do not add a
+second default scan. A5 remains outside this delivery. No historical cache/token-store shortcut is justified without
+measured need and complete-corpus equivalence proof.
 
 ## Test-first and verification plan
 
@@ -417,6 +544,12 @@ Cancellation retains the last validated publication; startup/stop states remain 
 | short exact clone | A/B is absent at 100; collection at 50 still yields zero default Review findings |
 | different logic and boilerplate | D must remain unmatched; real boilerplate inspection is a reviewer-checked value gate |
 | missing tools | automatic behavior does not exist; require visible unavailability and successful module-only publication |
+| auto versus required CPD failure | auto must publish an explicit failed outcome on a valid graph; required must retain old run/settings/recipe |
+| unreadable CPD-only versus mandatory/native input | isolate the optional input failure; never weaken mandatory or physical-boundary checks |
+| new settings plus invalid options or failed extraction | CLI currently persists registration early; require no committed setting/recipe change |
+| crash between run promotion and pointer update | reopening must resolve old or new complete request+run, never a mixed target configuration |
+| inactive historical targets | require no source scans/watchers/analyzers until explicit activation, even when browsing a saved bookmark |
+| busy UBT and stop during a 900-second child | typed contention retries are bounded; owned descendants exit within the existing stop wait, foreign process survives |
 | incomplete Review coverage | button can say zero findings while a check is unavailable; require an explicit availability cue |
 | source edit while viewing | no monitor or live adoption exists; require saved edit -> validated run -> visible update |
 | same-target/new-run adoption | existing show/restore paths retain old map or reject the scene; require consistent replacement |
@@ -438,12 +571,25 @@ all intended input files were processed. Reviewer judgements of usefulness are n
   clones, preserved negative-header native controls and no changed pins. Compare cold/reused results for equality.
 - Test missing tools versus corrupt/extra-library installations, explicit off, invalid options, lexical failure, partial
   output, timeout, edits during collection, prior-run retention, v1 strict artifacts and prior acknowledged findings.
+- Assert structured outcome/artifact consistency, CLI and Review presentation, no old artifact copied to a new failed run,
+  unchanged triage after unavailable coverage, and completed-zero versus failed/unrecorded distinctions. Test auto and
+  required mode separately; do not change the existing required-failure regression into a universal fallback test.
+- Inject failure before/after run rename and pointer replacement, then reopen workspace/CLI/server/freshness consumers.
+  Compare committed settings/recipe/run and test failed first registration, new engine/target options, identity collisions
+  and simultaneous manual/background requests. A lock-only test does not prove crash consistency.
 - Existing Node suites and the affected Review/health/viewer Chromium scenarios: default status, source ranges, strict versus
   normalized labels if enabled, acknowledgement/reopen, cancellation, late close and bounded pages.
 - New deterministic coordinator regressions plus actual Windows integration: startup gap, event storms/overflow, missing
   root return, unauthorized junction retarget, same-size/timestamp content edit, negative optional headers, duplicate events,
   manual/background contention, fair scheduling and stop during watch/copy/Java/native work. Stop/refusal leaves last good
   publication and user data unchanged. Root deletion/link fixtures must follow the repository's local test permissions.
+- Prove owned child/grandchild containment and stop timings for hung subprocess and Python preparation stages, pool work
+  already running, timeout, parent death, no Job Object support, and stop during UBT backoff. Verify no children survive a
+  successful stop, no queued retry spawns after cancellation, and no commit occurs from a cancelled worker. Busy exit 10
+  must differ from ordinary failures; retry exhaustion preserves dirty state without a polling retry loop.
+- Register several unrelated historical targets; instrument input reads, watch creation and process starts. Default up
+  touches source only for the launch-selected target. Browsing, activation refusal, explicit additional activation, pause,
+  duplicate tabs and restart must obey the session policy; cached artifacts remain available for inactive targets.
 - Server/browser tests: cached opening before blocked freshness scan, consistent generation URLs for every artifact,
   old/new reference and triage requests, context expiry, multiple tabs, manual build adoption, failed read-index preparation,
   drag/save-error/draft deferral, deleted focus fallback and closed Inspector retention. No automatic camera fit.
@@ -462,11 +608,13 @@ all intended input files were processed. Reviewer judgements of usefulness are n
   where their required explicit-health wording changes.
 - [Guide](../docs/guide.md) owns default live use, saved-only opening, optional setup, coverage, pause/retry and stop.
 - [Unreal profile](../docs/architecture/unreal-profile.md#source-duplication) owns automatic/off/required acquisition,
-  source boundaries, failure behavior and reuse. Replace its explicit-only statements after implementation.
+  source boundaries, provider failure classification and reuse. The [schema](../schema/graph.v1.schema.json) owns structured
+  coverage shapes; [graph model](../docs/architecture/graph-model.md) owns their generic semantics. Replace explicit-only
+  statements after implementation; do not duplicate outcome shapes in the guide or Review policy.
 - [Review](../docs/architecture/review.md) owns effective display policy, mode meaning and decision stability;
   [viewer](../docs/architecture/viewer.md#review-presentation) owns availability and snapshot-adoption behavior.
 - The coordinator introduces a distinct durable lifecycle contract. During implementation, give input generations, bounded
-  work, shutdown and publication handoff one owner at `docs/architecture/live-analysis.md`, routed from the existing
+  work, activation, cancellation and publication handoff one owner at `docs/architecture/live-analysis.md`, routed from the existing
   architecture README. [Structure](../docs/architecture/structure.md) and the main diagram retain only component boundaries;
   do not repeat the lifecycle in the guide, profile or viewer. Do not create separate watcher/cache/scheduler documents.
 - Preserve [third-party terms](../THIRD_PARTY.md); no new dependency is proposed. [Verification](../tests/README.md) owns commands.
@@ -475,8 +623,9 @@ all intended input files were processed. Reviewer judgements of usefulness are n
 ## Rollout and rollback
 
 Change defaults only after the value gate. Provide explicit fast/off behavior while keeping required-mode failure visible.
-Develop monitoring with saved-only opening available; enable default monitoring only after shutdown, failure, adoption and
-real-cost gates pass. Retention affects only newly tagged automatic artifacts under the protected-state contract. Preserve
+Follow the three delivery gates: one-shot defaults first, opt-in monitor/publication second, default live adoption last.
+Do not automatically activate historical registrations during migration. Enable defaults only after shutdown, failure,
+adoption and real-cost gates pass. Retention affects only newly tagged automatic artifacts under the protected-state contract. Preserve
 existing validated runs, user decisions and hidden pins. Version normalized evidence if enabled and prove old strict reading.
 Disabling monitoring must leave manual build/up/down and stored maps usable; rollback never resets layouts or triage.
 
@@ -486,8 +635,9 @@ Default use demonstrates useful recorded concerns, explains unavailable coverage
 Continuous edits update the visible map through a consistent immutable snapshot without lost work, camera jumps, unbounded
 jobs or repeated identical runs. Missed notifications and restart recover; stop releases owned work promptly. Measured real
 cost supports the chosen debounce/reconciliation/retention policy, with remaining expensive phases disclosed.
-The lower-floor and any normalized-mode gates have real evidence or an explicit unresolved limitation, not synthetic-only
-claims. All relevant regressions, source/boundary failure paths, browser checks, privacy checks and stable-owner updates pass.
+The lower-floor decision has real value evidence or a reviewed replacement before completion; normalized mode is optional
+under A4. All three delivery gates and relevant source/boundary failure, cancellation, committed-request, activation,
+browser, privacy and stable-owner checks pass. Unimplemented scope remains explicitly unverified, not a completion claim.
 Only changes authorized after this review are implemented; no new services or speculative analyzer/cache infrastructure.
 
 ## Review record
@@ -514,3 +664,24 @@ Only changes authorized after this review are implemented; no new services or sp
 - Documentation checks: 2 passed. ASCII, contents consistency and the local worktree privacy check passed. The earlier
   21-test provider/cache baseline is unchanged evidence, not execution proof for the proposed monitor.
 - Only this todo is changed. Implementation awaits approval of the expanded monitoring and snapshot-adoption scope.
+
+### 2026-11-17 - F1-F5 planning corrections and scope accounting
+
+- F1 accepted: the prior automatic-failure proposal could block ordinary maps. Replace it with explicitly failed optional
+  acquisition on an otherwise valid graph; preserve required-provider and core refusal. Never reuse old health as current.
+- F2 accepted: prose coverage cannot reliably drive the new behavior. Extend existing schema/manifest coverage with
+  structured outcomes and direct consumers; no separate capability registry or source-observation policy owner.
+- F3 accepted with qualification: the current 10 seconds is a confirmation wait, not a proved analysis cancellation
+  guarantee. Blocking 900-second calls and running futures require owned process containment plus bounded shutdown tests.
+- F4 accepted and reproduced on the synthetic sample: invalid health options return 2 after registration is written,
+  without a map. Commit effective request and graph through one pointer; verify crash states, not merely shared locking.
+- F5 accepted: D3 never required all historical registrations. A7 is rejected and A9 proposes one active target by default
+  plus explicit session activation. Required runtime and browser behavior is split into Gates 1-3.
+- Scope accounting: the later naming pass renamed this task and changed todo/README.md to record immutable creation-time
+  prefixes. Earlier dated entries describe their own stages and are preserved. The current supplied change set therefore
+  includes that README change; this review pass edits only the existing timestamped todo. Its filename/prefix stay unchanged.
+- Verification: 33 existing pipeline/commands/service/documentation/explicit-CPD-isolation tests passed, no skips. Results:
+  [checks.json](../workspace/tmp/default-analysis-review/checks.json). These establish current safeguards, not the future
+  monitor, process owner, outcome model or transaction. No real-project extraction was required for these planning fixes.
+- Implementation remains unapproved. Production code, tests and stable docs were not edited in this review pass; the Git
+  index was preserved. The revised contracts and actual Windows runtime costs remain acceptance work after approval.
