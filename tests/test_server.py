@@ -135,7 +135,9 @@ class Server(unittest.TestCase):
         self.assertEqual(self.get(entry['review_url'])[0],200)
         self.assertEqual(entry['acquisition'],manifest['coverage'].get('acquisition',{}))
         self.assertEqual(self.get(entry['data_url'].replace(run.name,'expired')+'manifest.json')[0],410)
-        status,body=self.get(f'/monitor/status?target=sample&run={run.name}&client=synthetic-tab&index={self.server.snapshots.latest('sample')["map_identity"]}')
+        identity=self.server.snapshots.latest('sample')['map_identity']
+        status,body=self.get(f'/monitor/status?target=sample&run={run.name}'
+                             f'&client=synthetic-tab&index={identity}')
         self.assertEqual(status,200);self.assertTrue(json.loads(body)['context_retained'])
         self.assertEqual(self.get('/monitor/status?target=sample')[0],400)
 

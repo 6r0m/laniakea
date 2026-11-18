@@ -1087,3 +1087,13 @@ Only changes authorized after this review are implemented; no new services or sp
 - The stable monitoring, viewer and verification owners describe these contracts. Interface review found no new focus,
   control or error-feedback gap in the changed paths. Final documentation, privacy, ASCII, syntax and whitespace checks
   passed. Gate 3 is accepted within this verified scope, and the task returns to done. No staging or commit was performed.
+
+
+### 2026-11-18 - Python compatibility closeout
+
+- F3 is valid: Python 3.11 rejected the server test module before import because a nested f-string expression reused
+  its enclosing quote. Extracting the index identity into a local variable fixes the syntax without changing the request.
+- All 26 server checks pass on both Python 3.11 and the current Python interpreter. The corrected module also passes
+  Python 3.9 grammar validation under Python 3.11; this is syntax evidence, not a Python 3.9 runtime claim.
+- Production behavior, saved user state and Gates 1-2 are unchanged. The completed task remains in done; this focused
+  compatibility correction satisfies the remaining Gate 3 closeout condition. No staging or commit was performed.
