@@ -437,7 +437,8 @@ tabs heartbeat their current read contexts through the [monitoring contract](mon
 
 Primary Checks, Review, View and Inspector actions remain visible without horizontal scrolling. View discloses layout,
 filters and arrangement; the separate summary row keeps changing counts from resizing the map. The non-modal Analysis
-panel displays acquisition coverage, current progress and requested-versus-applied settings. Only optional profile checks
+panel labels coverage from the displayed snapshot separately from newer results awaiting adoption. Attempt progress and
+requested-versus-applied settings do not replace displayed evidence; removing an adoption block updates coverage with the map. Only optional profile checks
 have mode selectors; the map foundation stays mandatory. Review evaluates existing evidence independently.
 Analysis opens once for an active target needing attention and stays closed after dismissal. Settings drafts defer live
 adoption; late control responses cannot overwrite another target's form. Close/Escape restores the primary action's focus.

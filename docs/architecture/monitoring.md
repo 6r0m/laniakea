@@ -25,12 +25,14 @@ publish before native augmentation. Unavailable or failed augmentation never dow
 Legacy recipes remain authoritative until explicitly changed; a false symbols flag is not consent to enable native work.
 
 Same-origin check requests use the existing controller, validated profile choices and expected run/settings revision.
-Identical pending choices coalesce; stale conflicting forms are rejected. Pending intent remains session-local until the
+Identical pending choices coalesce; stale conflicting forms are rejected. Mode selectors stay disabled while a submission
+is awaiting its response, so an acknowledgement cannot erase a newer unsent choice. Pending intent remains session-local until the
 validated run/request commits. Stop pauses only the selected target, invalidates publication and reports Stopping until
 owned cleanup is confirmed. Resuming preserves pending intent; restarting discards uncommitted choices.
 
 Workers report small phase/elapsed summaries and real completed-unit counts through the existing status poll. Unknown
-totals stay indeterminate. Status exposes only progress belonging to the current target/job/generation. HTTP threads
+totals stay indeterminate. Progress-output I/O failure logs once and disables that attempt's optional phase reporting;
+canonical analysis and its failures retain their normal outcome. Status exposes only progress belonging to the current target/job/generation. HTTP threads
 never scan sources, load tools or start analyzers directly. Saved-only startup cannot activate work through browser controls.
 
 ## Scheduling and failure
@@ -54,9 +56,12 @@ Typed external-build contention has bounded retries; other failures require chan
 does not monopolize the queue. Refused writer locks leave the existing writer alone.
 An automatic snapshot's complete input identity remains the restart baseline even when provider coverage failed. Unchanged
 inputs retain that coverage without another extraction; relevant input, tool or recipe changes, or explicit Retry, permit
-another attempt. Automatic native failures use a bounded disposable outcome keyed by the complete monitored identity,
-independently of the last good map. Unchanged failure reuse starts no compiler; invalid outcome data never means success.
-Required On requests and typed external-build contention do not acquire an automatic failure-cache entry.
+another attempt. Persistent native refusal is limited to completed, recognized parse/semantic diagnostics with a
+preprocessing guard and consumed inputs covered by the unchanged monitoring identity. That identity includes the compiler
+environment used by preprocessing. Unknown/new external inputs cannot establish reuse. A bounded classified outcome stays
+independent of the last good map; unclassified records never establish completed analysis or a reusable refusal.
+Required On requests, UBT/other provider errors, superseded inputs, access/resource failures and unrecognized diagnostics
+cannot create native negative-cache entries. They retain the ordinary session failure/Retry behavior.
 Reusing a snapshot never promotes failed coverage to completed analysis or zero findings.
 
 An unrecorded optional external header appearing outside watched inputs does not itself guarantee scheduling. Native

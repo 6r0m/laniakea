@@ -3,16 +3,17 @@
 'use strict';
 
 function checksSummary(current,target,message='') {
-  const rows=current?.checks?.length?current.checks:target?.checks||[];
+  const rows=target?.checks||[];
   const outcomes=Object.values(target?.acquisition||{});
-  const failed=rows.some(r=>r.status==='failed')||outcomes.some(r=>r.status==='failed')||Boolean(current?.error||message);
+  const failed=rows.some(r=>r.status==='failed')||current?.checks?.some(r=>r.status==='failed')||
+    outcomes.some(r=>r.status==='failed')||Boolean(current?.error||message);
   const busy=current?.active&&!['fresh','failed','retry required','saved','paused'].includes(current.state);
   const done=rows.filter(r=>r.status==='completed').length;
   const missing=rows.some(r=>!['completed','disabled'].includes(r.status))||outcomes.some(r=>['incomplete','unavailable'].includes(r.status));
   const label=current?.state==='stopping'?'Checks: stopping':failed?'Checks: failed':busy?'Checks: running':
     rows.length?`Checks: ${done}/${rows.length}`:'Checks: unavailable';
   return {label,attention:failed||missing||Boolean(current?.degraded),done,total:rows.length,busy,
-    description:[`${done} of ${rows.length} checks recorded`,...rows.filter(r=>r.status!=='completed')
+    description:[`Displayed map: ${done} of ${rows.length} checks recorded`,...rows.filter(r=>r.status!=='completed')
       .map(r=>`${r.label}: ${r.status}`),...outcomes.filter(r=>r.status!=='completed').map(r=>`${r.status}: ${r.code}`),
       current?.error,current?.degraded,message].filter(Boolean).join('. ')};
 }
@@ -69,11 +70,12 @@ class AnalysisControls {
     message=message||status?.error||'';
     const current=status?.targets.find(t=>t.id===state.target.id),ready=current?.ready||state.target;
     const rows=current?.checks?.length?current.checks:ready.checks||[];
-    const enabled=Boolean(state.startup?.monitoring),summary=checksSummary(current,ready,message);
-    const blocked=current?.ready&&liveGeneration(current.ready)!==liveGeneration(state.target)?liveBlockReason():'';
-    const button=$('toggle-analysis');button.textContent=blocked&&!summary.busy?'Checks: waiting':summary.label;
+    const displayed=state.target,enabled=Boolean(state.startup?.monitoring),summary=checksSummary(current,displayed,message);
+    const awaiting=Boolean(current?.ready&&liveGeneration(current.ready)!==liveGeneration(displayed));
+    const blocked=awaiting?liveBlockReason():'';
+    const button=$('toggle-analysis');button.textContent=awaiting&&!summary.busy?'Checks: waiting':summary.label;
     button.title=[summary.description,blocked&&`Update waiting: ${blocked}`].filter(Boolean).join('. ');
-    button.setAttribute('aria-label',summary.description);button.setAttribute('data-attention',String(summary.attention));
+    button.setAttribute('aria-label','Checks. '+button.title);button.setAttribute('data-attention',String(summary.attention));
     const key=JSON.stringify([ready.id,ready.run,current?.revision||0,current?.requested?.checks]);
     if(this.target!==ready.id){this.target=ready.id;this.requestId=(this.requestId||0)+1;
       this.edited=false;this.saving=false;this.formKey=null;this.error='';}
@@ -88,7 +90,13 @@ class AnalysisControls {
       'Recorded results are available below. Completed checks do not certify the whole architecture.';
     if(current?.requested)explanation+=' Check choices are pending; they are saved only with a validated update.';
     if(blocked)explanation+=` Update waiting: ${blocked}.`;
+    explanation+=' Coverage below belongs to the displayed map.';
     $('analysis-status').textContent=explanation;
+    $('analysis-ready').hidden=!awaiting;
+    const readyRows=ready.checks||[];
+    $('analysis-ready').textContent=awaiting?(readyRows.length?
+      `New results ready: ${readyRows.filter(r=>r.status==='completed').length} of ${readyRows.length} checks recorded. Not displayed yet.`:
+      'New results are ready. Not displayed yet.') :'';
     $('analysis-error').hidden=!this.error&&!current?.error&&!current?.degraded&&!message;
     $('analysis-error').textContent=[this.error,current?.error,current?.degraded&&`Monitoring degraded: ${current.degraded}`,message].filter(Boolean).join('. ');
     $('analysis-progress').hidden=!progress||!busy;
@@ -99,12 +107,18 @@ class AnalysisControls {
       const cell=$('check-'+row.id+'-status'),detail=$('check-'+row.id+'-detail');if(!cell||!detail)continue;
       const labels={completed:'Recorded',disabled:'Off',unavailable:'Needs setup / prerequisite',failed:'Failed',
         incomplete:'Not recorded',pending:'Queued'};
-      cell.textContent=busy&&progress?.phase===row.id?'Running':labels[row.status]||row.status;
-      detail.textContent=row.detail;
-      $('check-'+row.id+'-technical').hidden=['completed','disabled'].includes(row.status);
-      $('check-'+row.id+'-diagnostic').textContent=[row.code,row.diagnostic].filter(Boolean).join(': ');
-      cell.setAttribute('data-status',row.status);
+      const evidence=displayed.checks?.find(item=>item.id===row.id)||{status:'incomplete',detail:'Not recorded in the displayed map.'};
+      const next=awaiting&&readyRows.find(item=>item.id===row.id);
+      cell.textContent=(labels[evidence.status]||evidence.status)+' in displayed map';
+      detail.textContent=[evidence.detail,busy&&progress?.phase===row.id?'Current attempt: running.':
+        row.status!==evidence.status&&row.status!=='completed'?`Current attempt: ${labels[row.status]||row.status}. ${row.status==='disabled'?'':row.detail}`:'',
+        next&&next.status!==evidence.status?`Update ready: ${labels[next.status]||next.status}; not displayed yet.`:''].filter(Boolean).join(' ');
+      const diagnostic=!['completed','disabled'].includes(row.status)?row:evidence;
+      $('check-'+row.id+'-technical').hidden=['completed','disabled'].includes(diagnostic.status);
+      $('check-'+row.id+'-diagnostic').textContent=[diagnostic.code,diagnostic.diagnostic].filter(Boolean).join(': ');
+      cell.setAttribute('data-status',evidence.status);
     }
+    for(const select of Object.values(this.choices||{}))select.disabled=this.saving;
     $('analysis-run').textContent=this.edited?'Apply and run':'Run checks';
     $('analysis-run').disabled=!enabled||this.saving||current?.state==='stopping';
     $('analysis-stop').hidden=!current?.active||!busy;

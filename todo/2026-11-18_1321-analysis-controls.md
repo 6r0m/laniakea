@@ -415,3 +415,22 @@ real acceptance evidence, and no unrelated or operator-staged work is altered.
   scenario also proves a delayed response cannot erase a new draft after leaving and returning to the same target.
 - Before archival: complete the real default native/CPD Stop/resume/adoption walkthrough during a stable input window,
   record actual costs/responsiveness, and recheck protected stores. Keep this file active until then.
+
+### 2026-11-18 - Focused implementation review corrections
+
+- F1-F4 are valid. Native refusal requires an explicit compiler diagnostic classification, preprocessing proof, known
+  consumed inputs and an unchanged identity; unrelated providers/resources and superseded input cannot create that cache.
+  Older unclassified negative entries are not trusted. Optional progress-output I/O is logged once and isolated from
+  extraction. Displayed coverage and ready-to-adopt evidence remain separate, and selectors are locked during Apply.
+- Red proof reproduced required CPD poisoning, progress PermissionError propagation, ready counts replacing displayed
+  evidence, and enabled selectors during delayed Apply. Browser baseline controls used the matching committed viewer,
+  not a fabricated renderer. Green results are recorded after the focused acceptance run below.
+- D5 remains binding: the final private-project completion/adoption gate stays pending; these corrections do not reopen
+  the accepted earlier delivery gates or authorize claiming full real-project acceptance. No archival is performed.
+
+- Focused correction acceptance: 320 non-Engine Python checks with real LLVM/CPD enabled, zero failures/errors and one
+  optional legacy indexer skip; 72 affected Python 3.11 checks without skips; 187 JavaScript checks. Analysis, coverage
+  transition and Live Chromium scenarios passed. The delayed-Apply and ready-coverage scenarios reject the committed
+  baseline for the reported defects. Diagnostic category probes used the pinned local LLVM rather than message guessing.
+- Documentation/privacy checks passed. Main saved stores are checked byte-for-byte, temporary servers are stopped, and the
+  normal viewer is restarted through its owned lifecycle. D5's full real-project runtime gate is still pending.

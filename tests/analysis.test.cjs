@@ -21,6 +21,13 @@ test('check coverage keeps unavailable and skipped acquisition distinct from suc
   assert.match(value.description,/C\+\+: unavailable/);assert.match(value.description,/Clones: disabled/);
 });
 
+test('a newer ready snapshot cannot supply displayed check counts',()=>{
+  const displayed={checks:[{id:'native',label:'C++',status:'incomplete'}]},
+    ready={checks:[{id:'native',label:'C++',status:'completed'}]};
+  const summary=checksSummary({active:true,state:'fresh',checks:ready.checks,ready},displayed);
+  assert.equal(summary.done,0);assert.match(summary.description,/C\+\+: incomplete/);
+});
+
 test('an old complete map cannot disguise running or failed new work as completed checks',()=>{
   const target={checks:[{label:'Modules',status:'completed'}]};
   assert.equal(checksSummary({active:true,state:'updating'},target).label,'Checks: running');

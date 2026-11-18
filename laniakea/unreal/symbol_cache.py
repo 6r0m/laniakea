@@ -47,6 +47,10 @@ def fingerprint(installed, command, log):
     return digest.hexdigest()
 
 
+def environment():
+    return {key:os.environ.get(key) for key in ('CL','_CL_','INCLUDE')}
+
+
 def prepare(library, command, copy, output):
     copy, output = Path(copy), Path(output)
     marker = copy / project_copy.MARKER
@@ -60,7 +64,7 @@ def prepare(library, command, copy, output):
     native_code = {name: tools.digest(Path(__file__).with_name(name))
                    for name in ("native_api.py", "native_index.py", "native_worker.py", "symbol_cache.py")}
     context = {"command": command, "tools": installed["manifest"], "native_code": native_code,
-               "environment": {key: os.environ.get(key) for key in ("CL", "_CL_", "INCLUDE")}}
+               "environment": environment()}
     key = hashlib.sha256(json.dumps(context, sort_keys=True).encode()).hexdigest()
     preprocessed = fingerprint(installed, command, output.with_suffix(".preprocess.log"))
     if preprocessed is None:

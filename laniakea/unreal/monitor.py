@@ -54,9 +54,11 @@ def inspect(workspace,target,manifest,request):
                 values[path.relative_to(root).as_posix()]=tools.digest(path)
     tool_state={'health':health[1]}
     if request['symbols']:
+        from .symbol_cache import environment
         installed=tools.load(workspace.root/'tools/unreal')
         if installed is None:raise LaniakeaError('native tools missing; restore setup-symbols or explicitly rebuild without symbols')
         tool_state['native']=installed['manifest']
+        tool_state['native_environment']=environment()
     if health[1]['status']=='pending':tool_state['health']=health[0]['installed']['identity']
     # Include the installation marker even on refusal, so repairing a broken installation permits a new attempt.
     for relative in ('tools/health/cpd/tools.json','tools/unreal/tools.json'):

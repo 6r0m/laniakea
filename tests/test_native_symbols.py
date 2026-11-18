@@ -16,6 +16,25 @@ from laniakea.unreal import compiler, graph, native_index, symbols, ubt
 
 
 class CompilerBoundary(unittest.TestCase):
+    def test_only_completed_recognized_source_diagnostics_have_a_reusable_failure_type(self):
+        from laniakea.unreal.native_worker import reusable_diagnostics
+        for diagnostics,reusable in [
+            ([{'severity':3,'category':'Semantic Issue'}],True),
+            ([{'severity':3,'category':'Parse Issue'}],True),
+            ([{'severity':4,'category':'Lexical or Preprocessor Issue'}],False),
+            ([{'severity':3,'category':'User-Defined Issue'}],False),
+            ([{'severity':3}],False),
+        ]:
+            with self.subTest(diagnostics=diagnostics),tempfile.TemporaryDirectory() as temporary:
+                self.assertEqual(reusable_diagnostics({'diagnostics':diagnostics}),reusable)
+                metrics={'errors':1,'reusable_failure':reusable}
+                with patch.object(compiler,'_worker',return_value=metrics):
+                    if reusable:
+                        with gzip.open(Path(temporary)/'job-0000.json.gz','wt') as stream:
+                            json.dump({'input_hashes':{'Source/Sample.cpp':'synthetic'}},stream)
+                    with self.assertRaises(LaniakeaError) as caught:compiler.run_jobs({'library':'synthetic'},[{}],temporary,temporary)
+                self.assertEqual(isinstance(caught.exception,compiler.NativeDiagnosticsError),reusable)
+
     def test_unrendered_members_keep_the_nearest_recorded_code_owner(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);directory=root/'Source/Sample';engine=root/'engine'
@@ -230,6 +249,16 @@ class NativeSymbols(unittest.TestCase):
 
     def tearDown(self):
         self.temporary.cleanup()
+
+    def test_real_diagnostics_distinguish_source_errors_from_unclassified_failures(self):
+        from laniakea.unreal.native_worker import reusable_diagnostics
+        for text,expected in [('int F(){return missing;}',True),('int F( { }',True),
+                              ('#include "__missing_sample_header__.h"',False),('#error unavailable',False)]:
+            with self.subTest(source=text):
+                self.source.write_text(text)
+                batch=native_index.extract(os.environ['LANIAKEA_TEST_LIBCLANG'],
+                    {'directory':str(self.directory),'arguments':['clang-cl.exe','/std:c++20',str(self.source)]},self.project.parent)
+                self.assertEqual(reusable_diagnostics(batch),expected)
 
     def index(self, source=None):
         source = source or self.source

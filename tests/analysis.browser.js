@@ -58,17 +58,25 @@ async (page,{hold=async()=>{}}={})=>{
     const t=state.live.status.targets.find(t=>t.id===state.target.id);
     return t.active&&t.state==='fresh'&&!t.requested&&t.ready.recipe.checks?.native==='off';
   });
-  let release,received;const delayed=new Promise(r=>release=r),responded=new Promise(r=>received=r);
+  let release,received,finished;const delayed=new Promise(r=>release=r),responded=new Promise(r=>received=r),handled=new Promise(r=>finished=r);
   let captured=false;
   const intercept=async route=>{
     if(!captured&&route.request().postDataJSON().action==='checks'){
-      captured=true;const response=await route.fetch();received();await delayed;await route.fulfill({response});
+      captured=true;
+      try{const response=await route.fetch();received();await delayed;await route.fulfill({response});}
+      finally{finished();}
     }else await route.continue();
   };
   await hold(true);await page.route('**/monitor/control',intercept);
   try{
     await page.locator('[name="check-duplication"]').selectOption('auto');await page.locator('#analysis-run').click();
     await responded;
+    check(await page.locator('[name="check-native"]').isDisabled()&&
+      await page.locator('[name="check-duplication"]').isDisabled(),'Mode selectors remain editable during Apply');
+    const submitted=await page.locator('[name="check-duplication"]').inputValue();
+    const box=await page.locator('[name="check-duplication"]').boundingBox();
+    await page.mouse.click(box.x+box.width/2,box.y+box.height/2);await page.keyboard.press('ArrowUp');
+    check(await page.locator('[name="check-duplication"]').inputValue()===submitted,'An in-flight edit changed the submitted form');
     for(const id of ['historical','sample']){
       await page.locator('#target').selectOption(id);
       await page.waitForFunction(id=>state.target.id===id&&state.analysis.target===id,id);
@@ -79,7 +87,7 @@ async (page,{hold=async()=>{}}={})=>{
     await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
     check(await page.evaluate(()=>state.analysis.edited&&state.analysis.choices.duplication.value==='off'),
       'A late response erased a new draft after returning to the same project');
-  }finally{release();await page.unroute('**/monitor/control',intercept);await hold(false);}
+  }finally{release();if(captured)await handled;await page.unroute('**/monitor/control',intercept);await hold(false);}
   await page.locator('#analysis-run').click();
   await page.waitForFunction(()=>{
     const t=state.live.status.targets.find(t=>t.id===state.target.id);

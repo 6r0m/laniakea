@@ -107,6 +107,7 @@ class Library:
         self._bind("getNumDiagnostics", U, [P])
         self._bind("getDiagnostic", P, [P, U])
         self._bind("getDiagnosticSeverity", I, [P])
+        self._bind("getDiagnosticCategoryText", String, [P])
         self._bind("formatDiagnostic", String, [P, U])
         self._bind("disposeDiagnostic", None, [P])
 

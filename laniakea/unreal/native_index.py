@@ -293,6 +293,7 @@ def extract(library, command, project):
                 diagnostic = api.getDiagnostic(translation_unit, n)
                 try:
                     diagnostics.append({"severity": api.getDiagnosticSeverity(diagnostic),
+                                        "category": api.string(api.getDiagnosticCategoryText(diagnostic)),
                                         "text": api.string(api.formatDiagnostic(diagnostic, 3))})
                 finally:
                     api.disposeDiagnostic(diagnostic)

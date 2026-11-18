@@ -18,6 +18,13 @@ from . import commands, graph, project_copy, symbols, tools, ubt
 from .external import SourceLocations, action_providers
 
 
+class NativeDiagnosticsError(LaniakeaError):
+    """Completed workers reported only recognized C++ parse/semantic errors, not acquisition failures."""
+    def __init__(self,message,inputs=None,copy_root=None):
+        super().__init__(message)
+        self.inputs=inputs;self.copy_root=copy_root
+
+
 def _worker(library, command, copy, output):
     output = Path(output)
     request = output.with_suffix(".request.json")
@@ -60,7 +67,20 @@ def run_jobs(installed, database, copy, out, workers=4):
     except (OSError, RuntimeError) as error:
         raise LaniakeaError(f"native symbol worker failed: {error}; see {out}") from error
     if len(completed) != len(database) or any(job["errors"] for job in completed):
-        raise LaniakeaError(f"native symbol analysis has compiler errors; prior published run retained; see {out}")
+        failure=NativeDiagnosticsError if len(completed)==len(database) and all(
+            not job['errors'] or job.get('reusable_failure') is True for job in completed) else LaniakeaError
+        message=f"native symbol analysis has compiler errors; prior published run retained; see {out}"
+        if failure is NativeDiagnosticsError:
+            inputs={}
+            for job in completed:
+                if not job['errors']:continue
+                with gzip.open(out/f"job-{job['job']:04d}.json.gz",'rt',encoding='utf-8') as stream:
+                    consumed=json.load(stream)['input_hashes']
+                if any(name in inputs and inputs[name]!=value for name,value in consumed.items()):
+                    raise LaniakeaError('native diagnostic inputs changed during analysis')
+                inputs.update(consumed)
+            raise failure(message,inputs,copy)
+        raise failure(message)
     return completed
 
 

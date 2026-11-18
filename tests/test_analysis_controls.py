@@ -3,6 +3,7 @@
 
 import contextlib
 import io
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -128,16 +129,22 @@ class AnalysisControls(unittest.TestCase):
     def test_auto_failure_is_reused_after_restart_but_source_edits_and_explicit_retry_can_run(self):
         from test_build_context import BuildContext
         from laniakea import AnalysisBusy
+        from laniakea.unreal.compiler import NativeDiagnosticsError
         self.build('--health','off');BuildContext.receipt(self,'SampleProjectEditor','Development')
         published=self.workspace.latest('sample')
+        source=self.project/'Source/SampleProject/SampleProject.cpp'
+        from laniakea.unreal.tools import digest
         with patch('laniakea.unreal.tools.load',return_value={'manifest':{}}):
             recipe=execute(self.workspace,'sample','discover')['recipe']
             before=execute(self.workspace,'sample','probe',recipe)
-            with self.workspace.extraction_lock('sample'),patch.object(pipeline,'stage',side_effect=LaniakeaError('native failed')):
+            failure=NativeDiagnosticsError('native failed',{str(source):digest(source)},self.project)
+            with self.workspace.extraction_lock('sample'),patch.object(pipeline,'stage',side_effect=failure):
                 with self.assertRaisesRegex(LaniakeaError,'native failed'):execute(self.workspace,'sample','stage',recipe)
             self.assertEqual(self.workspace.latest('sample'),published)
             restarted=execute(Workspace(self.workspace.root),'sample','probe',recipe)
             self.assertEqual(restarted['previous_failure']['error'],'native failed')
+            with patch.dict(os.environ,{'CL':'/DSAMPLE_CHANGED_CONTEXT=1'}):
+                self.assertIsNone(execute(self.workspace,'sample','probe',recipe)['previous_failure'])
             source=self.project/'Source/SampleProject/SampleProject.cpp'
             source.write_bytes(source.read_bytes()+b'\n// changed input\n')
             changed=execute(self.workspace,'sample','probe',recipe)
@@ -145,6 +152,62 @@ class AnalysisControls(unittest.TestCase):
             with self.workspace.extraction_lock('sample'),patch.object(pipeline,'stage',side_effect=AnalysisBusy('external build')):
                 with self.assertRaises(AnalysisBusy):execute(self.workspace,'sample','stage',recipe)
             self.assertIsNone(execute(self.workspace,'sample','probe',recipe)['previous_failure'])
+
+    def test_unclassified_failures_and_superseded_diagnostics_are_not_reused(self):
+        from test_build_context import BuildContext
+        from laniakea.unreal import checks
+        from laniakea.unreal.compiler import NativeDiagnosticsError
+        self.build('--health','off');BuildContext.receipt(self,'SampleProjectEditor','Development')
+        with patch('laniakea.unreal.tools.load',return_value={'manifest':{}}):
+            recipe=execute(self.workspace,'sample','discover')['recipe']
+            identity=execute(self.workspace,'sample','probe',recipe)['identity']
+            for error in (LaniakeaError('UBT failed'),PermissionError('source unreadable'),MemoryError('resource failure')):
+                checks.remember_failure(self.workspace,'sample',recipe,identity,error)
+                self.assertFalse(checks.failure_path(self.workspace,'sample').exists())
+            source=self.project/'Source/SampleProject/SampleProject.cpp'
+            from laniakea.unreal.tools import digest
+            observed={str(source):digest(source)}
+            external=Path(self.temporary.name)/'External.h';external.write_text('// observed external header\n')
+            checks.remember_failure(self.workspace,'sample',recipe,identity,
+                NativeDiagnosticsError('native failed',{**observed,str(external):digest(external)},self.project))
+            self.assertFalse(checks.failure_path(self.workspace,'sample').exists())
+            source.write_bytes(source.read_bytes()+b'\n// superseded\n')
+            checks.remember_failure(self.workspace,'sample',recipe,identity,NativeDiagnosticsError('native failed',observed,self.project))
+            self.assertFalse(checks.failure_path(self.workspace,'sample').exists())
+            write_json(checks.failure_path(self.workspace,'sample'),{'version':1,'identity':identity,'error':'old broad failure'})
+            self.assertIn('cache_error',checks.previous_failure(self.workspace,'sample',identity,recipe))
+
+    def test_required_cpd_failure_does_not_poison_native_failure_reuse(self):
+        from test_build_context import BuildContext
+        from laniakea.unreal import cpd,checks
+        self.build('--health','off');BuildContext.receipt(self,'SampleProjectEditor','Development')
+        published=self.workspace.latest('sample')
+        with patch('laniakea.unreal.tools.load',return_value={'manifest':{}}):
+            recipe=execute(self.workspace,'sample','discover')['recipe']
+            recipe['health']['mode']='required';recipe['checks']['duplication']='on'
+            def prepared(options):return {**options,'prefixes':[],'installed':{'identity':'synthetic-health'}},{'status':'pending'}
+            with patch('laniakea.unreal.source_health.prepare',side_effect=prepared),self.workspace.extraction_lock('sample'), \
+                    patch.object(pipeline,'stage',side_effect=cpd.Failure('required CPD failed','provider_exit')):
+                with self.assertRaisesRegex(cpd.Failure,'required CPD failed'):execute(self.workspace,'sample','stage',recipe)
+            self.assertFalse(checks.failure_path(self.workspace,'sample').exists())
+        self.assertEqual(self.workspace.latest('sample'),published)
+
+    def test_progress_permission_failure_cannot_abort_a_valid_extraction(self):
+        from laniakea import progress
+        diagnostics=io.StringIO()
+        with recorded_ubt(self.project,self.engine),progress.reporting(self.workspace.root/'progress.json'), \
+                patch.object(progress,'write_json',side_effect=PermissionError('progress locked')) as publish, \
+                contextlib.redirect_stderr(diagnostics):
+            run,_=pipeline.extract(self.workspace,self.target,health_options={'mode':'off'})
+        self.assertEqual(self.workspace.latest('sample'),run)
+        self.assertEqual(publish.call_count,1)
+        self.assertEqual(diagnostics.getvalue().count('progress locked'),1)
+        path=self.workspace.root/'next-progress.json'
+        with progress.reporting(path):progress.emit('next','Next attempt')
+        self.assertEqual(read_json(path)['label'],'Next attempt')
+        with progress.reporting(path),patch.object(progress,'write_json',side_effect=PermissionError('progress locked')), \
+                contextlib.redirect_stderr(io.StringIO()),self.assertRaisesRegex(LaniakeaError,'actual analyzer failure'):
+            progress.emit('native','Running');raise LaniakeaError('actual analyzer failure')
 
 
 

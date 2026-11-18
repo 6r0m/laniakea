@@ -13,6 +13,11 @@ from .native_index import extract
 from . import symbol_cache
 
 
+def reusable_diagnostics(data):
+    errors=[d for d in data['diagnostics'] if d['severity']>=3]
+    return bool(errors) and all(d['severity']==3 and d.get('category') in {'Parse Issue','Semantic Issue'} for d in errors)
+
+
 def peak_memory():
     class Counters(ctypes.Structure):
         _fields_ = [("size", ctypes.c_ulong), ("faults", ctypes.c_ulong),
@@ -52,6 +57,7 @@ def main():
         "cache_enabled": cache is not None,
         "cache_warning": cache_warning,
         "errors": sum(d["severity"] >= 3 for d in data["diagnostics"]),
+        "reusable_failure": cache is not None and reusable_diagnostics(data),
         "symbols": len(data["symbols"]), "references": len(data["references"]),
         "peak_working_set_bytes": peak_memory()})
 

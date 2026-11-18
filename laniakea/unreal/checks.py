@@ -4,7 +4,7 @@
 import json
 from pathlib import Path
 
-from .. import LaniakeaError,AnalysisBusy
+from .. import LaniakeaError
 from ..workspace import read_json,write_json
 from . import builds,tools,source_health
 
@@ -47,7 +47,7 @@ def rows(manifest,recipe):
         }.get(outcome.get('code')) if key=='duplication' else None
         result.append({'id':key,'label':label,'optional':True,'mode':choices[key],'description':description,
                        'setup':setup,'status':status,'code':outcome.get('code','not_recorded'),
-                       'detail': 'Recorded in the displayed map.' if status=='completed' else
+                       'detail': 'Recorded in this snapshot.' if status=='completed' else
                            'Off in the saved settings.' if status=='disabled' else reason or 'Not recorded in the displayed map.'})
     return result
 
@@ -104,16 +104,32 @@ def previous_failure(workspace,target_id,identity,recipe=None):
     if len(raw)>8192:return {'cache_error':'Native failure cache exceeds its size limit; recomputing.'}
     try:value=json.loads(raw)
     except (ValueError,UnicodeError):return {'cache_error':'Native failure cache is invalid; recomputing.'}
-    if not isinstance(value,dict) or value.get('version')!=1 or not isinstance(value.get('error'),str) or \
+    if not isinstance(value,dict) or value.get('version')!=2 or value.get('kind')!='native-source-diagnostics' or not isinstance(value.get('error'),str) or \
             not isinstance(value.get('identity'),str):
         return {'cache_error':'Native failure cache is invalid; recomputing.'}
     return value if value['identity']==identity else None
 
 
 def remember_failure(workspace,target_id,recipe,identity,error):
-    if recipe.get('checks',{}).get('native')=='auto' and recipe['symbols'] and \
-            isinstance(error,LaniakeaError) and not isinstance(error,AnalysisBusy):
-        write_json(failure_path(workspace,target_id),{'version':1,'identity':identity,'error':str(error)[:1500]})
+    if recipe.get('checks',{}).get('native')!='auto' or not recipe['symbols']:return
+    from .compiler import NativeDiagnosticsError
+    if not isinstance(error,NativeDiagnosticsError) or not error.inputs or error.copy_root is None:return
+    from . import monitor,graph
+    target=workspace.load(target_id)
+    try:
+        current=monitor.inspect(workspace,target,
+                                read_json(workspace.latest(target_id)/'manifest.json'),recipe)
+    except (OSError,LaniakeaError,ValueError) as refusal:
+        error.args=(f'{error}; failure reuse unavailable: {refusal}',)
+        return
+    if current['identity']!=identity:return
+    # Unknown/new external inputs are not part of this identity and cannot justify persistent refusal.
+    for name,value in error.inputs.items():
+        relative=graph._relative(name,error.copy_root)
+        key=relative if relative is not None else 'external:'+name
+        if current['inputs'].get(key)!=value:return
+    write_json(failure_path(workspace,target_id),{'version':2,'kind':'native-source-diagnostics',
+                                                'identity':identity,'error':str(error)[:1500]})
 
 
 def clear_failure(workspace,target_id,recipe):
