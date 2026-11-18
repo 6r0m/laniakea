@@ -990,7 +990,7 @@ function frameNode(id) {
   if(state.cy)refreshMap();
 }
 
-function layout() {
+function layout({fit=true}={}) {
   if (!state.cy) return;
   const map = state.universe, mode = $('layout').value;
   const top = [...map.childIds(map.root), ...map.childIds(null).filter(id => id !== map.root)];
@@ -1008,5 +1008,5 @@ function layout() {
   }
   map.place(state.positionCache.layouts, mode, positions);
   state.cy.maxZoom(map.zoomLimit);
-  refreshMap(); fitMap(); state.positionCache.status();
+  refreshMap(); if(fit)fitMap(); state.positionCache.status();
 }

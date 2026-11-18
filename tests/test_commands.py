@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""The everyday build/up/down interface keeps analysis separate from viewing."""
+"""Build commits analysis intent; up opens the saved view before session monitoring."""
 
 import contextlib
 import io
@@ -17,7 +17,7 @@ from support import ROOT
 
 
 class Commands(unittest.TestCase):
-    def test_up_never_extracts_or_changes_analysis_settings(self):
+    def test_up_defers_analysis_to_the_session_without_changing_build_settings(self):
         with patch.object(cli,'_extract') as build,patch.object(cli,'_serve') as serve:
             self.assertEqual(cli.main(['up','--no-browser']),0)
         build.assert_not_called();serve.assert_called_once()
@@ -28,6 +28,7 @@ class Commands(unittest.TestCase):
                 with self.assertRaises(SystemExit):cli.parser().parse_args(argv)
 
     def test_viewer_target_selection_and_monitoring_are_independent_of_build_options(self):
+        self.assertTrue(cli.parser().parse_args(['up']).watch)
         args=cli.parser().parse_args(['up','sample','--watch'])
         self.assertEqual(args.target_id,'sample');self.assertTrue(args.watch)
         self.assertFalse(cli.parser().parse_args(['up','--no-watch']).watch)

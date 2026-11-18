@@ -20,7 +20,7 @@ help: ## Show these targets
 build: ## Analyse sources without starting the viewer
 	@$(PYTHON) laniakea.py build $(if $(strip $(PROJECT)),"$(PROJECT)") $(ARGS)
 
-up: ## Start the viewer without extracting
+up: ## Open saved maps and monitor the selected target
 	$(if $(strip $(PROJECT)),$(error PROJECT belongs to make build; build the map first))
 	@$(PYTHON) laniakea.py up $(ARGS)
 

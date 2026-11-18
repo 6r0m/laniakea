@@ -25,7 +25,7 @@ project needs no Laniakea installation or integration.
 |---|---|
 | [CLI](../../laniakea/cli.py) | command parsing and dispatch; [Makefile](../../Makefile) supplies shortcuts |
 | [Viewer lifecycle](../../laniakea/service.py) | workspace ownership and authenticated graceful stop |
-| [Background analysis](monitoring.md) | opt-in session scheduling, contained workers and immutable read contexts |
+| [Background analysis](monitoring.md) | session scheduling, contained workers and immutable read contexts |
 | [Pipeline](../../laniakea/pipeline.py) | validate and publish runs, coordinate optional analysis and freshness |
 | [Workspace](../../laniakea/workspace.py) | target registration, run storage and extraction-writer coordination |
 | [Profile registry](../../laniakea/profiles.py) | select the language adapter |
@@ -61,7 +61,7 @@ Through the tool contracts, evaluated build rules and compiler observations rema
 **Why:** Laniakea joins facts rather than maintaining another parser or authoritative database.
 
 Through local HTTP, serving pins data to its advertised runs. Publishing a new run cannot mix old and new artifacts;
-versioned contexts make newer snapshots available without changing old URLs. Open tabs stay pinned until reopened.
+versioned contexts make newer snapshots available without changing old URLs. Each tab adopts ready data through its viewer.
 Same-origin validation protects local writes. Session monitoring follows the [background-analysis contract](monitoring.md).
 The viewer lifetime has one workspace owner. A stop request verifies that instance, preserves saved state and never
 kills an unrelated process based on its port or PID. Startup failure and cancellation release ownership.

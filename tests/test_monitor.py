@@ -172,5 +172,31 @@ class Scheduler(unittest.TestCase):
         prune(self.workspace,'sample',protected)
         self.assertFalse(abandoned.exists());self.assertTrue(manual.is_dir())
 
+    def test_browser_deferred_context_is_retained_until_its_heartbeat_expires(self):
+        from unittest.mock import patch
+        import time
+        self.monitor.activate('sample');self.settle()
+        rule=self.project/'Source/SampleProject/SampleProject.Build.cs'
+        def change():
+            rule.write_bytes(rule.read_bytes()+b'\n// next\n');self.dirty();self.settle()
+        change();run=self.workspace.latest('sample');self.assertTrue(self.contexts.touch('sample',run.name,'browser'))
+        for _ in range(4):change()
+        self.assertTrue(run.exists());self.assertIn(('sample',run.name),self.contexts.contexts)
+        with patch('laniakea.snapshots.time.monotonic',return_value=time.monotonic()+121):
+            self.contexts.protected('sample')
+        self.assertNotIn(('sample',run.name),self.contexts.contexts)
+
+    def test_each_tab_releases_its_old_context_without_releasing_another_tab(self):
+        self.monitor.activate('sample');self.settle()
+        rule=self.project/'Source/SampleProject/SampleProject.Build.cs'
+        def change():
+            rule.write_bytes(rule.read_bytes()+b'\n// next\n');self.dirty();self.settle()
+        change();run=self.workspace.latest('sample')
+        self.contexts.touch('sample',run.name,'one');self.contexts.touch('sample',run.name,'two')
+        for _ in range(4):change()
+        latest=self.workspace.latest('sample')
+        self.contexts.touch('sample',latest.name,'one');self.assertIn(('sample',run.name),self.contexts.contexts)
+        self.contexts.touch('sample',latest.name,'two');self.assertNotIn(('sample',run.name),self.contexts.contexts)
+
 
 if __name__=='__main__':unittest.main()

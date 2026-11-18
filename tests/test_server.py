@@ -95,10 +95,15 @@ class Server(unittest.TestCase):
         self.assertEqual(self.get('/data/sample/manifest.json')[1],old_manifest)
         self.assertEqual(self.server.index[0],original)
         self.assertEqual(self.get(entry['map_url'])[0],200)
+        self.assertIn(view.root.name,entry['map_url'])
+        self.assertEqual(self.get(entry['map_url'].replace(view.root.name,'obsolete-index'))[0],410)
         self.assertEqual(self.post(entry['layout_url']+'entry.json',{'layout':'snapshot_probe','positions':{}})[0],200)
         self.assertEqual(self.get(entry['review_url'])[0],200)
         self.assertEqual(entry['acquisition'],manifest['coverage'].get('acquisition',{}))
         self.assertEqual(self.get(entry['data_url'].replace(run.name,'expired')+'manifest.json')[0],410)
+        status,body=self.get(f'/monitor/status?target=sample&run={run.name}&client=synthetic-tab')
+        self.assertEqual(status,200);self.assertTrue(json.loads(body)['context_retained'])
+        self.assertEqual(self.get('/monitor/status?target=sample')[0],400)
 
     def test_post_refusal_delivers_response_with_an_unread_body(self):
         before=self.get('/layout/sample/entry.json')

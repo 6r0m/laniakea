@@ -18,15 +18,18 @@ Trace dependencies to source, explore public contracts and inspect the evidence 
 Use the [Make shortcuts](../Makefile) (`make help`) to build a map, then open the saved result. For Python commands,
 options and defaults, run `python laniakea.py --help` or `python laniakea.py <command> --help`.
 
-`up` stays in the foreground. Stop it with Ctrl+C or `make down` from another terminal. After source changes, run
-`make build`; restart an already running viewer with `make down`, then `make up` to display the new snapshot.
-Saved-only opening does not scan sources. An optional registered target ID selects what opens; an explicit browser
-deep link still wins over that launch selection.
+`up` opens saved maps immediately, then monitors the launch-selected target using its committed analysis recipe. Saved
+source changes publish and appear automatically without fitting the camera or losing pins, filters or surviving focus.
+It stays in the foreground; stop with Ctrl+C or `make down` from another terminal. An optional registered target ID selects
+what opens; an explicit browser deep link wins for browsing without activating that historical target.
 
-Experimental `python laniakea.py up <target-id> --watch` monitors that target with its committed analysis recipe. Other
-registered targets remain inactive. It updates saved runs in the background; existing browser pages stay pinned, so reopen
-the server to display the result. `--no-watch` explicitly selects scan-free saved exploration. Monitor status and session
-activation/pause/retry are available through the local server; automatic browser adoption and its user controls are pending.
+Open the compact **Live** status for the monitored targets, provider coverage, **Pause this target**, **Monitor this target**
+and **Retry analysis**. Other registered targets stay inactive until explicitly activated. New snapshots wait while dragging,
+saving positions or editing a Review decision. Finish or clear the draft to continue; failed saves retain their existing
+recovery controls. Failed source analysis remains visible and does not imply zero findings.
+
+`python laniakea.py up --no-watch` opens saved maps without source scanning. Native depth remains independently selected
+by the build recipe. Manual `make build` also publishes updates for an active session; no viewer restart is needed.
 
 The displayed target/configuration describes the selected [build context](architecture/unreal-profile.md#build-context).
 Check it before interpreting the map: a saved run does not prove that current sources compiled.

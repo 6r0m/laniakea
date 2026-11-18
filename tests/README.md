@@ -18,6 +18,7 @@ python -m unittest discover -s tests -p test_shards.py
 python -m unittest discover -s tests
 node --test tests/icons.test.cjs tests/sections.test.cjs tests/viewer.test.cjs tests/universe.test.cjs tests/references.test.cjs tests/traces.test.cjs
 node --test tests/review.test.cjs
+node --test tests/live.test.cjs
 ```
 
 Python 3.9+ needs no extra packages. Viewer unit tests need Node.js 18+; Node is not a runtime requirement for Laniakea.
@@ -72,6 +73,7 @@ Source-file fixtures must use the normal pipeline/read index/server and real exa
 | [inspector.browser.js](inspector.browser.js) | Review fixture: accessible tabs, separate findings/details, retained drafts/evidence/scroll, lazy references, late responses and narrow panels |
 | [health.browser.js](health.browser.js) | `test_health.browser_fixture`: source evidence paging, file badges, triage/reopen, late-close, narrow layout and pin preservation |
 | [monitor.browser.js](monitor.browser.js) | Two registered sample targets: launch/deep-link precedence, inactive browsing and same-origin session controls |
+| [live.browser.js](live.browser.js) | Namespace fixture and a harness publication callback: adoption, camera, references, drag/save/draft deferral, Review isolation, independent tabs and removed focus |
 
 Other functions use the served [sample](../sample/SampleProject/SampleProject.uproject), with synthetic overlays.
 Keep real-project screenshots outside the clone and other observations in the ignored workspace.

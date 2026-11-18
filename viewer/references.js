@@ -2,6 +2,16 @@
 // Immutable reference pages have a bounded memory lifetime, independent of user positions.
 'use strict';
 
+function referenceReader(target,universe) {
+  return universe.paged?new ReferencePages(target.references_url,{validate:page=>{
+    for(const item of page.items){
+      const group=universe.graph.edges[item.group-1],edge=item.reference;
+      if(!group||group.source!==edge.source||group.target!==edge.target||group.type!==edge.type||
+        Boolean(group.internal_to_owner)!==Boolean(edge.internal_to_owner))throw Error('Reference page does not match this map');
+    }
+  }}):null;
+}
+
 class ReferencePages {
   constructor(url, {maxBytes=8*1024*1024,maxEntries=64,validate=()=>{}}={}) {
     this.url=url;this.maxBytes=maxBytes;this.maxEntries=maxEntries;this.validate=validate;

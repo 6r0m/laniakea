@@ -5,6 +5,7 @@ from contextlib import contextmanager
 import copy
 from pathlib import Path
 import threading
+import time
 
 from . import LaniakeaError,map_index
 from .review_store import Review
@@ -38,7 +39,7 @@ class Context:
 class Snapshots:
     def __init__(self,workspace,index,views):
         self.workspace=workspace;self.index=index;self.lock=threading.RLock()
-        self.contexts={};self.baseline={};self.newest={}
+        self.contexts={};self.baseline={};self.newest={};self.browsers={}
         for entry in index:
             target=entry['id'];run=workspace.target_dir(target)/'runs'/entry['run']
             context=Context(workspace,target,run,views[target],copy.deepcopy(entry))
@@ -63,7 +64,9 @@ class Snapshots:
             context.run=run;context.review.args=(self.workspace,target,run,context.view)
             base=f'/snapshot/{target}/{run.name}'
             context.entry.update(data_url=base+'/data/',layout_url=base+'/layout/',
-                map_url=base+'/map/topology.json',references_url=base+'/map/references',review_url=base+'/map/review',
+                map_url=base+'/map/'+context.view.root.name+'/topology.json',map_identity=context.view.root.name,
+                references_url=base+'/map/'+context.view.root.name+'/references',
+                review_url=base+'/map/'+context.view.root.name+'/review',
                 stale=False,changed=[],changed_count=0,freshness='checked' if prepared is not None else 'unknown')
             self.contexts[target,run.name]=context;self.newest[target]=run.name
             self._trim(target)
@@ -72,6 +75,8 @@ class Snapshots:
     def _trim(self,target):
         keys=sorted((key for key in self.contexts if key[0]==target),key=lambda key:key[1])
         protected={self.baseline[target],self.newest[target],*(key[1] for key in keys[-2:])}
+        self.browsers={client:pin for client,pin in self.browsers.items() if pin[2]>time.monotonic()}
+        protected.update(run for owner,run,_until in self.browsers.values() if owner==target)
         for key in keys:
             if key[1] not in protected and not self.contexts[key].readers:del self.contexts[key]
 
@@ -82,8 +87,19 @@ class Snapshots:
 
     def protected(self,target):
         with self.lock:
+            self._trim(target)
             return {'runs':[key[1] for key in self.contexts if key[0]==target],
                     'views':[value.view.root.name for key,value in self.contexts.items() if key[0]==target]}
+
+    def touch(self,target,run,client):
+        with self.lock:
+            context=self.contexts.get((target,run))
+            if context is None:return False
+            previous=self.browsers.get(client)
+            self.browsers[client]=(target,run,time.monotonic()+120)
+            self._trim(target)
+            if previous and previous[0]!=target:self._trim(previous[0])
+            return True
 
     @contextmanager
     def route(self,path):
@@ -98,6 +114,10 @@ class Snapshots:
             if context is None or kind not in {'data','map','layout'}:
                 yield False,path
             else:
+                if kind=='map':
+                    identity,separator,rest=rest.partition('/')
+                    if not separator or identity!=context.view.root.name:
+                        yield False,path;return
                 prefix=f'/map/{target}/{context.view.root.name}/' if kind=='map' else f'/{kind}/{target}/'
                 yield context,prefix+rest
         finally:

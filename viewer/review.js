@@ -369,13 +369,14 @@ class ArchitectureReview {
       const button=el('button',title,{type:'button'});controls.append(button);
       button.onclick=async()=>{
         const epoch=state.referenceEpoch,returnFocus=controls.contains(document.activeElement);
+        this.saving=(this.saving||0)+1;
         for(const action of controls.children)action.disabled=true;status.textContent='Saving decision...';
         try {await this.request({}, {action:'triage',report,revision,finding:finding.id,state:stateValue,reason:reason.value});
           this.pages.clear();await this.load();
           if(epoch===state.referenceEpoch&&returnFocus&&!button.isConnected&&document.activeElement===document.body)
             (state.inspector?.tabs.get('architecture')||$('review-recheck')).focus();
         } catch(error){if(error.name!=='AbortError'&&article.isConnected)status.textContent=error.message;}
-        finally {for(const action of controls.children)action.disabled=false;}
+        finally {this.saving--;for(const action of controls.children)action.disabled=false;}
       };
     }
     article.append(controls,status);parent.append(article);

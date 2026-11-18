@@ -16,12 +16,14 @@ remain outside this component. Operator workflows live in the [user guide](../gu
 - [Saved arrangements](#saved-arrangements)
 - [Review presentation](#review-presentation)
 - [Coverage and freshness presentation](#coverage-and-freshness-presentation)
+- [Live snapshots](#live-snapshots)
 
 ## Composition
 
 | part | responsibility |
 |---|---|
 | [app.js](../../viewer/app.js) | startup, target selection and HTML controls |
+| [live.js](../../viewer/live.js) | staged snapshot adoption and compact session controls |
 | [universe.js](../../viewer/universe.js) | containment, reference projection and world positions |
 | [sections.js](../../viewer/sections.js) | source organization without changing semantic ownership |
 | [traces.js](../../viewer/traces.js) | shared directional calculations |
@@ -410,3 +412,24 @@ configuration disabled the node; the viewer does not infer that cause from targe
 
 The staleness warning stays visible as a compact summary; its disclosure retains changed paths, the run and recovery action.
 Saved-only opening labels unchecked source freshness in the coverage footer rather than implying that the snapshot is fresh.
+
+## Live snapshots
+
+The live coordinator polls small session metadata, less often in hidden tabs, and stages manifest, topology, navigation
+index and layouts from one ready generation. It replaces the current map only after staging succeeds. Invalid or expired
+data leaves the last good map available with an explicit update error. Review evaluation is independent and never delays
+the map; obsolete Review and exact-page requests are cancelled or ignored by their generation guards.
+When the validated read-index identity and projection hints are unchanged, the coordinator reuses topology and unchanged
+geometry while refreshing generation-bound readers, coverage and Review. A changed identity always prepares a new universe.
+
+Adoption reuses scene, position, reference and Inspector owners. It retains the camera, layout mode, surviving expanded
+containers, filters, selected entities and Inspector intent. Removed focus falls back through its recorded ancestors with
+an explanation. Exact reference IDs are not carried across generations. Back/Forward and target switching use the adopted
+generation's immutable data URLs.
+
+Dragging, pending or failed position writes, in-flight Review decisions and edited decision reasons defer adoption. A position
+revision change during staging discards that staged copy rather than applying layouts read before a newer move. Independent
+tabs heartbeat their current read contexts through the [monitoring contract](monitoring.md#publication-and-shutdown).
+
+The compact Live disclosure owns activation, pause, retry and coverage access. Acquisition failures remain visible in its
+closed summary. The toolbar scrolls rather than wrapping as counts change, preserving map geometry and narrow-screen space.

@@ -249,10 +249,16 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200,json.dumps({'target':self.server.launch_target,
                                'monitoring':getattr(self.server,'monitor',None) is not None}).encode(),'application/json')
         if path=='/monitor/status':
+            query=parse_qs(urlsplit(self.path).query,keep_blank_values=True)
+            if query and (set(query)!={'target','run','client'} or any(len(values)!=1 for values in query.values()) or
+                    not 1<=len(query['client'][0])<=64 or any(c not in
+                    'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_' for c in query['client'][0])):
+                return self._send(400,b'expected one target, run and bounded browser identifier\n')
+            retained=self.server.snapshots.touch(query['target'][0],query['run'][0],query['client'][0]) if query else None
             monitor=getattr(self.server,'monitor',None)
             data=monitor.status() if monitor else {'targets':[{'id':e['id'],'active':False,'state':'saved',
                   'ready':self.server.snapshots.latest(e['id'])} for e in self.server.index]}
-            return self._send(200,json.dumps(data).encode(),'application/json')
+            return self._send(200,json.dumps({**data,'context_retained':retained}).encode(),'application/json')
         if path.startswith('/map/'):
             view = self._view(path)
             if view is None:
@@ -345,7 +351,8 @@ def make_server(workspace, port=0, *, scan=True, launch_target=None):
         view = map_index.ensure(workspace, entry['id'], run)
         views[entry['id']] = view
         base = f"/map/{entry['id']}/{view.root.name}"
-        entry.update(map_url=base+'/topology.json', references_url=base+'/references',review_url=base+'/review')
+        entry.update(map_url=base+'/topology.json',map_identity=view.root.name,
+                     references_url=base+'/references',review_url=base+'/review')
     try:
         server = _Server((HOST, port), partial(Handler, workspace=workspace, index=index))
     except OSError as error:

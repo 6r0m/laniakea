@@ -73,7 +73,7 @@ def _run_server(args,workspace,owner):
             from .monitor import Monitor
             monitor=Monitor(workspace,server.snapshots)
             server.monitor=monitor;monitor.activate(args.target_id)
-            print(f'laniakea: monitoring {args.target_id} (experimental; existing tabs remain pinned)',flush=True)
+            print(f'laniakea: monitoring {args.target_id}; browser updates preserve exploration state',flush=True)
         print(f'laniakea: viewer preparation: {perf_counter()-started:.3f}s')
         url = f"http://{HOST}:{server.server_address[1]}/"
         for entry in server.index:
@@ -117,14 +117,15 @@ def parser():
     def serve_options(command):
         command.add_argument('target_id',nargs='?',help='registered target to open; most recently built when omitted')
         watch=command.add_mutually_exclusive_group()
-        watch.add_argument('--watch',action='store_true',help='experimental session monitoring; existing browser maps stay pinned')
-        watch.add_argument('--no-watch',action='store_true',help='saved maps only, without source scanning (default)')
+        watch.add_argument('--watch',action='store_true',help='monitor the selected target and update open maps (default)')
+        watch.add_argument('--no-watch',dest='watch',action='store_false',help='saved maps only, without source scanning')
+        command.set_defaults(watch=True)
         command.add_argument("--port", type=int, default=DEFAULT_PORT,
                              help=f"port on 127.0.0.1; default {DEFAULT_PORT}, 0 picks a free one")
         command.add_argument("--no-browser", action="store_true", help="do not open a browser")
 
     project_options(commands.add_parser('build',aliases=['extract'],help='analyse a project and save a new map'))
-    serve_options(commands.add_parser('up',aliases=['serve'],help='open saved maps without analysing sources'))
+    serve_options(commands.add_parser('up',aliases=['serve'],help='open saved maps and monitor the selected target'))
     commands.add_parser('down',help='stop the viewer owned by this workspace')
     setup = commands.add_parser("setup-symbols", help="install the pinned local symbol compiler into the workspace (offline)")
     setup.add_argument("--libclang", required=True, help="LLVM 21.1.8 libclang.dll")

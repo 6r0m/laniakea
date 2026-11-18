@@ -38,6 +38,11 @@
   <div id="banner" role="status" hidden></div>
   <div id="error" role="alert" hidden></div>
   <div class="scope-bar">
+    <details id="live-controls"><summary id="live-summary" aria-live="polite">Checking updates...</summary>
+      <div class="live-options"><p id="live-status" role="status"></p>
+        <button id="live-toggle" type="button">Monitor this target</button>
+        <button id="live-retry" type="button">Retry analysis</button></div>
+    </details>
     <button id="toggle-filters" type="button" aria-controls="filters" aria-expanded="false">Browse &amp; filters</button>
     <span id="scope-summary" role="status"></span>
     <button id="toggle-configuration" type="button" aria-pressed="false" hidden>Config marks</button>
@@ -90,6 +95,7 @@
   <script src="references.js"></script>
   <script src="review.js"></script>
   <script src="inspector.js"></script>
+  <script src="live.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

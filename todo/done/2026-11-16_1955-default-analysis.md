@@ -1,10 +1,12 @@
 # Continuous useful analysis with safe reuse
 
-**Status:** IN PROGRESS - Gate 1 complete; Gate 2 review corrections verified; Gate 3 remains pending
+**Status:** DONE - Gates 1-3 verified within the recorded scope
+
+The investigation and plan preserve their original evidence. The final review record documents implementation and closure.
 
 **Scope:** continuous monitoring, default code-health collection, safe reuse and validated live map updates  
-**Stable documentation owners:** [Unreal profile](../docs/architecture/unreal-profile.md),
-[Review](../docs/architecture/review.md), [viewer](../docs/architecture/viewer.md), [guide](../docs/guide.md)
+**Stable documentation owners:** [Unreal profile](../../docs/architecture/unreal-profile.md),
+[Review](../../docs/architecture/review.md), [viewer](../../docs/architecture/viewer.md), [guide](../../docs/guide.md)
 
 ## Contents
 
@@ -110,11 +112,11 @@ existing local tools. No production code, stable docs, tests or analysed-project
 
 ### Facts and controlled results
 
-1. [CLI](../laniakea/cli.py) makes health explicit; `up` does not collect source facts. Review already starts automatically
-   for a supported saved target through [viewer/review.js](../viewer/review.js).
-2. [CPD](../laniakea/unreal/cpd.py) collects strict matches with a default floor of 100. Its Java bridge uses PMD tokens
-   for exact ranges and fingerprints. [Review defaults](../laniakea/review_policy.py) independently specify 100, and
-   [the evaluator](../laniakea/review.py) also falls back to 100.
+1. [CLI](../../laniakea/cli.py) makes health explicit; `up` does not collect source facts. Review already starts automatically
+   for a supported saved target through [viewer/review.js](../../viewer/review.js).
+2. [CPD](../../laniakea/unreal/cpd.py) collects strict matches with a default floor of 100. Its Java bridge uses PMD tokens
+   for exact ranges and fingerprints. [Review defaults](../../laniakea/review_policy.py) independently specify 100, and
+   [the evaluator](../../laniakea/review.py) also falls back to 100.
 3. A real PMD 7.29.0 probe used four small C++ files: A/B share a readiness loop, C renames its local identifiers, and D
    implements different control flow. All four files were processed in each of eight runs:
 
@@ -126,9 +128,9 @@ existing local tools. No production code, stable docs, tests or analysed-project
    | ignore identifiers | 50, 40, 30 | one 52-token A/B/C match; D excluded |
 
    Java invocation times were 0.609-0.723 seconds on this tiny corpus. This is mechanism evidence, not a real-project
-   throughput or precision claim. [Probe](../workspace/tmp/default-analysis-investigation/probe.py),
-   [namespace-aware output reader](../workspace/tmp/default-analysis-investigation/read_probe.py),
-   [results](../workspace/tmp/default-analysis-investigation/probe.json).
+   throughput or precision claim. [Probe](../../workspace/tmp/default-analysis-investigation/probe.py),
+   [namespace-aware output reader](../../workspace/tmp/default-analysis-investigation/read_probe.py),
+   [results](../../workspace/tmp/default-analysis-investigation/probe.json).
 4. The current real pipeline collected the short pair at 50, but default Review emitted no duplication finding because
    its threshold remained 100. An unchanged repeat launched no Java process; one source edit invalidated reuse:
 
@@ -138,48 +140,48 @@ existing local tools. No production code, stable docs, tests or analysed-project
    | unchanged | 0 | yes | 0.115 |
    | one file changes, eliminating the match | 1 | no | 0.677 |
 
-   [Reproduction](../workspace/tmp/default-analysis-investigation/pipeline_probe.py),
-   [results](../workspace/tmp/default-analysis-investigation/pipeline-probe.json).
-5. [Existing CPD reuse](../laniakea/unreal/cpd.py) compares the complete selected source inventory, owners, scope, tool
+   [Reproduction](../../workspace/tmp/default-analysis-investigation/pipeline_probe.py),
+   [results](../../workspace/tmp/default-analysis-investigation/pipeline-probe.json).
+5. [Existing CPD reuse](../../laniakea/unreal/cpd.py) compares the complete selected source inventory, owners, scope, tool
    identity and threshold with the immediately preceding run's validated artifact. It is corpus-wide, not per module,
    and does not search arbitrary historical runs after an intervening run without health evidence.
-6. [Native cache](../laniakea/unreal/symbol_cache.py) already works at compiler-job scope. It binds command/tool/code/
+6. [Native cache](../../laniakea/unreal/symbol_cache.py) already works at compiler-job scope. It binds command/tool/code/
    environment identity, rechecks preprocessing and exact input bytes, including newly appearing optional headers.
    It avoids repeated indexing, not all preprocessing, copy, export or normalization work.
-7. [Review cache](../laniakea/review_store.py) is disposable and keyed by the read index, manifest, policy and evaluator
+7. [Review cache](../../laniakea/review_store.py) is disposable and keyed by the read index, manifest, policy and evaluator
    code. Triage remains separate. Global dependency cycles can change through another module; they are not a safe
    independently cached per-module property.
-8. The [existing baseline command](../workspace/tmp/default-analysis-investigation/baseline.py) ran 21 tests with no
+8. The [existing baseline command](../../workspace/tmp/default-analysis-investigation/baseline.py) ran 21 tests with no
    skips or failures, including real CPD reuse/refusal and native preprocessing/negative-header controls. Results:
-   [baseline-tests.json](../workspace/tmp/default-analysis-investigation/baseline-tests.json).
-9. [Server](../laniakea/server.py) checks freshness before serving and pins its target index, views and Review owners
+   [baseline-tests.json](../../workspace/tmp/default-analysis-investigation/baseline-tests.json).
+9. [Server](../../laniakea/server.py) checks freshness before serving and pins its target index, views and Review owners
    at startup. Reference URLs carry a read-index identity; manifest/shard and layout URLs do not pin a run. Merely noticing
    a new latest pointer would not safely refresh these consumers.
-10. [Navigation](../viewer/app.js) treats only a target-id change as a new map; [scene restoration](../viewer/scene.js)
-    refuses a different run. [PositionCache](../viewer/positions.js) deliberately retains failed writes. Automatic adoption
+10. [Navigation](../../viewer/app.js) treats only a target-id change as a new map; [scene restoration](../../viewer/scene.js)
+    refuses a different run. [PositionCache](../../viewer/positions.js) deliberately retains failed writes. Automatic adoption
     needs a same-target/new-run route, not a call to existing navigation or a page reload.
 11. A standard-library Windows probe received a notification after atomic replacement and drained a cancelled pending
     directory watch. This proves local API availability, not event decoding, overflow recovery or production performance.
-    [Probe](../workspace/tmp/continuous-monitor-investigation/native_probe.py),
-    [result](../workspace/tmp/continuous-monitor-investigation/native-probe.json).
-12. [Unreal collection](../laniakea/unreal/__init__.py) fingerprints requested health sources before collecting the graph;
-    a later CPD error also propagates through the whole pipeline. [Coverage schema](../schema/graph.v1.schema.json)
+    [Probe](../../workspace/tmp/continuous-monitor-investigation/native_probe.py),
+    [result](../../workspace/tmp/continuous-monitor-investigation/native-probe.json).
+12. [Unreal collection](../../laniakea/unreal/__init__.py) fingerprints requested health sources before collecting the graph;
+    a later CPD error also propagates through the whole pipeline. [Coverage schema](../../schema/graph.v1.schema.json)
     presently has prose lists and counts, not structured acquisition outcomes. Existing fail-closed behavior is correct for
     explicitly required analysis, but cannot become the default optional-provider policy unchanged.
-13. [UBT](../laniakea/unreal/ubt.py), [CPD](../laniakea/unreal/cpd.py) and
-    [native workers](../laniakea/unreal/compiler.py) use blocking subprocess calls with 900-second timeouts. Native
-    preprocessing has its own [180-second timer](../laniakea/unreal/symbol_cache.py); cancelling a future does not stop a
-    running child. [Service stop](../laniakea/service.py) waits up to 10 seconds after the stop acknowledgement for lease
+13. [UBT](../../laniakea/unreal/ubt.py), [CPD](../../laniakea/unreal/cpd.py) and
+    [native workers](../../laniakea/unreal/compiler.py) use blocking subprocess calls with 900-second timeouts. Native
+    preprocessing has its own [180-second timer](../../laniakea/unreal/symbol_cache.py); cancelling a future does not stop a
+    running child. [Service stop](../../laniakea/service.py) waits up to 10 seconds after the stop acknowledgement for lease
     release. These are different limits; the current analysis paths cannot promise bounded viewer shutdown.
-14. [CLI target selection](../laniakea/cli.py) writes registration/settings before health-option validation and extraction.
-    [Workspace publication](../laniakea/workspace.py) later replaces the latest pointer separately. A failed extraction
+14. [CLI target selection](../../laniakea/cli.py) writes registration/settings before health-option validation and extraction.
+    [Workspace publication](../../laniakea/workspace.py) later replaces the latest pointer separately. A failed extraction
     can therefore leave new settings beside the old map. The prior recipe paragraph did not resolve crash consistency.
-    A [synthetic CLI probe](../workspace/tmp/default-analysis-review/check.py) reproduced registration after an invalid
-    health-option request returned 2 without publishing a map: [result](../workspace/tmp/default-analysis-review/settings-probe.json).
-15. The [Review isolation contract](../docs/architecture/review.md#lifetimes-and-failure-isolation) makes evaluation
+    A [synthetic CLI probe](../../workspace/tmp/default-analysis-review/check.py) reproduced registration after an invalid
+    health-option request returned 2 without publishing a map: [result](../../workspace/tmp/default-analysis-review/settings-probe.json).
+15. The [Review isolation contract](../../docs/architecture/review.md#lifetimes-and-failure-isolation) makes evaluation
     independent of map serving/publication. Current Review construction binds a run/index; evaluation happens later in
-    [Review.load()](../laniakea/review_store.py). [Browser startup](../viewer/app.js) currently resolves no-URL selection
-    through remembered target state. [Startup target indexing](../laniakea/server.py) checks freshness for registrations;
+    [Review.load()](../../laniakea/review_store.py). [Browser startup](../../viewer/app.js) currently resolves no-URL selection
+    through remembered target state. [Startup target indexing](../../laniakea/server.py) checks freshness for registrations;
     saved-map viewing today is not a guarantee of no source scanning.
 
 ### Upstream evidence and reviewer assessment
@@ -222,15 +224,15 @@ the earlier notification API probe does not prove them. Gates 2-3 retain their i
 
 | concern | existing owner |
 |---|---|
-| build requests, optional collection and publication | [CLI](../laniakea/cli.py), [pipeline](../laniakea/pipeline.py), [Unreal adapter](../laniakea/unreal/__init__.py) |
-| server lifetime and authenticated stop | [service](../laniakea/service.py), [CLI](../laniakea/cli.py) |
-| target settings, writer lock and latest publication | [workspace](../laniakea/workspace.py) |
-| pinned reads and local layout writes | [server](../laniakea/server.py), [layouts](../laniakea/layouts.py) |
-| bounded source corpus and tool identity | [source inputs](../laniakea/unreal/source_inputs.py), [SourceTree](../laniakea/unreal/source_tree.py), [CPD tools](../laniakea/unreal/cpd_tools.py) |
-| duplication collection and reuse | [CPD collector](../laniakea/unreal/cpd.py), [Java adapter](../laniakea/unreal/CpdBridge.java) |
-| immutable source observations | [health](../laniakea/health.py), [manifest schema](../schema/graph.v1.schema.json) |
-| findings, applicability and decisions | [Review contract](../docs/architecture/review.md) |
-| availability and finding presentation | [viewer contract](../docs/architecture/viewer.md#review-presentation) |
+| build requests, optional collection and publication | [CLI](../../laniakea/cli.py), [pipeline](../../laniakea/pipeline.py), [Unreal adapter](../../laniakea/unreal/__init__.py) |
+| server lifetime and authenticated stop | [service](../../laniakea/service.py), [CLI](../../laniakea/cli.py) |
+| target settings, writer lock and latest publication | [workspace](../../laniakea/workspace.py) |
+| pinned reads and local layout writes | [server](../../laniakea/server.py), [layouts](../../laniakea/layouts.py) |
+| bounded source corpus and tool identity | [source inputs](../../laniakea/unreal/source_inputs.py), [SourceTree](../../laniakea/unreal/source_tree.py), [CPD tools](../../laniakea/unreal/cpd_tools.py) |
+| duplication collection and reuse | [CPD collector](../../laniakea/unreal/cpd.py), [Java adapter](../../laniakea/unreal/CpdBridge.java) |
+| immutable source observations | [health](../../laniakea/health.py), [manifest schema](../../schema/graph.v1.schema.json) |
+| findings, applicability and decisions | [Review contract](../../docs/architecture/review.md) |
+| availability and finding presentation | [viewer contract](../../docs/architecture/viewer.md#review-presentation) |
 
 Acquisition validates data; Review interprets it. Do not reintroduce a lower-layer dependency on Review policy to share a
 numeric default. D1 and D3 change explicit-only acquisition and reader-only opening, not the ownership of facts.
@@ -426,7 +428,7 @@ immutable read context containing manifest, shards, topology and exact reference
 lazy Review owner to that generation; do not require successful policy loading, cache generation, triage reading or Review
 evaluation for publication, context readiness or browser adoption. Review errors remain explicit in Review while the new
 map stays usable. Even Review-owner preparation failure must not gate the canonical map. This preserves the existing
-[failure-isolation contract](../docs/architecture/review.md#lifetimes-and-failure-isolation); required acquisition artifact
+[failure-isolation contract](../../docs/architecture/review.md#lifetimes-and-failure-isolation); required acquisition artifact
 validation still belongs to publication and is not bypassed by this rule.
 
 Pin all multi-request reads to one generation; old in-flight readers finish on that context. Never return new reference
@@ -579,15 +581,15 @@ constrain its value/review checkpoints.
 
 ### Gate 3 - Browser adoption and default activation
 
-- [ ] Adopt a staged ready context through existing scene/position/navigation owners, deferring for drag/pending saves/
+- [x] Adopt a staged ready context through existing scene/position/navigation owners, deferring for drag/pending saves/
   failures/drafts. Preserve camera, surviving IDs, filters, selection and Inspector intent. Cancel obsolete pages; test
   deep contextual files, removed focus fallback, multiple tabs and old/new writes without cross-run evidence mixing.
   A blocked or failed Review evaluation must not delay adoption; show Review's error separately on the usable new map.
-- [ ] Show monitored target, job state and provider coverage without new permanent panels. Historical browsing stays
+- [x] Show monitored target, job state and provider coverage without new permanent panels. Historical browsing stays
   inactive until explicit activation. Run affected Chromium scenarios and the real save-to-visible-update walkthrough.
   Preserve useful narrow-screen map space: the existing viewer acceptance fails its map-height check on the unchanged
   baseline as well as this patch. Resolve that demonstrated limitation when adding compact live status/controls.
-- [ ] Measure interaction p95/max while analysis runs; compare protected state and exact references. Only after Gates 1-3
+- [x] Measure interaction p95/max while analysis runs; compare protected state and exact references. Only after Gates 1-3
   pass may normal up enable A9 monitoring and safe adoption by default. Update stable docs, report limitations and archive.
 
 A4 is a separate optional extension after its real usefulness gate, not required for the three delivery gates. If adopted,
@@ -680,20 +682,20 @@ all intended input files were processed. Reviewer judgements of usefulness are n
 
 ## Documentation plan
 
-- [CLI help](../laniakea/cli.py) owns options; [Makefile](../Makefile) remains a shortcut. Update runtime recovery hints only
+- [CLI help](../../laniakea/cli.py) owns options; [Makefile](../../Makefile) remains a shortcut. Update runtime recovery hints only
   where their required explicit-health wording changes.
-- [Guide](../docs/guide.md) owns default live use, saved-only opening, optional setup, coverage, pause/retry and stop.
-- [Unreal profile](../docs/architecture/unreal-profile.md#source-duplication) owns automatic/off/required acquisition,
-  source boundaries, provider failure classification and reuse. The [schema](../schema/graph.v1.schema.json) owns structured
-  coverage shapes; [graph model](../docs/architecture/graph-model.md) owns their generic semantics. Replace explicit-only
+- [Guide](../../docs/guide.md) owns default live use, saved-only opening, optional setup, coverage, pause/retry and stop.
+- [Unreal profile](../../docs/architecture/unreal-profile.md#source-duplication) owns automatic/off/required acquisition,
+  source boundaries, provider failure classification and reuse. The [schema](../../schema/graph.v1.schema.json) owns structured
+  coverage shapes; [graph model](../../docs/architecture/graph-model.md) owns their generic semantics. Replace explicit-only
   statements after implementation; do not duplicate outcome shapes in the guide or Review policy.
-- [Review](../docs/architecture/review.md) owns effective display policy, mode meaning and decision stability;
-  [viewer](../docs/architecture/viewer.md#review-presentation) owns availability and snapshot-adoption behavior.
+- [Review](../../docs/architecture/review.md) owns effective display policy, mode meaning and decision stability;
+  [viewer](../../docs/architecture/viewer.md#review-presentation) owns availability and snapshot-adoption behavior.
 - The coordinator introduces a distinct durable lifecycle contract. During implementation, give input generations, bounded
   work, activation, cancellation and publication handoff one owner at `docs/architecture/live-analysis.md`, routed from the existing
-  architecture README. [Structure](../docs/architecture/structure.md) and the main diagram retain only component boundaries;
+  architecture README. [Structure](../../docs/architecture/structure.md) and the main diagram retain only component boundaries;
   do not repeat the lifecycle in the guide, profile or viewer. Do not create separate watcher/cache/scheduler documents.
-- Preserve [third-party terms](../THIRD_PARTY.md); no new dependency is proposed. [Verification](../tests/README.md) owns commands.
+- Preserve [third-party terms](../../THIRD_PARTY.md); no new dependency is proposed. [Verification](../../tests/README.md) owns commands.
 - Stable docs/code must not link to this task. Archive it under the existing todo lifecycle after approval and completion.
 
 ## Rollout and rollback
@@ -757,7 +759,7 @@ Only changes authorized after this review are implemented; no new services or sp
   prefixes. Earlier dated entries describe their own stages and are preserved. The current supplied change set therefore
   includes that README change; this review pass edits only the existing timestamped todo. Its filename/prefix stay unchanged.
 - Verification: 33 existing pipeline/commands/service/documentation/explicit-CPD-isolation tests passed, no skips. Results:
-  [checks.json](../workspace/tmp/default-analysis-review/checks.json). These establish current safeguards, not the future
+  [checks.json](../../workspace/tmp/default-analysis-review/checks.json). These establish current safeguards, not the future
   monitor, process owner, outcome model or transaction. No real-project extraction was required for these planning fixes.
 - Implementation remains unapproved. Production code, tests and stable docs were not edited in this review pass; the Git
   index was preserved. The revised contracts and actual Windows runtime costs remain acceptance work after approval.
@@ -797,9 +799,9 @@ Only changes authorized after this review are implemented; no new services or sp
 - The untouched registered bridge reproduced the same full result at 4 GiB, controlling for diagnostic instrumentation.
   A sampled manual audit found useful short cross-module logic as well as intentional boilerplate. Findings remain review
   candidates; strict clones do not establish a design violation. Diagnostics and project-identifying measurements stay
-  private: [phase/heap sweep](../workspace/tmp/live-analysis-implementation/cpd-profile/sweep-audited.json),
-  [independent bridge and cache controls](../workspace/tmp/live-analysis-implementation/cpd-profile/controls.json),
-  [short-clone audit](../workspace/tmp/live-analysis-implementation/cpd-profile/short-clone-audit.json).
+  private: [phase/heap sweep](../../workspace/tmp/live-analysis-implementation/cpd-profile/sweep-audited.json),
+  [independent bridge and cache controls](../../workspace/tmp/live-analysis-implementation/cpd-profile/controls.json),
+  [short-clone audit](../../workspace/tmp/live-analysis-implementation/cpd-profile/short-clone-audit.json).
 - Upstream [issue 6145](https://github.com/pmd/pmd/issues/6145) supports the matching-memory diagnosis. The open
   [optimization PR 6215](https://github.com/pmd/pmd/pull/6215) changes grouping behavior and is not adopted. Local bridge
   retokenization adds later cost, but cannot explain the earlier matching failure. No new matcher/cache is justified here.
@@ -840,14 +842,14 @@ Only changes authorized after this review are implemented; no new services or sp
 - The corrected production adapter processed every frozen authorized input and reproduced the prior validated signature,
   fingerprints, token counts, occurrences and exact ranges. The complete artifact passed current limits; unchanged reuse
   launched no Java. The initial busy-host attempt was refused before Java; subsequent admission used the unchanged guard.
-  Private proof: [production replay](../workspace/tmp/gate1-review/real-acceptance.json),
-  [exact-match difference diagnosis](../workspace/tmp/gate1-review/match-differences-semantic.json).
+  Private proof: [production replay](../../workspace/tmp/gate1-review/real-acceptance.json),
+  [exact-match difference diagnosis](../../workspace/tmp/gate1-review/match-differences-semantic.json).
 - Verification: 231 Python tests passed; 24 optional native tests skipped and three real-Engine cases excluded. The first
   broad run encountered one Windows access-denied snapshot rename; the focused repeat and final full run passed. Its cause
   is unconfirmed; no publication retry or weakened refusal was introduced. All 173 JavaScript tests passed. Review and health
   Chromium suites plus narrow coverage-label rendering passed without browser errors. Evidence:
-  [Python checks](../workspace/tmp/gate1-review/non-engine-results.json),
-  [browser checks](../workspace/tmp/gate1-review/browser-results.json).
+  [Python checks](../../workspace/tmp/gate1-review/non-engine-results.json),
+  [browser checks](../../workspace/tmp/gate1-review/browser-results.json).
 - Protected saved-position and triage inventory stayed byte-identical. Documentation links, ASCII, local privacy,
   diff whitespace and unchanged-index checks passed. The owned disposable browser fixture server was stopped.
 - Stable profile, graph, Review and guide contracts describe the delivered behavior. The task stays active: continuous
@@ -875,10 +877,10 @@ Only changes authorized after this review are implemented; no new services or sp
 - Ordinary CLI analysis also passed on the current complete authorized real corpus in an isolated workspace, followed by
   an unchanged build with no target/analyzer flags. Both produced completed coverage and Review findings at the selected
   floor; the repeat launched no Java and preserved exact observations. This does not claim monitoring or live adoption.
-  Private evidence: [real ordinary builds](../workspace/tmp/gate1-closeout/real-default-results.json),
-  [admission scenarios](../workspace/tmp/gate1-closeout/memory-scenarios.json),
-  [native/regression checks](../workspace/tmp/gate1-closeout/python-results.json),
-  [Engine boundary checks](../workspace/tmp/gate1-closeout/engine-results.json).
+  Private evidence: [real ordinary builds](../../workspace/tmp/gate1-closeout/real-default-results.json),
+  [admission scenarios](../../workspace/tmp/gate1-closeout/memory-scenarios.json),
+  [native/regression checks](../../workspace/tmp/gate1-closeout/python-results.json),
+  [Engine boundary checks](../../workspace/tmp/gate1-closeout/engine-results.json).
 - Stable guide/profile/structure contracts now describe automatic one-shot acquisition and explicit opt-out; verification
   docs include native preprocessing and combined health inputs. Gate 1 is complete within these proofs. The task remains
   active for Gates 2-3; no matcher, cache framework, service, renderer or analyzer was added.
@@ -921,14 +923,14 @@ Only changes authorized after this review are implemented; no new services or sp
   attributed to monitoring. An initial Windows directory-promotion access error in an existing CPD test did not reproduce in
   its focused rerun or the succeeding full run. The first live harness was corrected to observe HTTP readiness rather than
   race a marker replacement.
-- Private evidence: [live monitoring](../workspace/tmp/gate2/live-results.json),
-  [replacement recovery](../workspace/tmp/gate2/root-recovery-results.json),
-  [owned tool cancellation](../workspace/tmp/gate2/tool-stop-results.json),
-  [resource observations](../workspace/tmp/gate2/resource-results.json),
-  [Python checks](../workspace/tmp/gate2/python-results.json),
-  [Engine checks](../workspace/tmp/gate2/engine-results.json),
-  [JavaScript checks](../workspace/tmp/gate2/javascript.log),
-  [unchanged narrow-view baseline](../workspace/tmp/gate2/baseline-browser-result.json).
+- Private evidence: [live monitoring](../../workspace/tmp/gate2/live-results.json),
+  [replacement recovery](../../workspace/tmp/gate2/root-recovery-results.json),
+  [owned tool cancellation](../../workspace/tmp/gate2/tool-stop-results.json),
+  [resource observations](../../workspace/tmp/gate2/resource-results.json),
+  [Python checks](../../workspace/tmp/gate2/python-results.json),
+  [Engine checks](../../workspace/tmp/gate2/engine-results.json),
+  [JavaScript checks](../../workspace/tmp/gate2/javascript.log),
+  [unchanged narrow-view baseline](../../workspace/tmp/gate2/baseline-browser-result.json).
 - Stable architecture, guide and verification owners describe the delivered opt-in behavior. Default up remains saved-only;
   --no-watch guarantees no source scans and the browser labels unchecked freshness. --watch activates the launch-selected
   target only. Session controls and ready metadata are available locally; existing browser pages remain pinned. Gate 3 must
@@ -959,10 +961,10 @@ Only changes authorized after this review are implemented; no new services or sp
 - Verification: 295 non-Engine Python checks passed with one legacy clangd-indexer skip, with real LLVM and CPD enabled.
   All three Engine checks and 173 JavaScript checks passed. The real CLI/browser monitoring scenario passed launch selection,
   explicit links, inactive browsing and same-origin controls; authenticated shutdown completed within the existing budget.
-  Evidence: [Python](../workspace/tmp/gate2-review/python-results.json),
-  [Engine](../workspace/tmp/gate2-review/engine-results.json),
-  [CLI](../workspace/tmp/gate2-review/live-results.json),
-  [browser](../workspace/tmp/gate2-review/browser-results.json).
+  Evidence: [Python](../../workspace/tmp/gate2-review/python-results.json),
+  [Engine](../../workspace/tmp/gate2-review/engine-results.json),
+  [CLI](../../workspace/tmp/gate2-review/live-results.json),
+  [browser](../../workspace/tmp/gate2-review/browser-results.json).
 - The additional optional-header observation remains a trigger limitation: an absent external input appearing outside watched
   paths does not itself guarantee scheduling. Existing native negative-header guards passed on the next extraction. Retry,
   a build or another observed change can initiate it. No broader Engine watch or new discovery subsystem was added.
@@ -985,10 +987,65 @@ Only changes authorized after this review are implemented; no new services or sp
   candidate validation and owned-process cleanup remain covered by the affected suite.
 - Verification: 89 affected Python checks passed without skips, with real CPD and LLVM enabled. Scope includes monitoring,
   provider contracts, combined native/health staging, HTTP contexts, Windows lifecycle, documentation and privacy. Evidence:
-  [pre-fix failure](../workspace/tmp/gate2-retry-review/red.log),
-  [worker-only correction still fails](../workspace/tmp/gate2-retry-review/partial-fix.log),
-  [affected checks](../workspace/tmp/gate2-retry-review/results.json).
+  [pre-fix failure](../../workspace/tmp/gate2-retry-review/red.log),
+  [worker-only correction still fails](../../workspace/tmp/gate2-retry-review/partial-fix.log),
+  [affected checks](../../workspace/tmp/gate2-retry-review/results.json).
 - Stable monitoring and verification owners describe failure reuse. Saved-only default and opt-in --watch remain unchanged;
   Gate 3 stays pending and this todo stays active. No staging or commit was performed.
 - Documentation, privacy, syntax and whitespace checks passed. Protected saved files remained byte-identical. Authenticated
   restart and the real saved-map browser smoke passed with monitoring off, no runtime errors and no layout writes.
+
+
+### 2026-11-17 - Gate 3 delivery and full closure
+
+- The operator accepted Gate 2 and requested full task closure with verification. Gate 3 is implemented; this is not an
+  archive of unfinished browser work. Normal up opens saved maps first, then monitors the launch-selected target and adopts
+  ready generations. Explicit saved-only opening remains scan-free. Browsing another target never activates it implicitly.
+- The browser coordinator stages one generation through existing Universe, scene, position, reference and Inspector owners.
+  It defers during gestures, pending/failed saves and Review drafts/decisions. A changed position revision or navigation
+  cancels obsolete adoption. Camera, surviving expansion/focus, filters, layout and Inspector intent survive; removed focus
+  falls back through recorded ancestors. Old exact pages and Review responses cannot overwrite the new generation.
+- Browser heartbeats belong to existing read contexts. Each tab replaces its own expiring claim; another tab remains protected.
+  Tests verify retention during deferral, independent release and expiry. Map URLs bind the validated index identity as well
+  as the run, refusing an obsolete index before it can reinterpret reference groups. Same-run index changes trigger adoption.
+- A toolbar wrap reproduced displaced hover hits and the previously recorded narrow-map failure. A stable scrolling toolbar
+  fixes both. Live controls use a keyboard-accessible disclosure, anchored below its summary, with pause/activation/retry and
+  explicit failed/unavailable coverage. Review evaluation can remain blocked or fail while the new graph is already usable.
+- Measurements exposed unnecessary reconstruction of identical real-map topology. Reusing the validated index identity and
+  unchanged projection/layout preserves geometry while refreshing manifest, coverage, Review and generation-bound readers.
+  Three unchanged-topology adoptions improved from about 1.0-1.2 seconds to 133-184 ms. Changed identities still rebuild.
+  Saved real-map interaction measured frame p95 16.6 ms and maximum 58.3 ms in the repeated prepared-context probe. These
+  bounded observations are not guarantees for changed dense graphs. One separate cold harness opening timed out; the repeat
+  against its prepared cache passed. No unsupported cause or universal cold-opening claim is assigned to that timeout.
+- The no-expert-flags CLI walkthrough used real Unreal/CPD on disposable Sample sources. Body, header addition and build-rule
+  saves became visible in about 10-11 seconds with completed coverage, preserved camera/pins and run-bound exact references.
+  Real lexical failure published visibly failed coverage and recovered after correction. Native depth remains independent.
+  While analysis ran, sample interaction frame p95 was about 4.2 ms versus 4.3 ms idle; maxima were 4.3 and 8.3 ms respectively.
+  Sample throughput is not used as a private-project extraction estimate.
+- Final automated verification: 298 Python checks ran, 297 passed and one legacy clangd-indexer check skipped; all three real
+  Engine checks and all 180 JavaScript checks passed. Real LLVM and CPD were enabled. Thirteen existing Chromium scenarios
+  and the new live-adoption scenario passed, including narrow layout, independent tabs, source evidence, triage, Review
+  failure isolation, deferred work, deep files, expired/fallback paths and closed Inspector behavior.
+- Private receipts: [Python checks](../../workspace/tmp/gate3/python-results.json),
+  [Engine checks](../../workspace/tmp/gate3/engine-results.json),
+  [JavaScript checks](../../workspace/tmp/gate3/javascript-final.log),
+  [existing browser scenarios](../../workspace/tmp/gate3/all/browser-results.json),
+  [viewer scenario](../../workspace/tmp/gate3/all/viewer-fixed.log),
+  [health scenario](../../workspace/tmp/gate3/health/browser.log),
+  [live adoption](../../workspace/tmp/gate3/browser-results.json),
+  [real CLI walkthrough](../../workspace/tmp/gate3/real-results.json),
+  [real-map adoption](../../workspace/tmp/gate3/large-results.json).
+- Durable contracts live in the guide, monitoring, viewer, structure and verification owners. No new parser, renderer,
+  database, persistent service or analyzer was introduced. No Git staging or commit is authorized by task closure.
+- Accepted limits remain explicit: tools must be installed locally; selected-target/static evidence is not exhaustive
+  runtime or architectural proof; unrecorded optional external headers need a later extraction trigger; resource failures
+  wait for changed inputs or explicit Retry. Identifier normalization remains optional future work, not an unfinished gate.
+- Final local acceptance: the viewer restarted with default monitoring, retained its committed analysis recipe and adopted
+  a validated run through index-bound URLs without browser errors or layout writes. Saved layouts, policy and triage files
+  remained byte-identical. Normal monitoring may advance latest; it does not delete the previously published manual run.
+  Privacy, ASCII, syntax, documentation links and whitespace checks passed. The task is archived under done.
+- Optional diagnostic cleanup was policy-blocked: a command combining exact helper-process termination and removal of copied
+  large scratch graphs was refused with only "blocked by policy". Those ignored copies were not deleted. This does not alter
+  the delivered gates or their acceptance receipts; no user data or analyzed source was cleaned.
+  Owned helper sessions were subsequently stopped through their original execution controls, and the marker-based fixture
+  used its normal shutdown path. The main live viewer remains healthy; copied diagnostics remain under ignored scratch.

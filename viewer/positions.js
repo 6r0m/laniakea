@@ -30,9 +30,11 @@ class PositionCache {
     this.tail = Promise.resolve();
     this.pending = 0;
     this.errors = new Set();
+    this.revision = 0;
   }
 
   async write(mode, positions) {
+    this.revision++;
     const keys = positions === null ? [`${mode}/reset`] : Object.keys(positions).map(id => `${mode}/${id}`);
     this.pending++;
     unsavedPositionCaches.add(this);
@@ -87,7 +89,8 @@ class PositionCache {
 }
 
 async function loadPositionCache(target, file) {
-  const url = `/layout/${encodeURIComponent(target)}/${encodeURIComponent(file)}`;
+  const entry=state.targets.find(t=>t.id===target);
+  const url = (entry?.layout_url||`/layout/${encodeURIComponent(target)}/`)+encodeURIComponent(file);
   for (const cache of unsavedPositionCaches) {
     if (cache.url !== url) continue;
     await cache.tail;

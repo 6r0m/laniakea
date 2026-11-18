@@ -17,8 +17,8 @@ function el(tag, text, attrs) {
 function recall(key) { try { return localStorage.getItem(key); } catch (_) { return null; } }
 function remember(key, value) { try { localStorage.setItem(key, value); } catch (_) { /* storage is optional */ } }
 
-async function getJson(url) {
-  const response = await fetch(url, { cache: 'no-store' });
+async function getJson(url,options={}) {
+  const response = await fetch(url, { cache: 'no-store',...options });
   if (!response.ok) throw Object.assign(new Error(`${url}: HTTP ${response.status}`), { status: response.status });
   return response.json();
 }
@@ -96,7 +96,7 @@ async function start() {
     if (state.target && r.target === state.target.id && r.file === state.file) restoreView(history.state && history.state.scene);
   });
   window.addEventListener('beforeunload', event => {
-    if (unsavedPositionCaches.size) {
+    if (unsavedPositionCaches.size||state.review?.saving||liveBlockReason().includes('decision')) {
       event.preventDefault();
       event.returnValue = '';
     }
@@ -120,6 +120,16 @@ async function start() {
   const wanted = route();
   const id = known(state.targets.some(target => target.id === wanted.target) ? wanted.target : state.startup.target);
   await show(id, wanted.target === id ? wanted.file : null, 'replace');
+  state.live=new LiveUpdates();state.live.start();
+  $('live-controls').addEventListener('toggle',()=>state.live.positionControls());
+  window.addEventListener('resize',()=>state.live.positionControls());
+  document.addEventListener('visibilitychange',()=>state.live.tick());
+  window.addEventListener('pagehide',()=>state.live.stop());
+  window.addEventListener('pageshow',()=>{if(state.live.stopped)state.live.start();});
+  $('graph').addEventListener('pointerdown',()=>{state.pointerDown=true;});
+  window.addEventListener('pointerup',()=>{state.pointerDown=false;});
+  window.addEventListener('pointercancel',()=>{state.pointerDown=false;});
+  window.addEventListener('blur',()=>{state.pointerDown=false;});
 }
 
 function known(id) {
@@ -136,7 +146,7 @@ async function show(id, file, mode) {
   try {
     const changed = !state.target || state.target.id !== id;
     const target = state.targets.find((t) => t.id === id);
-    const manifest = changed ? await getJson(`/data/${encodeURIComponent(id)}/manifest.json`) : state.manifest;
+    const manifest = changed ? await getJson(targetData(target,'manifest.json')) : state.manifest;
     if (navigation !== state.navigation) return;
     const index = await projectIndex(target);
     if (navigation !== state.navigation) return;
@@ -147,7 +157,7 @@ async function show(id, file, mode) {
       if (navigation !== state.navigation) return;
       let entry = index.nodes.find(n=>n.file===wanted);
       if (!entry) {
-        try { await getJson(`/data/${encodeURIComponent(id)}/scopes/${encodeURIComponent(wanted)}`); }
+        try { await getJson(targetData(target,`scopes/${encodeURIComponent(wanted)}`)); }
         catch(error) {
           if(error.status!==404||wanted===manifest.entry)throw error;
           wanted=manifest.entry;mode='replace';entry=index.nodes.find(n=>n.file===wanted);
@@ -160,29 +170,22 @@ async function show(id, file, mode) {
           file:(byId.get(id)||byId.get(universe.nodes.get(id).attrs?.source_owner))?.file})).filter(p=>p.file)};
     } else {
       try {
-        shard = await getJson(`/data/${encodeURIComponent(id)}/scopes/${encodeURIComponent(wanted)}`);
+        shard = await getJson(targetData(target,`scopes/${encodeURIComponent(wanted)}`));
       } catch (error) {
         if (error.status !== 404 || wanted === manifest.entry) throw error;
         wanted = manifest.entry;
-        shard = await getJson(`/data/${encodeURIComponent(id)}/scopes/${encodeURIComponent(wanted)}`);
+        shard = await getJson(targetData(target,`scopes/${encodeURIComponent(wanted)}`));
         mode = 'replace';
       }
       if (navigation !== state.navigation) return;
       universe = changed || !state.universe ?
-        new Universe(await getJson(`/data/${encodeURIComponent(id)}/graph.json`),manifest) : state.universe;
+        new Universe(await getJson(targetData(target,'graph.json')),manifest) : state.universe;
     }
     if (navigation !== state.navigation) return;
     const positionCache = changed || !state.positionCache ? await loadPositionCache(id, manifest.entry) : state.positionCache;
     if (navigation !== state.navigation) return;
     if (changed) { state.hidden = new Set(); state.configuration = {}; state.referencePages?.clear(); }
-    const referencePages = universe.paged && (changed || !state.referencePages) ?
-      new ReferencePages(target.references_url,{validate:page=>{
-        for(const item of page.items) {
-          const group=universe.graph.edges[item.group-1],edge=item.reference;
-          if(!group||group.source!==edge.source||group.target!==edge.target||group.type!==edge.type||
-            Boolean(group.internal_to_owner)!==Boolean(edge.internal_to_owner))throw new Error('Reference page does not match this map');
-        }
-      }}) : state.referencePages;
+    const referencePages = changed || !state.referencePages ? referenceReader(target,universe) : state.referencePages;
     const fresh = changed || !state.cy;
     Object.assign(state, { target, manifest, shard, scopeShard: shard, universe, file: wanted,
       elsewhere: null, selection: null, positionCache, index, referencePages,
@@ -257,6 +260,7 @@ function onKey(event) {
   if (typing || event.altKey || event.ctrlKey || event.metaKey) return;
   if (event.key === 'Backspace') { event.preventDefault(); up(); }
   if (event.key === '/') { event.preventDefault(); $('find').focus(); }
+  if(event.key==='Escape'&&$('live-controls').open){$('live-controls').open=false;$('live-summary').focus();return;}
   if (event.key === 'Escape') { $('type-key').open=false;unfocus(true); renderDetails(null); }
   if (event.target === $('graph') && state.cy && ['+', '=', '-'].includes(event.key)) {
     event.preventDefault();
@@ -285,7 +289,7 @@ function renderBanner() {
   if (t.stale) {
     const details = el('details');
     details.append(el('summary', `Snapshot out of date: ${t.changed_count} inputs changed`),
-      el('p', `Showing run ${t.run}. Run: python laniakea.py build ${t.id}; then python laniakea.py down and python laniakea.py up to load the new map.`));
+      el('p', `Showing run ${t.run}. Run: python laniakea.py build ${t.id}. Live mode adopts validated updates; saved-only viewing requires reopening the viewer.`));
     const changed = el('ul');
     for (const path of t.changed) changed.append(el('li', path));
     details.append(changed);
@@ -451,7 +455,7 @@ function renderFindResults() {
 
 async function projectIndex(target = state.target) {
   if (state.target === target && state.index) return state.index;
-  const index = await getJson(`/data/${encodeURIComponent(target.id)}/scopes/index.json`);
+  const index = await getJson(targetData(target,'scopes/index.json'));
   if (state.target === target) state.index = index;
   return index;
 }

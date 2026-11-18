@@ -1,7 +1,7 @@
 # Background analysis
 
-Experimental session monitoring updates saved runs without changing an open browser's read context.
-The [CLI](../../laniakea/cli.py) owns activation options; automatic browser adoption is not implemented.
+Session monitoring prepares immutable runs while the saved map stays available. The [CLI](../../laniakea/cli.py) owns
+activation options; the [viewer](viewer.md#live-snapshots) owns adoption of ready generations.
 
 ## Ownership
 
@@ -52,9 +52,13 @@ The worker validates the canonical graph/read index before promotion. Its result
 source, generator and cache identities; the controller checks those bindings without repeating large index reads. A valid
 index belonging to another graph cannot be admitted. Review is lazy and independent: policy or triage failures cannot block
 a usable map. Versioned snapshot URLs pin manifest, topology, exact-reference pages and layout/triage validation
-to the same generation. Old URLs never acquire new reference identities. Expired contexts return HTTP 410. Active readers,
+to the same generation. Map URLs also bind the validated index identity, so regeneration cannot reinterpret old group IDs.
+Old URLs never acquire new reference identities. Expired contexts return HTTP 410. Active readers,
 the initial context and the latest/recovery contexts protect their artifacts from cleanup. Manual runs and user stores are
 never automatically removed; disposable automatic history is tagged separately.
+Browser status heartbeats retain each tab's current read context for a bounded interval. A tab replaces its own claim when
+it adopts or switches targets; it cannot release another tab's context. Expired claims stop protecting abandoned generations.
+This state lives only in the existing read-context owner and does not become another persistent store.
 
 Workers enter their Job Object during process creation, before execution. The controller alone holds the non-inherited
 kill-on-close handle. Containment refusal cannot launch an uncontained fallback. Stop prevents starts/publication, cancels
@@ -63,5 +67,5 @@ authorize termination. A cleanup failure remains observable rather than reportin
 An unexpected scheduler failure performs the same owned-job and notification cleanup and releases its writer lease without
 requiring a later stop request. Unconfirmed cleanup remains an error.
 
-Saved-only startup reads workspace artifacts without source scanning. Monitoring remains explicit, and existing tabs remain
-pinned until reopened; preparing a newer context does not itself change exploration state.
+Startup reads workspace artifacts before source scanning. The launch-selected target is monitored by default; saved-only
+startup disables monitoring. Browser reads remain pinned until that browser adopts a prepared context.
