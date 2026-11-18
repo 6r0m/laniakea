@@ -80,11 +80,16 @@ def validate(value, definition=None):
     if definition == 'manifest':
         outcome=value['coverage'].get('acquisition',{}).get('source-duplication')
         if outcome is not None:
+            if not all(key in outcome for key in ('prefixes','minimum_tokens')):
+                raise LaniakeaError('source-health acquisition lacks its collection scope or threshold')
             completed=outcome['status']=='completed'
             if completed != ('health' in value) or completed and outcome.get('artifact_sha256')!=value['health']['sha256']:
                 raise LaniakeaError('source-health outcome and validated artifact disagree')
             if completed and not all(outcome.get(k) for k in ('tool_identity','input_identity')):
                 raise LaniakeaError('completed source-health outcome lacks input/tool identity')
+        native=value['coverage'].get('acquisition',{}).get('native')
+        if native is not None and (native['status']=='completed')!=any(s['id']=='compiler' for s in value['sources']):
+            raise LaniakeaError('native acquisition outcome and compiler evidence disagree')
     if definition == 'map':
         files, nodes = value.get('files', []), value['nodes']
         for file in files:

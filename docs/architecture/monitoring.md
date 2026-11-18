@@ -6,12 +6,32 @@ activation options; the [viewer](viewer.md#live-snapshots) owns adoption of read
 ## Ownership
 
 - [Monitor](../../laniakea/monitor.py) owns session activation, debounce, generations and one background job at a time.
+- [Check choices](../../laniakea/unreal/checks.py) own Unreal modes, prerequisites and coverage descriptions.
+- [Progress](../../laniakea/progress.py) projects bounded owned-worker phases into Monitor status.
 - [Profile inputs](../../laniakea/unreal/monitor.py) define consumed files, physical boundaries and watch specifications.
 - [Windows notifications](../../laniakea/notifications.py) multiplex directory reads through one completion port.
 - [Owned processes](../../laniakea/owned_process.py) contain disposable workers and descendants in Windows Job Objects.
 - [Worker](../../laniakea/monitor_worker.py) probes inputs and stages extraction/read indexes; it cannot publish.
 - [Read contexts](../../laniakea/snapshots.py) bind HTTP reads and write validation to immutable runs.
 - [Automatic history](../../laniakea/automatic_history.py) reclaims only tagged background artifacts.
+
+## Requested checks
+
+New project builds record recommended intent separately from the effective acquisition recipe and published evidence.
+The initial build can collect CPD; first monitored opening resolves available native work without blocking saved-map serving.
+Native Auto requires validated local tools and a usable successful-build receipt; it never compiles the analysed project.
+Required native requests retain fail-closed semantics. When upgrading a module-only run, useful module/health results can
+publish before native augmentation. Unavailable or failed augmentation never downgrades an existing native map.
+Legacy recipes remain authoritative until explicitly changed; a false symbols flag is not consent to enable native work.
+
+Same-origin check requests use the existing controller, validated profile choices and expected run/settings revision.
+Identical pending choices coalesce; stale conflicting forms are rejected. Pending intent remains session-local until the
+validated run/request commits. Stop pauses only the selected target, invalidates publication and reports Stopping until
+owned cleanup is confirmed. Resuming preserves pending intent; restarting discards uncommitted choices.
+
+Workers report small phase/elapsed summaries and real completed-unit counts through the existing status poll. Unknown
+totals stay indeterminate. Status exposes only progress belonging to the current target/job/generation. HTTP threads
+never scan sources, load tools or start analyzers directly. Saved-only startup cannot activate work through browser controls.
 
 ## Scheduling and failure
 
@@ -34,7 +54,10 @@ Typed external-build contention has bounded retries; other failures require chan
 does not monopolize the queue. Refused writer locks leave the existing writer alone.
 An automatic snapshot's complete input identity remains the restart baseline even when provider coverage failed. Unchanged
 inputs retain that coverage without another extraction; relevant input, tool or recipe changes, or explicit Retry, permit
-another attempt. Reusing a snapshot never promotes failed coverage to completed analysis or zero findings.
+another attempt. Automatic native failures use a bounded disposable outcome keyed by the complete monitored identity,
+independently of the last good map. Unchanged failure reuse starts no compiler; invalid outcome data never means success.
+Required On requests and typed external-build contention do not acquire an automatic failure-cache entry.
+Reusing a snapshot never promotes failed coverage to completed analysis or zero findings.
 
 An unrecorded optional external header appearing outside watched inputs does not itself guarantee scheduling. Native
 preprocessing guards detect it on the next extraction; Retry, a build or another observed input change can initiate that

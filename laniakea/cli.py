@@ -38,10 +38,22 @@ def _extract(args, workspace):
     target = _target(workspace, args.project, args.engine, args.name, args.target)
     print(f"laniakea: building map for {target['project_file']}")
     print(f"laniakea: engine {target['engine_root']}")
-    options={'mode':'required' if args.health=='duplication' else args.health or 'auto','prefixes':args.health_scope}
+    previous=workspace.request(target['id']);prior=previous['recipe'] if previous else None
+    options=dict(prior['health']) if prior else {'mode':'auto','prefixes':[]}
+    if args.health is not None:options['mode']='required' if args.health=='duplication' else args.health
+    if args.health_scope:options['prefixes']=args.health_scope
     if args.health_minimum_tokens is not None:options['minimum_tokens']=args.health_minimum_tokens
     if args.health_heap_mib is not None:options['heap_mib']=args.health_heap_mib
-    run, manifest = pipeline.extract(workspace, target, symbols=args.symbols,health_options=options)
+    profile=profiles.get(target['profile'])
+    choices=None
+    if hasattr(profile,'check_choices') and (prior is None or 'checks' in prior or args.symbols):
+        choices=profile.check_choices(prior or {'symbols':False,'health':{'mode':'auto'}})
+        if prior is None:choices={key:'auto' for key in choices}
+        if args.symbols:choices['native']='on'
+        if args.health is not None:choices['duplication']={'duplication':'on','auto':'auto','off':'off'}[args.health]
+        elif prior and 'checks' in prior:options['mode']=prior['health']['mode']
+    symbols=args.symbols or bool(prior and prior['symbols'] and (not choices or choices['native']!='off'))
+    run, manifest = pipeline.extract(workspace, target, symbols=symbols,health_options=options,checks=choices)
     counts = manifest["coverage"]["counts"]
     summary = ", ".join(f"{key.split('.', 1)[1]} {value}" for key, value in counts.items() if key.startswith("nodes."))
     print(f"laniakea: {target['id']}: target {manifest['target']['name']}, run {run.name}")

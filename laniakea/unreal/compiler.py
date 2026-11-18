@@ -13,6 +13,7 @@ from time import perf_counter
 
 from .. import LaniakeaError
 from ..workspace import read_json, write_json
+from .. import progress
 from . import commands, graph, project_copy, symbols, tools, ubt
 from .external import SourceLocations, action_providers
 
@@ -53,6 +54,7 @@ def run_jobs(installed, database, copy, out, workers=4):
                         pending.cancel()
                     raise
                 completed.append(item)
+                progress.emit('native','Indexing C++ units',len(completed),len(database))
                 print(f"laniakea: compiler {len(completed)}/{len(database)} units, {item['errors']} error(s)", flush=True)
                 write_json(out / "progress.json", {"seconds": perf_counter() - start, "jobs": completed})
     except (OSError, RuntimeError) as error:

@@ -23,7 +23,8 @@ remain outside this component. Operator workflows live in the [user guide](../gu
 | part | responsibility |
 |---|---|
 | [app.js](../../viewer/app.js) | startup, target selection and HTML controls |
-| [live.js](../../viewer/live.js) | staged snapshot adoption and compact session controls |
+| [live.js](../../viewer/live.js) | staged snapshot adoption and Monitor transport |
+| [analysis.js](../../viewer/analysis.js) | check coverage, requested modes and acquisition controls |
 | [universe.js](../../viewer/universe.js) | containment, reference projection and world positions |
 | [sections.js](../../viewer/sections.js) | source organization without changing semantic ownership |
 | [traces.js](../../viewer/traces.js) | shared directional calculations |
@@ -434,5 +435,10 @@ Dragging, pending or failed position writes, in-flight Review decisions and edit
 revision change during staging discards that staged copy rather than applying layouts read before a newer move. Independent
 tabs heartbeat their current read contexts through the [monitoring contract](monitoring.md#publication-and-shutdown).
 
-The compact Live disclosure owns activation, pause, retry and coverage access. Acquisition failures remain visible in its
-closed summary. The toolbar scrolls rather than wrapping as counts change, preserving map geometry and narrow-screen space.
+Primary Checks, Review, View and Inspector actions remain visible without horizontal scrolling. View discloses layout,
+filters and arrangement; the separate summary row keeps changing counts from resizing the map. The non-modal Analysis
+panel displays acquisition coverage, current progress and requested-versus-applied settings. Only optional profile checks
+have mode selectors; the map foundation stays mandatory. Review evaluates existing evidence independently.
+Analysis opens once for an active target needing attention and stays closed after dismissal. Settings drafts defer live
+adoption; late control responses cannot overwrite another target's form. Close/Escape restores the primary action's focus.
+Unavailable, failed, disabled and incomplete checks remain distinct from completed checks and zero findings.

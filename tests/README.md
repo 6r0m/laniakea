@@ -18,7 +18,7 @@ python -m unittest discover -s tests -p test_shards.py
 python -m unittest discover -s tests
 node --test tests/icons.test.cjs tests/sections.test.cjs tests/viewer.test.cjs tests/universe.test.cjs tests/references.test.cjs tests/traces.test.cjs
 node --test tests/review.test.cjs
-node --test tests/live.test.cjs
+node --test tests/live.test.cjs tests/analysis.test.cjs
 ```
 
 Python 3.9+ needs no extra packages. Viewer unit tests need Node.js 18+; Node is not a runtime requirement for Laniakea.
@@ -34,6 +34,7 @@ It also stages newly discovered native external headers and rejects subsequent d
 manual completed-health run still reconciles configuration edits made before monitoring starts.
 It also verifies that restarting an automatic failed-CPD snapshot launches neither extraction nor Java until an input change
 or explicit Retry, while preserving the failed coverage.
+`test_analysis_controls.py` checks first-opening intent, legacy settings, native prerequisites and failed-attempt reuse.
 `test_monitor.py` checks coalescing, contention, supersession, activation, fairness and bounded automatic history.
 `test_monitor_inputs.py` checks profile-selected inputs, changed receipt/product sets and unpublished staging. The server
 suite refuses a valid read index from another graph before context admission. It also pins two indexes for one run through
@@ -74,6 +75,7 @@ Source-file fixtures must use the normal pipeline/read index/server and real exa
 | [review.browser.js](review.browser.js) | [Review fixture](test_review.py): direct explanation, exact evidence, triage, refused writes, late close and pins |
 | [inspector.browser.js](inspector.browser.js) | Review fixture: accessible tabs, separate findings/details, retained drafts/evidence/scroll, lazy references, late responses and narrow panels |
 | [health.browser.js](health.browser.js) | `test_health.browser_fixture`: source evidence paging, file badges, triage/reopen, late-close, narrow layout and pin preservation |
+| [analysis.browser.js](analysis.browser.js) | Mandatory foundation, selectable source checks, Apply/Stop, retained maps, responsive controls and keyboard focus |
 | [monitor.browser.js](monitor.browser.js) | Two registered sample targets: launch/deep-link precedence, inactive browsing and same-origin session controls |
 | [live.browser.js](live.browser.js) | Namespace fixture and a harness publication callback: adoption, injected layout/partial-render recovery, camera, references, drag/save/draft deferral, Review isolation, independent tabs and removed focus |
 

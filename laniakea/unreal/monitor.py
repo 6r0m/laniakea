@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from .. import LaniakeaError
-from . import builds,descriptors, source_inputs, tools, source_health
+from . import builds,descriptors, source_inputs, tools, source_health, checks
 from .source_tree import SourceTree
 
 
@@ -32,14 +32,7 @@ def engine_inputs(target,manifest):
 def recipe(workspace,target,manifest):
     committed=workspace.request(target['id'])
     if committed:return committed['recipe']
-    acquisition=manifest.get('coverage',{}).get('acquisition',{}).get('source-duplication')
-    native=any(source['id']=='compiler' for source in manifest['sources'])
-    if acquisition:
-        health={key:acquisition[key] for key in ('mode','prefixes','minimum_tokens','heap_mib')}
-    elif 'health' in manifest:
-        raise LaniakeaError('legacy health intent is ambiguous; build once with the intended health options before monitoring')
-    else:health={'mode':'off'}
-    return {'symbols':native,'health':health}
+    return checks.from_manifest(manifest)
 
 
 def inspect(workspace,target,manifest,request):
@@ -67,7 +60,7 @@ def inspect(workspace,target,manifest,request):
     if health[1]['status']=='pending':tool_state['health']=health[0]['installed']['identity']
     # Include the installation marker even on refusal, so repairing a broken installation permits a new attempt.
     for relative in ('tools/health/cpd/tools.json','tools/unreal/tools.json'):
-        if 'unreal' in relative and not request['symbols']:continue
+        if 'unreal' in relative and not request['symbols'] and request.get('checks',{}).get('native','off')=='off':continue
         if 'health' in relative and request['health']['mode']=='off':continue
         path=workspace.root/relative
         tool_state[relative]=digest_or_missing(path)
@@ -130,5 +123,6 @@ def watches(workspace,target,manifest,plugins,code,request):
         if key.startswith('external:'):
             path=Path(key[len('external:'):]);add(path.parent,names=(path.name,))
     if request['health']['mode']!='off':add(workspace.root/'tools/health/cpd',True,('.json','.jar','.class','.exe'))
-    if request['symbols']:add(workspace.root/'tools/unreal',True,('.json','.dll','.exe','.h'))
+    if request['symbols'] or request.get('checks',{}).get('native','off')!='off':
+        add(workspace.root/'tools/unreal',True,('.json','.dll','.exe','.h'))
     return list(found.values())

@@ -26,7 +26,7 @@ async page=>{
   check(await page.locator('#review').isHidden(),'Automatic review should not cover the map with its list');
   await page.waitForFunction(()=>state.review.data&&!state.review.requests.size);
   await page.waitForFunction(()=>!state.gestureActive&&!state.viewportFrame&&!state.zoomFrame);
-  check(await page.locator('#toggle-review').innerText().then(t=>/candidate|violation/.test(t)),'Toolbar hides the result');
+  check(await page.locator('#toggle-review').getAttribute('aria-label').then(t=>/candidate|violation/.test(t)),'Toolbar hides the result');
   const marked=await page.evaluate(()=>{
     const node=state.cy.nodes().find(n=>n.data('reviewMark')),edge=state.cy.edges('.review-candidate,.review-violation')[0];
     return{images:(node.style('background-image').match(/data:image\/svg\+xml/g)||[]).length,
@@ -73,7 +73,7 @@ async page=>{
   await page.route(loadingPattern,async route=>{arriveLoading();await loadingGate;await route.continue();});
   await page.reload();await loadingWaiting;
   await page.waitForFunction(()=>state.cy&&state.positionCache);
-  check(await page.locator('#toggle-review').innerText().then(t=>/checking/.test(t)),'Pending review is not explicit');
+  check(await page.locator('#toggle-review').getAttribute('aria-label').then(t=>/checking/.test(t)),'Pending review is not explicit');
   await clickStar('A');await page.locator('#toggle-review').click();
   await page.waitForFunction(()=>state.mapSize.width===$('graph').getBoundingClientRect().width);
   const loadingZoom=await page.evaluate(()=>worldZoom()),loadingBox=await page.locator('#graph').boundingBox();
@@ -194,24 +194,24 @@ async page=>{
   await page.unroute(pattern);
   await page.setViewportSize({width:640,height:900});
   check(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Review overflows narrow viewport');
-  await page.getByRole('button',{name:'Recheck',exact:true}).click();
+  await page.getByRole('button',{name:'Refresh findings',exact:true}).click();
   await page.waitForFunction(()=>state.review.data?.total===2&&!state.review.requests.size);
   await clickStar('A');await page.locator('#details .review-details').waitFor();
   await page.route('**'+initial.url,async route=>route.request().method()==='POST'&&route.request().postDataJSON()?.action==='recheck'?
     route.fulfill({status:400,body:'Synthetic invalid policy'}):route.continue());
   if(await page.locator('#review').isHidden())await page.locator('#toggle-review').click();
-  await page.getByRole('button',{name:'Recheck',exact:true}).click();
+  await page.getByRole('button',{name:'Refresh findings',exact:true}).click();
   await page.locator('#review-status').getByText(/Synthetic invalid policy/).waitFor();
-  check(await page.locator('#toggle-review').innerText().then(t=>/failed/.test(t)),'Failed review resembles a clean result');
+  check(await page.locator('#toggle-review').getAttribute('aria-label').then(t=>/failed/.test(t)),'Failed review resembles a clean result');
   check(await page.locator('#review-items [data-finding]').count()===0&&await page.locator('#details .review-details').count()===0,
     'Failed recheck retained apparently current findings');
   await page.unroute('**'+initial.url);
   await page.getByRole('button',{name:'Close review',exact:true}).click();
   check(await page.evaluate(()=>state.review.enabled),'Closing the list disabled review');
   await page.locator('#toggle-review').click();
-  await page.getByLabel('Review this snapshot',{exact:true}).uncheck();
+  await page.getByLabel('Evaluate recorded evidence',{exact:true}).uncheck();
   check(await page.evaluate(()=>!state.review.enabled&&!state.cy.nodes().some(n=>n.data('reviewMark'))),'Review off retained badges');
-  check(await page.locator('#toggle-review').innerText().then(t=>/off/.test(t)),'Disabled review state is hidden');
+  check(await page.locator('#toggle-review').getAttribute('aria-label').then(t=>/off/.test(t)),'Disabled review state is hidden');
   check(await page.evaluate(()=>JSON.stringify(state.positionCache.layouts))===pins,'Review modified pins');
   check(writes.length===0,'Review wrote positions');check(errors.length===0,'Browser errors: '+errors.join('; '));
   return {review:true,automatic:true,readableSymbols:true,independentList:true,warningWires:true,findingChoice:true,offscreenPartner:true,oppositeEndpoint:true,exactEvidence:true,triage:true,refusal:true,lateClose:true,pinsUnchanged:true,

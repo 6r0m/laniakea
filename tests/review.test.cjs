@@ -89,15 +89,15 @@ test('review starts enabled with a closed list, and closing that list retains an
     assert.equal(control.enabled,true);assert.equal(node('review').hidden,true);
     control.panel(true);assert.equal(node('review').hidden,false);
     control.panel(false);assert.equal(control.enabled,true);assert.equal(node('review').hidden,true);
-    control.loading=true;control.status();assert.match(node('toggle-review').textContent,/checking/i);
-    control.loading=false;control.error='Failed';control.status();assert.match(node('toggle-review').textContent,/failed/i);
+    control.loading=true;control.status();assert.match(node('toggle-review').title,/checking/i);
+    control.loading=false;control.error='Failed';control.status();assert.match(node('toggle-review').title,/failed/i);
     control.error=null;control.data={counts:{candidate:2,violation:0,acknowledged:0}};control.status();
-    assert.match(node('toggle-review').textContent,/2 candidates/);
+    assert.match(node('toggle-review').title,/2 candidates/);
     control.data={counts:{candidate:0,violation:0,acknowledged:0},checks:[
       {status:'failed'},{status:'unavailable'},{status:'available'},{status:'disabled'}]};
-    control.status();assert.match(node('toggle-review').textContent,/0 findings \/ 1 failed \/ 1 unavailable \/ 1 disabled/);
+    control.status();assert.match(node('toggle-review').title,/0 findings \/ 1 failed \/ 1 unavailable \/ 1 disabled/);
     control.data.checks.push({status:'incomplete'});control.status();
-    assert.match(node('toggle-review').textContent,/0 findings \/ 1 incomplete \/ 1 failed \/ 1 unavailable \/ 1 disabled/);
+    assert.match(node('toggle-review').title,/0 findings \/ 1 incomplete \/ 1 failed \/ 1 unavailable \/ 1 disabled/);
   } finally {global.$=previous;global.togglePanel=previousPanel;}
 });
 

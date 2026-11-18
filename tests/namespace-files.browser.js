@@ -84,6 +84,7 @@ async page=>{
       throw Error('Could not seed the unrelated fixture pin');
   });await settle();
   await page.locator('#source-layout-status').filter({hasText:/file markers overlap/}).waitFor();
+  await page.locator('#view-summary').click();
   check(await page.locator('#arrange-files').isVisible(),'Namespace repair action is unavailable');
   check(await page.locator('#arrange-files').getAttribute('data-overlap')==='true','Namespace overlap did not emphasize the repair');
   const protectedPositions=await page.evaluate(()=>Object.fromEntries(['root','module','scope','other'].map(id=>[id,{...state.universe.positions.get(id)}])));

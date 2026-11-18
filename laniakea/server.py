@@ -40,6 +40,8 @@ def target_index(workspace, *, scan=True):
         request=workspace.request_at(target['id'],run)
         settings=request['target'] if request is not None else target
         manifest=read_json(run/'manifest.json')
+        from . import profiles
+        describe=getattr(profiles.get(manifest['profile']),'analysis_metadata',None)
         index.append({
             "id": target["id"],
             "project": Path(target["project_file"]).stem,
@@ -50,6 +52,7 @@ def target_index(workspace, *, scan=True):
             "changed": changed[:20],
             "changed_count": len(changed),
             "freshness": "checked" if scan else "unknown",
+            **(describe(manifest,request) if describe else {}),
         })
     return index
 
@@ -187,6 +190,7 @@ class Handler(BaseHTTPRequestHandler):
             path = unquote(urlsplit(self.path).path)
             if path==service.STOP:return service.control(self,stop=True)
             if path=='/monitor/control':
+                from .monitor import ChecksConflict
                 monitor=getattr(self.server,'monitor',None)
                 if monitor is None:return self._send(409,b'monitoring is off; restart with --watch\n')
                 if self.headers.get('Content-Type','').split(';',1)[0]!='application/json':
@@ -196,11 +200,13 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(413,b'expected bounded monitor control\n')
                 try:
                     body=json.loads(self._body(int(length)))
-                    if not isinstance(body,dict) or set(body)!={'action','target'} or \
-                            body['action'] not in {'activate','pause','retry'} or \
+                    if not isinstance(body,dict) or body.get('action') not in {'activate','pause','retry','checks'} or \
+                            set(body)!=({'action','target','checks','run','revision'} if body['action']=='checks' else {'action','target'}) or \
                             not isinstance(body['target'],str) or not any(e['id']==body['target'] for e in self.server.index):
                         raise ValueError('invalid monitor control')
-                    getattr(monitor,body['action'])(body['target'])
+                    if body['action']=='checks':monitor.configure(body['target'],body['checks'],body['run'],body['revision'])
+                    else:getattr(monitor,body['action'])(body['target'])
+                except ChecksConflict as error:return self._send(409,str(error).encode())
                 except (ValueError,UnicodeError) as error:return self._send(400,str(error).encode())
                 return self._send(200,json.dumps(monitor.status()).encode(),'application/json')
             if path.startswith('/map/'):

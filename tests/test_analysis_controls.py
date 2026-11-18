@@ -1,0 +1,151 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+"""Requested checks, resolved acquisition and published evidence have independent meanings."""
+
+import contextlib
+import io
+from pathlib import Path
+import tempfile
+import unittest
+from unittest.mock import patch
+
+from laniakea import cli,pipeline,schema,LaniakeaError
+from laniakea.monitor_worker import execute
+from laniakea.unreal import target_fields
+from laniakea.workspace import Workspace,read_json,write_json
+from support import copy_sample,fake_engine,recorded_ubt
+
+
+class AnalysisControls(unittest.TestCase):
+    def setUp(self):
+        self.temporary=tempfile.TemporaryDirectory();self.addCleanup(self.temporary.cleanup)
+        base=Path(self.temporary.name);self.project=copy_sample(base);self.engine=fake_engine(base)
+        self.workspace=Workspace(base/'workspace')
+        self.target=self.workspace.propose('sample',target_fields(self.project/'SampleProject.uproject',self.engine))
+
+    def build(self,*options):
+        with recorded_ubt(self.project,self.engine),contextlib.redirect_stdout(io.StringIO()):
+            result=cli.main(['--workspace',str(self.workspace.root),'build',str(self.project/'SampleProject.uproject'),
+                             '--engine',str(self.engine),'--name','sample',*options])
+        self.assertEqual(result,0)
+        return self.workspace.request('sample')['recipe']
+
+    def test_first_build_records_recommended_intent_without_claiming_native_evidence(self):
+        recipe=self.build()
+        self.assertEqual(recipe.get('checks'),{'native':'auto','duplication':'auto'})
+        self.assertFalse(recipe['symbols'])
+
+    def test_historical_off_request_is_preserved_without_manufacturing_new_consent(self):
+        with recorded_ubt(self.project,self.engine):pipeline.extract(self.workspace,self.target,health_options={'mode':'off'})
+        recipe=self.workspace.request('sample')['recipe']
+        result=execute(self.workspace,'sample','discover')
+        self.assertEqual(result['recipe'],recipe)
+        self.assertEqual(self.build(),recipe)
+
+    def test_normal_build_keeps_legacy_required_native_intent(self):
+        self.build('--health','off')
+        recipe=self.workspace.request('sample')['recipe'];recipe.pop('checks');recipe['symbols']=True
+        arguments=cli.parser().parse_args(['build','sample'])
+        with patch.object(cli,'_target',return_value=self.target),patch.object(self.workspace,'request',return_value={'recipe':recipe}), \
+                patch.object(pipeline,'extract',side_effect=RuntimeError('capture options')) as extract, \
+                contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(RuntimeError,'capture options'):cli._extract(arguments,self.workspace)
+        self.assertTrue(extract.call_args.kwargs['symbols']);self.assertIsNone(extract.call_args.kwargs['checks'])
+
+    def test_build_preserves_saved_health_scope_threshold_and_budget_when_not_overridden(self):
+        self.build('--health','off','--health-scope','Source','--health-minimum-tokens','75','--health-heap-mib','2048')
+        previous=self.workspace.request('sample')['recipe']['health']
+        recipe=self.build()
+        self.assertEqual(recipe['health'],previous)
+
+    def test_progress_remains_live_during_indeterminate_phases_and_rejects_unbounded_or_false_counts(self):
+        from laniakea.monitor import Task
+        task=Task.__new__(Task);task.root=self.workspace.root;task.started=10;task.progress=None;task.progress_at=0
+        path=task.root/'progress.json'
+        write_json(path,{'phase':'duplication','label':'Checking duplicated code','seconds':1})
+        with patch('laniakea.monitor.time.monotonic',return_value=50):task._progress()
+        self.assertEqual(task.progress['seconds'],40)
+        for data in ({'phase':'native','label':'Compiling','seconds':1,'completed':3,'total':2},'x'*4097):
+            if isinstance(data,dict):write_json(path,data)
+            else:path.write_text(data)
+            task.progress_at=0
+            with patch('laniakea.monitor.time.monotonic',return_value=60):task._progress()
+            self.assertEqual(task.progress['label'],'Progress unavailable')
+
+    def test_new_native_auto_explains_missing_tools_without_starting_compiler_work(self):
+        self.build('--health','off')
+        with patch('laniakea.unreal.compiler.extract',side_effect=AssertionError('native extraction in discovery')):
+            result=execute(self.workspace,'sample','discover')
+        native=next((row for row in result.get('checks',[]) if row['id']=='native'),{})
+        self.assertEqual(native.get('status'),'unavailable')
+        self.assertEqual(native.get('code'),'tools_missing')
+        self.assertFalse(result['recipe']['symbols'])
+
+    def test_coverage_rejects_unproved_completion_and_explains_resource_refusal(self):
+        from laniakea.unreal import checks
+        self.build('--health','off');manifest=read_json(self.workspace.latest('sample')/'manifest.json')
+        manifest['coverage']['acquisition']['native'].update(status='completed',code='complete')
+        with self.assertRaisesRegex(LaniakeaError,'native acquisition'):schema.validate(manifest,'manifest')
+        manifest['coverage']['acquisition'].pop('native')
+        outcome=manifest['coverage']['acquisition']['source-duplication']
+        outcome.update(status='unavailable',code='resource_headroom')
+        recipe=checks.configure(self.workspace.request('sample')['recipe'],{'native':'off','duplication':'auto'})
+        row=checks.rows(manifest,recipe)[2]
+        self.assertEqual(row['status'],'unavailable');self.assertIn('insufficient memory',row['detail'])
+        outcome.pop('prefixes')
+        with self.assertRaisesRegex(LaniakeaError,'collection scope'):schema.validate(manifest,'manifest')
+
+    def test_native_auto_requires_a_usable_successful_receipt_without_building(self):
+        self.build('--health','off')
+        with patch('laniakea.unreal.tools.load',return_value={'manifest':{}}), \
+                patch('laniakea.unreal.ubt.query_targets',side_effect=AssertionError('build/query in eligibility')):
+            result=execute(self.workspace,'sample','discover')
+            self.assertFalse(result['recipe']['symbols']);self.assertEqual(result['checks'][1]['code'],'build_required')
+            from test_build_context import BuildContext
+            BuildContext.receipt(self,'SampleProjectEditor','Development')
+            result=execute(self.workspace,'sample','discover')
+        self.assertTrue(result['recipe']['symbols']);self.assertEqual(result['checks'][1]['code'],'ready')
+
+    def test_explicit_native_on_stays_required_and_failed_probe_does_not_apply_choices(self):
+        self.build('--health','off');previous=self.workspace.latest('sample')
+        from laniakea.unreal import checks
+        proposed=checks.configure(self.workspace.request('sample')['recipe'],{'native':'on','duplication':'off'})
+        with patch('laniakea.unreal.tools.load',return_value=None):
+            result=execute(self.workspace,'sample','discover',proposed)
+            self.assertTrue(result['recipe']['symbols'])
+            with self.assertRaisesRegex(LaniakeaError,'native tools missing'):
+                execute(self.workspace,'sample','probe',result['recipe'])
+        self.assertEqual(self.workspace.latest('sample'),previous)
+        self.assertEqual(self.workspace.request('sample')['recipe']['checks']['native'],'auto')
+
+    def test_unavailable_auto_cannot_downgrade_previously_recorded_native_map(self):
+        self.build('--health','off');run=self.workspace.latest('sample')
+        from laniakea.unreal import checks
+        manifest=read_json(run/'manifest.json');manifest['sources'].append({'id':'compiler'})
+        with patch('laniakea.unreal.tools.load',return_value=None):
+            recipe,_=checks.resolve(self.workspace,self.target,manifest,self.workspace.request('sample')['recipe'])
+        self.assertTrue(recipe['symbols'])
+
+    def test_auto_failure_is_reused_after_restart_but_source_edits_and_explicit_retry_can_run(self):
+        from test_build_context import BuildContext
+        from laniakea import AnalysisBusy
+        self.build('--health','off');BuildContext.receipt(self,'SampleProjectEditor','Development')
+        published=self.workspace.latest('sample')
+        with patch('laniakea.unreal.tools.load',return_value={'manifest':{}}):
+            recipe=execute(self.workspace,'sample','discover')['recipe']
+            before=execute(self.workspace,'sample','probe',recipe)
+            with self.workspace.extraction_lock('sample'),patch.object(pipeline,'stage',side_effect=LaniakeaError('native failed')):
+                with self.assertRaisesRegex(LaniakeaError,'native failed'):execute(self.workspace,'sample','stage',recipe)
+            self.assertEqual(self.workspace.latest('sample'),published)
+            restarted=execute(Workspace(self.workspace.root),'sample','probe',recipe)
+            self.assertEqual(restarted['previous_failure']['error'],'native failed')
+            source=self.project/'Source/SampleProject/SampleProject.cpp'
+            source.write_bytes(source.read_bytes()+b'\n// changed input\n')
+            changed=execute(self.workspace,'sample','probe',recipe)
+            self.assertNotEqual(changed['identity'],before['identity']);self.assertIsNone(changed['previous_failure'])
+            with self.workspace.extraction_lock('sample'),patch.object(pipeline,'stage',side_effect=AnalysisBusy('external build')):
+                with self.assertRaises(AnalysisBusy):execute(self.workspace,'sample','stage',recipe)
+            self.assertIsNone(execute(self.workspace,'sample','probe',recipe)['previous_failure'])
+
+
+
+if __name__=='__main__':unittest.main()

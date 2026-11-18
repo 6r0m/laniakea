@@ -96,19 +96,39 @@ a:hover { text-decoration-thickness: 2px; }
 #banner summary { font-weight: 600; }
 #banner p { margin: 8px 0; }
 #banner ul { margin: 8px 0; padding-left: 20px; }
-.scope-bar { display:flex; flex-wrap:nowrap; overflow-x:auto; flex-shrink:0; align-items:center; gap:8px;
+.scope-bar { display:flex; flex-wrap:nowrap; flex-shrink:0; align-items:center; gap:8px;
   padding:8px 20px; border-bottom:1px solid var(--line); }
-#scope-summary { flex:1; min-width:180px; color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums;
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:360px; }
+#scope-summary { flex:1; min-width:0; color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 #position-status { color: var(--muted); font-size: 12px; }
 .scope-bar > * { flex-shrink:0; }
-#live-controls { flex-shrink:0; font-size:12px; }
-#live-controls summary { white-space:nowrap; padding:5px 0; }
-#live-summary[data-attention='true'] { color:var(--review-candidate); }
-.live-options { position:fixed; z-index:40; top:var(--live-top,96px); right:12px; width:340px; max-width:calc(100vw - 24px);
-  max-height:calc(100vh - var(--live-top,96px) - 12px); overflow:auto;
+#toggle-details { margin-left:auto; }
+#toggle-analysis[data-attention='true'] { color:var(--review-candidate); }
+.map-context { display:flex; align-items:center; gap:16px; padding:0 20px; height:26px; flex:none;
+  border-bottom:1px solid var(--line); font-size:12px; }
+.map-context > span:not(:first-child) { flex-shrink:0; }
+#view-summary { padding:5px 9px; min-height:32px; border:1px solid var(--line); border-radius:5px; }
+.view-options { position:fixed; z-index:40; top:var(--view-top,96px); left:var(--view-left,12px); width:280px; max-width:calc(100vw - 24px);
+  max-height:calc(100vh - var(--view-top,96px) - 12px); overflow:auto;
   padding:12px; background:var(--panel); border:1px solid var(--line); border-radius:5px; box-shadow:0 6px 24px #0003; }
-.live-options p { margin:0 0 10px; overflow-wrap:anywhere; }
+.view-options > * { display:block; width:100%; margin-bottom:8px; text-align:left; }
+.view-options select { width:100%; }
+#analysis { flex-basis:340px; width:340px; border-right-width:1px; }
+.analysis-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.analysis-check { padding:12px 0; border-top:1px solid var(--line); }
+.analysis-check h3 { margin:0; }
+.analysis-check-heading { display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
+.analysis-check-heading label { font-size:12px; }
+.analysis-check p { font-size:12px; margin:6px 0; }
+.analysis-check code { display:block; white-space:pre-wrap; overflow-wrap:anywhere; margin:8px 0; }
+.analysis-check [data-status='failed'],#analysis-error { color:var(--review-violation); }
+.analysis-check [data-status='unavailable'],.analysis-check [data-status='incomplete'] { color:var(--review-candidate); }
+@media(max-width:600px) {
+  .scope-bar { padding:8px 12px; gap:6px; }
+  .scope-bar button,#view-summary { font-size:12px; padding:5px 7px; }
+  .map-context { padding:0 12px; }
+  #position-status { display:none; }
+}
 main { flex: 1; min-height: 280px; display: flex; position: relative; }
 #map { position: relative; flex: 1; min-width: 0; min-height: 280px; overflow: hidden; }
 #graph { position: absolute; inset: var(--legend-height) 0 var(--trace-height); }
@@ -235,6 +255,7 @@ footer ul { margin: 8px 0; padding-left: 18px; }
   aside { position: absolute; top: 0; bottom: 0; z-index: 3; max-width: calc(100% - 40px); box-shadow: 0 6px 24px #0003; }
   #filters { left: 0; }
   #review { left:0; }
+  #analysis { left:0; }
   #details { right: 0; }
 }
 @media (max-width: 600px) {
@@ -243,7 +264,7 @@ footer ul { margin: 8px 0; padding-left: 18px; }
   #crumbs { flex-basis: calc(100% - 60px); order: 3; }
   #find { flex: 1; width: 150px; }
   header > label:last-child { display: none; }
-  .scope-bar { padding: 4px 12px; gap: 4px 6px; flex-wrap:nowrap; overflow-x:auto; flex-shrink:0; }
+  .scope-bar { padding: 4px 12px; gap: 4px 6px; flex-wrap:nowrap; flex-shrink:0; }
   .scope-bar > button { flex-shrink:0; }
   #scope-summary { display:none; }
   .scope-bar button { font-size: 12px; padding: 4px 7px; }

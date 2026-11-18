@@ -84,7 +84,7 @@ async page => {
   await page.waitForFunction(()=>state.selection?.id==='get');
   check(await page.locator('#inspector-page-details > code').innerText()==='int Get()','Signature is not primary inspection content');
   check(/public.*static/.test(await page.locator('#details').innerText()),'Access and static method context missing');
-  await page.locator('#clear').click();
+  await page.locator('#view-summary').click();await page.locator('#clear').click();
   await page.waitForFunction(()=>!state.gestureActive&&!state.viewportFrame&&state.mapSize.width===$('graph').getBoundingClientRect().width);
   await frames();
   const point=await page.evaluate(()=>{const p=state.cy.getElementById('get').renderedPosition(),b=$('graph').getBoundingClientRect();
@@ -103,7 +103,7 @@ async page => {
   check(/struct/.test(await page.locator('#details').innerText())&&
     /2 observed fields \/ 0 observed callables/.test(await page.locator('#details').innerText())&&
     /not individual stars/.test(await page.locator('#details').innerText()),'Data-only type looks empty or has the wrong kind');
-  await page.locator('#clear').click();
+  await page.locator('#view-summary').click();await page.locator('#clear').click();
   await page.evaluate(()=>{state.universe.expanded=new Set(['root']);flyToNode('module',false);
     state.universe.expanded.add('module');refreshMap();frameNode('module');});
   let wheelSteps=0;

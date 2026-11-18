@@ -74,7 +74,8 @@ class ArchitectureReview {
   }
   panel(open=$('review').hidden) {
     $('review').hidden=!open;$('toggle-review').setAttribute('aria-expanded',String(open));
-    if(open){togglePanel('filters',false);if(typeof innerWidth!=='undefined'&&innerWidth<=1000)togglePanel('details',false);}
+    if(open){togglePanel('filters',false);if(typeof state!=='undefined')state.analysis?.panel(false);
+      if(typeof innerWidth!=='undefined'&&innerWidth<=1000)togglePanel('details',false);}
     else if(typeof document!=='undefined'&&$('review').contains(document.activeElement))$('toggle-review').focus();
   }
   status() {
@@ -86,8 +87,11 @@ class ArchitectureReview {
       const count=(this.data?.checks||[]).filter(check=>check.status===status).length;
       return count?`${count} ${status}`:null;
     }).filter(Boolean);
-    button.textContent='Review: '+[label,...coverage].join(' / ');button.disabled=!this.target?.review_url;
-    button.title=this.error||'All modules in the recorded snapshot. Open for review counts, coverage and controls.';
+    button.textContent='Review: '+(!this.target?.review_url?'-':!this.enabled?'off':this.error?'failed':
+      counts?counts.violation+counts.candidate:'...');
+    button.disabled=!this.target?.review_url;
+    button.title=this.error||[label,...coverage].join(' / ')+'. Findings use recorded evidence; source checks are in Analysis.';
+    button.setAttribute('aria-label','Review: '+[label,...coverage].join(' / '));
     button.setAttribute('data-severity',counts?.violation?'violation':counts?.candidate?'candidate':'');
     $('review-enabled').checked=this.enabled;$('review-enabled').disabled=button.disabled;
     $('review-legend').hidden=!this.enabled||!this.data;

@@ -99,6 +99,8 @@ async (page,{publish})=>{
   check(await page.evaluate(()=>$('details').hidden),'Adoption reopened closed Inspector');
   await page.evaluate(()=>{const input=el('input',null,{name:'review-reason',value:''});input.value='draft';$('details').append(input);});
   run=await publish();await poll();check(await page.evaluate(run=>state.target.run!==run,run),'Adoption discarded a decision draft');
+  check(await page.locator('#toggle-analysis').getAttribute('title').then(text=>/decision draft/.test(text)),
+    'Deferred update lost its visible explanation in Checks');
   await page.evaluate(()=>$('details').querySelector('[name="review-reason"]').remove());
   await page.waitForFunction(()=>!liveBlockReason());await poll();
   check(await page.evaluate(run=>state.target.run===run,run),'Adoption did not resume after the draft cleared');
@@ -109,11 +111,11 @@ async (page,{publish})=>{
   await page.setViewportSize({width:390,height:844});
   check(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth&&$('graph').getBoundingClientRect().height>=300),
     'Live controls leave no useful narrow map or overflow');
-  await page.locator('#live-summary').click();
-  check(await page.evaluate(()=>document.querySelector('.live-options').getBoundingClientRect().top>=
-    $('live-summary').getBoundingClientRect().bottom),'Live controls cover their own close target');
-  await page.locator('#live-toggle').focus();await page.keyboard.press('Escape');
-  check(await page.evaluate(()=>!$('live-controls').open&&document.activeElement===$('live-summary')),'Live controls do not close by keyboard');
+  await page.locator('#view-summary').click();
+  check(await page.evaluate(()=>document.querySelector('.view-options').getBoundingClientRect().top>=
+    $('view-summary').getBoundingClientRect().bottom),'View options cover their own close target');
+  await page.locator('#view-summary').focus();await page.keyboard.press('Escape');
+  check(await page.evaluate(()=>!$('view-controls').open&&document.activeElement===$('view-summary')),'View controls do not close by keyboard');
   return {adoption:true,camera:true,deepScope:true,filters:true,immutableURLs:true,dragAndSaveDeferral:true,
     drafts:true,closedInspector:true,removedFocus:true,narrowMap:true,reviewIsolation:true,multipleTabs:true,renderRollback:true};
 }

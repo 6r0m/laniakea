@@ -7,12 +7,22 @@ Every Unreal-specific fact lives under this package; core and viewer only see th
 from pathlib import Path
 from time import perf_counter
 
-from .. import LaniakeaError
+from .. import LaniakeaError,progress
 from . import builds, descriptors, engine, graph, ubt, source_inputs
 from . import review as review_adapter
+from . import checks as check_adapter
 
 NAME = "unreal"
 CONFIGURATION = "Development"
+
+check_choices=check_adapter.modes
+configure_checks=check_adapter.configure
+check_rows=check_adapter.rows
+saved_recipe=check_adapter.from_manifest
+analysis_metadata=check_adapter.metadata
+previous_check_failure=check_adapter.previous_failure
+remember_check_failure=check_adapter.remember_failure
+clear_check_failure=check_adapter.clear_failure
 
 
 def project_file(reference):
@@ -53,13 +63,13 @@ def validate_monitor_inputs(target,manifest):
     monitor.validate(target,manifest)
 
 
-def monitor_roots(workspace,target,manifest):
+def monitor_roots(workspace,target,manifest,recipe=None):
     from . import monitor,source_health
-    recipe=monitor.recipe(workspace,target,manifest)
+    recipe,checks=check_adapter.resolve(workspace,target,manifest,recipe or monitor.recipe(workspace,target,manifest))
     health=source_health.prepare({**recipe['health'],'tools':workspace.root/'tools/health/cpd'})
     roots=monitor.watches(workspace,target,manifest,descriptors.project_plugins(Path(target['project_file']).parent),
                           recipe['symbols'] or health[1]['status']=='pending',recipe)
-    return {'recipe':recipe,'watches':roots}
+    return {'recipe':recipe,'watches':roots,'checks':checks}
 
 
 def inputs(target, manifest=None, *, symbols=False, health_options=None):
@@ -83,7 +93,7 @@ def _choose(targets, wanted):
     return next((t for t in editors if t["default"]), editors[0])
 
 
-def extract(target, run_dir, previous_manifest=None, tools_dir=None, health_options=None):
+def extract(target, run_dir, previous_manifest=None, tools_dir=None, health_options=None, checks=None):
     """Export the target's module graph into run_dir/ubt and build schema v1 from it."""
     from . import source_health
     prepared=source_health.prepare(health_options)
@@ -104,6 +114,7 @@ def extract(target, run_dir, previous_manifest=None, tools_dir=None, health_opti
     platform = engine.PLATFORM
     configuration = chosen["configuration"]
     start = perf_counter()
+    progress.emit('foundation','Reading module architecture')
     exported = ubt.export(root, project, chosen["name"], platform, configuration, out)
     timings["export"] = perf_counter() - start
     start = perf_counter()
@@ -112,6 +123,7 @@ def extract(target, run_dir, previous_manifest=None, tools_dir=None, health_opti
     compiler_result = {"enabled": False, "reason": "levels: namespace, class, function (not requested; pass --symbols)"}
     if tools_dir is not None:
         from . import compiler
+        progress.emit('native','Preparing isolated C++ analysis')
         built, compiler_result = compiler.extract(target, run_dir, built, exported, chosen, tools_dir)
         timings.update({"symbols_" + name: seconds for name, seconds in compiler_result.get("timings", {}).items()})
         counts = graph._counts(built)
@@ -163,5 +175,7 @@ def extract(target, run_dir, previous_manifest=None, tools_dir=None, health_opti
         unknown = compiler_result["unknown"]
         if any(unknown.values()):
             coverage["not_analysed"].append(f"unresolved compiler reference ownership: source={unknown['source']}, target={unknown['target']}")
+    progress.emit('duplication','Checking duplicated code')
     source_health.collect(target,run_dir,built,exported,manifest,prepared,previous_manifest)
+    check_adapter.snapshot_outcome(manifest,checks,compiler_result['enabled'])
     return built, manifest

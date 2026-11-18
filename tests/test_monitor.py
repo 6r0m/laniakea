@@ -86,6 +86,51 @@ class Scheduler(unittest.TestCase):
         self.assertEqual(self.workspace.latest('sample'),self.run)
         self.assertEqual(self.monitor.status()['targets'][0]['state'],'paused')
 
+    def test_pause_reports_stopping_until_the_owned_job_has_closed(self):
+        self.monitor.activate('sample');self.settle()
+        rule=self.project/'Source/SampleProject/SampleProject.Build.cs';rule.write_bytes(rule.read_bytes()+b'\n// changed\n')
+        self.dirty();self.monitor.step();self.monitor.step();self.monitor.step();self.hold=True
+        self.assertIsNotNone(self.monitor.current)
+        self.monitor.pause('sample')
+        self.assertEqual(self.monitor.status()['targets'][0]['state'],'stopping')
+        self.monitor.step()
+        self.assertEqual(self.monitor.status()['targets'][0]['state'],'paused')
+        self.assertEqual(self.workspace.latest('sample'),self.run)
+
+    def test_progress_belongs_only_to_the_current_generation(self):
+        self.monitor.activate('sample');self.settle();self.dirty();self.hold=True;self.monitor.step()
+        self.monitor.current['task'].progress={'phase':'native','label':'Indexing C++','completed':2,'total':5}
+        self.assertEqual(self.monitor.status()['targets'][0].get('progress',{}).get('completed'),2)
+        self.dirty()
+        self.assertIsNone(self.monitor.status()['targets'][0].get('progress'))
+
+    def test_requested_checks_apply_only_with_publication_and_survive_monitor_restart(self):
+        self.monitor.activate('sample');self.settle()
+        previous=self.workspace.request('sample')
+        self.monitor.configure('sample',{'native':'auto','duplication':'auto'},self.run.name,0)
+        self.assertEqual(self.workspace.request('sample'),previous)
+        self.settle()
+        recipe=self.workspace.request('sample')['recipe']
+        self.assertEqual(recipe['checks'],{'native':'auto','duplication':'auto'})
+        self.assertFalse(recipe['symbols'])
+        self.assertIsNone(self.monitor.status()['targets'][0]['requested'])
+        count=self.started.count('stage');self.monitor.pause('sample');self.monitor.activate('sample');self.settle()
+        self.assertEqual(self.started.count('stage'),count)
+
+    def test_explicit_retry_overrides_a_known_native_failure_without_reclassifying_it(self):
+        self.monitor.activate('sample');self.settle()
+        original=execute
+        def cached(*args,**kwargs):
+            result=original(*args,**kwargs)
+            if args[2]=='probe':result['previous_failure']={'error':'known failed attempt'}
+            return result
+        from unittest.mock import patch
+        with patch('test_monitor.execute',side_effect=cached):
+            self.dirty();self.settle()
+            self.assertEqual(self.monitor.status()['targets'][0]['state'],'retry required')
+            count=self.started.count('stage');self.monitor.retry('sample');self.settle()
+        self.assertEqual(self.started.count('stage'),count+1)
+
     def test_contention_retries_are_bounded_and_polling_does_not_restart_failures(self):
         self.monitor.activate('sample');self.settle()
         state=self.monitor.states['sample'];state.update(phase='stage',due=self.now,identity='same')

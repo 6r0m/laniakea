@@ -49,7 +49,7 @@ change-history analysis and metric thresholds are outside this evaluator.
 ## Policy
 
 The viewer shows the target's local policy path under `workspace/targets/<id>/review/`. Edit that JSON and use
-Recheck; no extraction or server restart is needed for policy changes. The
+Refresh findings; no extraction or server restart is needed for policy changes. The
 [synthetic policy](../../fixtures/review.rules.json) is an example to adapt, not an automatically selected design.
 [The policy validator](../../laniakea/review_policy.py) owns accepted fields, bounds and matching syntax.
 
@@ -102,7 +102,7 @@ decision unchanged and provides an error. Corrupt triage fails visibly; unavaila
 | `review/rules.json` | Local policy input; explicit recheck reloads it |
 | `review/triage.json` | Durable local decisions, independent of caches, runs and layouts |
 
-Opening a supported target starts analysis in the background without blocking the map. An uncached report streams
+Opening a supported target starts Review evaluation in the background without blocking the map. An uncached report streams
 exact references once. Only module adjacency,
 summaries, compact reference-group associations and bounded witnesses remain; there is no second symbol/reference graph.
 Associations cover all groups supporting a finding, independently of its witness sample and list pagination. They bind

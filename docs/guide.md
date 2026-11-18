@@ -18,39 +18,39 @@ Trace dependencies to source, explore public contracts and inspect the evidence 
 Use the [Make shortcuts](../Makefile) (`make help`) to build a map, then open the saved result. For Python commands,
 options and defaults, run `python laniakea.py --help` or `python laniakea.py <command> --help`.
 
-`up` opens saved maps immediately, then monitors the launch-selected target using its committed analysis recipe. Saved
-source changes publish and appear automatically without fitting the camera or losing pins, filters or surviving focus.
-It stays in the foreground; stop with Ctrl+C or `make down` from another terminal. An optional registered target ID selects
-what opens; an explicit browser deep link wins for browsing without activating that historical target.
+`up` opens the saved map immediately and monitors the selected target. For a new project, the initial build records
+recommended checks and can already collect duplication evidence; `up` starts the remaining available C++ checks in the
+background. Tools must be installed locally, and native indexing needs a usable successful-build receipt. Laniakea does
+not automatically build your project or install tools. A saved run does not prove current sources compiled.
 
-Open the compact **Live** status for the monitored targets, provider coverage, **Pause this target**, **Monitor this target**
-and **Retry analysis**. Other registered targets stay inactive until explicitly activated. New snapshots wait while dragging,
-saving positions or editing a Review decision. Finish or clear the draft to continue; failed saves retain their existing
-recovery controls. Failed source analysis remains visible and does not imply zero findings.
+Open **Checks** to see what ran, what is running and what needs setup. **Skip for now** or **Stop checks** pauses owned
+background work and retains the previous map. These controls do not interrupt the earlier foreground build command.
+Choose **Run checks** to resume. **Retry** retries a failed attempt; unchanged failures otherwise remain recorded.
+Auto uses available prerequisites; On makes a check required; Off explicitly skips it. Choices apply only when a validated
+map publishes. Failed or cancelled attempts keep the previous saved settings. Existing projects retain their recorded
+choices; **Run recommended checks** explicitly enables the automatic modes.
 
-`python laniakea.py up --no-watch` opens saved maps without source scanning. Native depth remains independently selected
-by the build recipe. Manual `make build` also publishes updates for an active session; no viewer restart is needed.
+**Review** inspects findings in recorded evidence. **View** contains layout, filters, configuration marks, fitting and
+arrangement. **Inspector** opens the current selection. Zero findings with missing checks does not certify the architecture.
 
-The displayed target/configuration describes the selected [build context](architecture/unreal-profile.md#build-context).
-Check it before interpreting the map: a saved run does not prove that current sources compiled.
+Saved changes appear without fitting the camera or losing pins, filters or surviving focus. Updates wait during drags,
+position saves, Check edits and Review drafts. Other registered targets stay inactive until explicitly activated in Checks;
+browsing a deep link alone does not activate them. Stop the foreground viewer with Ctrl+C or `make down`.
+`python laniakea.py up --no-watch` opens saved maps without scanning sources or starting checks.
 
-For namespaces, classes, functions and static references, supply local LLVM 21.1.8 tools and request native analysis:
+For C++ depth, register LLVM 21.1.8 tools locally:
 
 ```text
 python laniakea.py setup-symbols --libclang <llvm>/bin/libclang.dll --resources <llvm>/lib/clang/21 --compiler <llvm>/bin/clang-cl.exe
-make build ARGS="--symbols"
-make up
 ```
 
-Setup copies tools into `workspace/` without downloading. The optional `--compiler` enables preprocessing-validated
-reuse. Pass `--symbols` for every native extraction. Native analysis uses an
-isolated copy, reports timings/diagnostics and can be expensive. Failed tool/build-context checks or compiler errors
-leave the previous map available. Omit `--symbols` for module exploration. See
+The optional compiler enables preprocessing-validated reuse. Use Checks for background acquisition, or `--symbols` on a
+build for immediate required native extraction. Native work uses an isolated copy and can be expensive. See
 [native analysis](architecture/unreal-profile.md#native-symbol-analysis) for isolation and coverage.
 
 ## Read and navigate the map
 
-Choose **galaxy** for the Engine-centered overview. Rings are expandable groups, filled markers are leaves, boxes
+In **View**, choose **galaxy** for the Engine-centered overview. Rings are expandable groups, filled markers are leaves, boxes
 are source organization and diamonds are external boundaries. The **Type icons** key distinguishes modules, plugins,
 namespaces, classes and callables. Other layout modes keep separate saved arrangements.
 
@@ -137,7 +137,7 @@ Apply them to the project's intended boundaries and actual target conditions.
 ## Use architecture review
 
 1. Review runs automatically. Its button shows checking, failure or finding counts across the recorded project.
-   Open it for the list and coverage; closing the list keeps markers visible. Uncheck **Review this snapshot** to disable it.
+   Open it for the list and coverage; closing the list keeps markers visible. Uncheck **Evaluate recorded evidence** to disable it.
 2. Follow amber triangle badges / `?` wires for candidates, or red stop signs / `!` wires for policy violations.
    Hover explains the concern, including when the other endpoint is
    off-screen. Click the wire, a marked star or a finding in the Review list. The **Review** tab shows the rule, original
@@ -145,7 +145,7 @@ Apply them to the project's intended boundaries and actual target conditions.
    Open **Exact evidence** for source links, or switch to **Details** for ordinary references and endpoint navigation.
 3. Use **Accept risk** or **Not relevant**, optionally recording a reason. The finding leaves active markers/list.
    **Show acknowledged** retains inspection and **Reopen**; acknowledgement never means fixed.
-4. For project constraints, open **Policy & availability**, edit the shown local JSON path and use **Recheck**.
+4. For project constraints, open **Policy & availability**, edit the shown local JSON path and use **Refresh findings**.
    Adapt the [synthetic policy](../fixtures/review.rules.json); inspect its resolved modules before trusting results.
 
 Defaults produce yellow review candidates. Red violations need applicable configured constraints; the tool does not
@@ -162,7 +162,7 @@ make build
 make up
 ```
 
-Add `--symbols` to retain native classes/functions in a newly extracted map. Without it, the new map is module-only.
+Recorded check choices are retained on subsequent builds. Use `--symbols` for immediate required native acquisition.
 Use the build command's health-scope options to bound the scan and its minimum-token option to choose the collection floor.
 An omitted floor uses the provider default. `--health-heap-mib` overrides the Java heap ceiling; insufficient host headroom
 refuses a fresh JVM without reducing coverage. A valid unchanged result can still be reused without launching Java.
@@ -176,8 +176,8 @@ Yellow **Duplication** candidates mark recorded files or modules. Click a marked
 inspect ownership before refactoring. A stale snapshot warns that current coordinates may have moved. No duplication
 wires are invented. Accept/reopen decisions use the existing Review workflow.
 
-Opening a map never runs PMD. Missing tools remain visible as unavailable; builds never download or install them.
-Use `--health off` for module exploration without Java; LLVM stays optional unless native symbols are requested.
+Checks can run PMD in the monitored background. Missing tools remain visible as unavailable; no runtime tools are downloaded.
+Use Off in Checks or `--health off` during a build to skip duplication.
 See [collection boundaries and costs](architecture/unreal-profile.md#source-duplication).
 
 ## Account for missing information

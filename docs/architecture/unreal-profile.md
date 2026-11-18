@@ -123,7 +123,8 @@ Native AST validation is needed before such references can be labelled as static
 `tools.py` installs supplied LLVM 21.1.8 `libclang.dll` and resource headers into the workspace. Setup is explicit and offline;
 extraction never downloads a tool. The installation records content hashes and checks them before use. Python uses LLVM's
 stable C indexing API through `ctypes`, without a Python package dependency or a C++ parser in Laniakea.
-`--symbols` opts one extraction into this path. Ordinary extraction does not load or validate an installed compiler.
+`--symbols` makes one extraction require this path. The [background check policy](monitoring.md#requested-checks) can
+resolve native Auto for a new project; module-only extraction does not load or validate an installed compiler.
 An explicit native request without tools or usable build context fails visibly and retains the published run.
 
 With tools and usable build context, `compiler.py` synchronizes a marked, incremental target copy. It refuses an unmarked

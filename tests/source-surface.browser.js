@@ -103,9 +103,11 @@ async page=>{
   const other=await page.evaluate(()=>JSON.stringify(state.universe.positions.get('peer')));
   await page.evaluate(()=>state.universe.translate('class',1000,300));
   const crowded=await page.evaluate(()=>JSON.stringify([...state.universe.positions]));
+  await page.locator('#view-summary').click();
   page.once('dialog',dialog=>dialog.dismiss());await page.locator('#arrange-files').click();
   check(await page.evaluate(before=>JSON.stringify([...state.universe.positions])===before,crowded),'Cancel changed the arrangement');
   check(!writes.length,'Cancel saved positions');
+  await page.locator('#view-summary').click();
   page.once('dialog',dialog=>dialog.accept());await page.locator('#arrange-files').focus();await page.keyboard.press('Enter');
   await page.waitForFunction(()=>!state.positionCache.pending);await settle();
   check(await page.evaluate(other=>JSON.stringify(state.universe.positions.get('peer'))===other,other),'Arrange moved a neighbouring module');

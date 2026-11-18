@@ -48,7 +48,8 @@ The [main view](diagrams/main.md) owns the component relationships. Adapter inte
 [implemented profile](../../laniakea/unreal/__init__.py).
 
 Through the profile contract, extraction remains language-specific while validation and publication stay generic.
-Native indexing remains explicit; ordinary builds use automatic source-health collection. Required collection failures
+New-project checks use the [recommended background modes](monitoring.md#requested-checks); historical choices remain
+authoritative. Ordinary builds use automatic source-health collection. Required collection failures
 retain the publication; automatic source-health requests may publish a valid graph with failed coverage under the
 [profile acquisition contract](unreal-profile.md#source-duplication).
 

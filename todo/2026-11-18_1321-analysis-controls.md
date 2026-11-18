@@ -1,6 +1,6 @@
 # Automatic checks and clear exploration controls
 
-**Status:** REVIEW REQUIRED  
+**Status:** PARTIAL - implementation verified; final real-project runtime gate pending
 **Scope:** first-opening analysis, existing monitor controls, progress and viewer information hierarchy  
 **Stable owners:** [monitoring](../docs/architecture/monitoring.md), [viewer](../docs/architecture/viewer.md),
 [Review](../docs/architecture/review.md), [guide](../docs/guide.md)
@@ -46,10 +46,20 @@ skip or stop them without learning extraction flags. Analysis, findings and map 
   - Reason: simple users should understand the application.
   - Date/source: operator request, 2026-11-18.
 
+- **D4:** Implement this plan and apply valid reviewer corrections.
+  - Effect: implementation authorization includes the F1-F3 clarifications below and their acceptance tests.
+  - Reason: not stated.
+  - Date/source: operator implementation request, 2026-11-18.
+
+- **D5:** Finish the code and leave the final real-project runtime gate pending.
+  - Effect: deliver the verified implementation without claiming real-project native completion/adoption or archiving this task.
+  - Reason: concurrent source editing prevents a stable final proof within the current walkthrough.
+  - Date/source: explicit operator answer to the runtime-gate question, 2026-11-18.
+
 ### Operator gates
 
-No blocking question remains for investigation. D2 resolves automatic start versus waiting for a Run click. This design
-still requires implementation approval; answering that question is not approval of every proposed mechanism below.
+No operator question remains. D4 authorizes implementation, D2 owns first-opening behavior, and D5 leaves the final
+real-project gate pending. Archival still requires that gate; implementation completion is not its acceptance.
 
 ### Working assumptions
 
@@ -174,18 +184,22 @@ in Checks; it does not manufacture a red architecture wire. Ordinary completion 
 
 | user title | short explanation | honest limit |
 |---|---|---|
-| Module dependencies | Finds dependency cycles and evaluates configured boundary rules | One selected build context; red needs an applicable policy |
+| Module architecture | Always collected as the map foundation; no Off control | One selected build context |
+| Dependency cycles | Existing Review evaluation and configured policy; no acquisition selector | Red needs an applicable configured constraint |
 | C++ usage | Records classes/functions and checks recorded calls against module access | Static compiler evidence, not complete runtime or link verification |
 | Duplicated code | Finds exact repeated token sequences with source locations | Similar syntax can be intentional; does not prove a design violation |
 
-Each row shows selection, status, reason and an appropriate next action. Keep provider/build IDs and detailed diagnostics in
+Only optional C++ usage and duplication have Auto/On/Off selection. Foundation and Review rows show status/limitations
+without implying mandatory graph collection can be disabled. Each row offers an appropriate next action. Keep provider/build IDs and detailed diagnostics in
 an expandable technical section. "Needs LLVM setup" or "Not run: insufficient memory; retry when memory is available" is
 clearer than a raw unavailable count. Do not imply automatic resource retry when the current policy requires explicit Retry.
 Missing tools remain visible in requested coverage; never remove them from the denominator to make completion look better.
 
 ### Defaults, request and publication
 
-1. D2 applies to newly registered project intent. Normal up opens the saved map immediately, then the existing controller
+1. First opening means the existing two-command route: initial build creates a valid map, may already collect foreground
+   CPD, and records new-project recommended intent; first up starts remaining eligible native work. Completed CPD evidence
+   is reused. Browser Skip/Stop controls subsequent monitored work, not the earlier foreground build. D2 applies to newly registered project intent. Normal up opens the saved map immediately, then the existing controller
    resolves available recommended checks in background. Before such work starts, its state is observable as queued/checking;
    Analysis opens on first use and Stop/Skip is available. Do not wait for slow checks before displaying the saved map.
 2. Keep three meanings distinct: requested check policy, resolved acquisition recipe, and evidence in the currently displayed
@@ -214,6 +228,19 @@ Missing tools remain visible in requested coverage; never remove them from the d
    or weakening required CPD artifact/input/tool validation. Cached results count as completed only when their guards validate.
 9. Saved-only startup remains scan-free and starts no new checks. Its panel explains why running is unavailable in that mode;
    it does not silently create a monitoring lifecycle the CLI will fail to shut down. No tool downloads/install work occurs.
+
+### Native acquisition acceptance contract
+
+| requested situation | required result |
+|---|---|
+| Auto, valid local tools and usable completed-build receipt | Background native augmentation |
+| Auto, missing or invalid local tools | Setup/unavailable state; base map retained |
+| Auto, no usable successful-build receipt | Prerequisite unavailable; no automatic project build |
+| Automatic attempt fails | Previous map retained; attempt failure separate from immutable completed evidence |
+| Same inputs/tools/intent after failure and restart | Reuse failed-attempt evidence; no repeated expensive work |
+| On / explicit --symbols | Existing required, fail-closed publication semantics |
+| Historical symbols=False without new intent | Preserve; offer Run recommended checks |
+| --no-watch | Saved-only, no automatic analysis |
 
 ### Progress and cancellation
 
@@ -255,14 +282,14 @@ policy editor. Reuse existing close/Escape/focus behavior, and never reopen a di
 
 ## Implementation tasks
 
-- [ ] Add failing acceptance/regression cases below before production changes. Keep legacy fixtures and existing pin/triage
+- [x] Add failing acceptance/regression cases below before production changes. Keep legacy fixtures and existing pin/triage
   baselines; use Sample fixtures for public proof and the real project only in ignored/private runtime evidence.
-- [ ] Extend existing request/schema/profile ownership for recommended first-opening intent, resolved recipes and meaningful
+- [x] Extend existing request/schema/profile ownership for recommended first-opening intent, resolved recipes and meaningful
   native acquisition states. Implement and prove existing-run preservation and required-CLI behavior first.
-- [ ] Extend Monitor controls for requested checks, expected-generation rejection, identical-request coalescing and session
+- [x] Extend Monitor controls for requested checks, expected-generation rejection, identical-request coalescing and session
   Skip/Stop. Reuse workers, lease, contained cancellation and atomic publication. Add bounded native-failure reuse where needed.
-- [ ] Expose bounded current-attempt progress/capability summaries without source work on HTTP threads or a new UI poll loop.
-- [ ] Implement the Analysis presentation and regroup navigation, Checks, Review, View and selection actions. Explain setup,
+- [x] Expose bounded current-attempt progress/capability summaries without source work on HTTP threads or a new UI poll loop.
+- [x] Implement the Analysis presentation and regroup navigation, Checks, Review, View and selection actions. Explain setup,
   missing evidence and requested-versus-applied settings. Reuse existing native UI primitives and Inspector behavior.
 - [ ] Verify each delivery boundary independently: request/default behavior; worker/cancellation/publication; responsive UI
   and live adoption. Do not mark the whole feature ready on fixture/unit tests alone.
@@ -345,3 +372,46 @@ real acceptance evidence, and no unrelated or operator-staged work is altered.
 - Verified the toolbar access and coverage/control gaps; selected existing owners rather than a replacement subsystem.
 - Baseline CLI/monitor and live JavaScript checks passed. Final documentation/privacy checks concern this plan only;
   future implementation, performance and new automatic native behavior remain unverified.
+
+
+### 2026-11-18 - Reviewer clarification and implementation authorization
+
+- F1-F3 are valid. First-opening scope, mandatory foundation versus optional source checks, and native-mode refusal/reuse
+  contracts are explicit above. No architecture replacement or new project import is included.
+- D4 records the operator's implementation authorization. Existing saved-user-state hashes and session status were captured
+  privately before work; active background analysis was paused while changing its controller/worker contract.
+
+### 2026-11-18 - Implementation verification
+
+- Implemented requested/default check intent, profile eligibility, bounded failed-native-attempt reuse, current-task progress
+  and expected-generation controls through the existing Monitor/pipeline. No source acquisition runs on HTTP threads.
+- Separated Checks, Review, View and Inspector. Read-only foundation and rule evaluation cannot be disabled as acquisitions.
+  Late target responses, dirty forms, stale two-tab changes, deferred updates and degraded watches remain observable.
+- Red receipts under `workspace/tmp/analysis-controls/`: default/control/browser failures reproduced before implementation;
+  the progress regression rejected frozen elapsed time; legacy-build regressions rejected resetting historical choices.
+- Current full non-Engine run: 314 tests, no failures, one optional legacy indexer skip, with real LLVM and CPD enabled.
+  Focused follow-up covers resource explanations and negative acquisition validation. Three real-Engine tests passed.
+  Python 3.11 affected checks passed; changed Python also parses with the 3.9 grammar.
+- All 186 JavaScript checks passed. Thirteen isolated Chrome regression scenarios plus Analysis and Live adoption passed;
+  Analysis includes trusted controls, Stop, stale-tab conflicts and draft retention. The headed agent Chrome walkthrough
+  passed both themes and narrow widths. Headless Chrome owns repeatable suites; no daily-profile tab was manipulated.
+- Main positions remained byte-identical and the local viewer was restarted through authenticated lifecycle commands.
+- Final real-project gate remains running: default duplication collection completed and native started automatically;
+  Stop retained the prior map. A deep scratch path exceeded Unreal's path limit and was replaced by a shorter ignored
+  workspace. Concurrent authored-source edits are genuinely superseding native work. Completion/adoption and final costs
+  remain unclaimed until that run and its safely reused replacement settle. Evidence is private in the ignored workspace.
+
+### 2026-11-18 - Bounded implementation handoff
+
+- D5 closes this implementation session with the final real-project runtime gate explicitly pending. The browser observer
+  reached its time limit while the native scan was incomplete; no final native-completion or adoption claim is made.
+  Authored-source notifications independently confirmed concurrent edits. The last good map remained available.
+- Stopped disposable real/synthetic servers through their owned lifecycles and confirmed clean process exits. The normal
+  viewer remains running at its documented address, with original check opt-outs and protected user stores preserved.
+- All three reviewer corrections were valid and implemented. Durable contracts are in the guide and architecture owners;
+  this active task retains only execution/acceptance history. No commit, staging or remote operation was performed.
+- Additional focused acquisition guards passed after the broad run: native evidence cannot be fabricated as completed,
+  CPD scope fields remain mandatory, and memory refusal has a plain-language explanation. The final Analysis browser
+  scenario also proves a delayed response cannot erase a new draft after leaving and returning to the same target.
+- Before archival: complete the real default native/CPD Stop/resume/adoption walkthrough during a stable input window,
+  record actual costs/responsiveness, and recheck protected stores. Keep this file active until then.

@@ -9,6 +9,7 @@ function liveBlockReason() {
   if(state.drag||state.labelDrag||state.pointerDown||state.gestureActive||state.framing||state.wheelFrame||
     state.zoomFrame||state.viewportFrame)return 'Finish moving the map';
   if(unsavedPositionCaches.size)return 'Waiting for positions to save';
+  if(state.analysis?.dirty())return 'Finish or reload the check choices';
   if(state.review?.saving||[...document.querySelectorAll('[name="review-reason"]')]
     .some(input=>input.value!==input.defaultValue))return 'Finish or clear the decision draft';
   if($('graph').getAttribute?.('aria-busy')==='true')return 'Waiting for navigation';
@@ -40,7 +41,7 @@ function adoptionCheckpoint() {
   const previous={...state},scene=state.cy.json(),overrides=renderedOverrides(state.cy);
   const url=location.href,entry=history.state,title=document.title;
   const focus=document.activeElement;
-  const roots=['details','review','filters','banner','coverage','crumbs','find-results','find-hint','scope-summary',
+  const roots=['details','review','filters','analysis','toggle-analysis','banner','coverage','crumbs','find-results','find-hint','scope-summary',
     'position-status','source-layout-status','layout-hint','map-tooltip','map-empty','hover-card','icon-key','review-legend',
     'toggle-review','toggle-details','toggle-configuration','configuration-legend','up','arrange-files','find','graph'];
   const dom=roots.map(id=>{
@@ -85,43 +86,23 @@ class LiveUpdates {
   start(){
     this.stopped=false;this.tick();
   }
-  positionControls(){
-    if($('live-controls').open)$('live-controls').style.setProperty('--live-top',
-      ($('live-summary').getBoundingClientRect().bottom+8)+'px');
-  }
   stop(){this.stopped=true;clearTimeout(this.timer);this.controller?.abort();this.prepared=null;}
   async control(action){
     if(!state.startup.monitoring)return;
     this.failed=null;this.message='';
     try{
-      const response=await fetch('/monitor/control',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({action,target:state.target.id})});
-      if(!response.ok)throw Error(await response.text());
+      await this.request({action,target:state.target.id});
       await this.tick();
     }catch(error){this.message=error.message;this.render();}
   }
+  async request(body){
+    const response=await fetch('/monitor/control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!response.ok)throw Error(await response.text());
+    return response.json();
+  }
   render(){
-    const current=this.status?.targets.find(t=>t.id===state.target?.id),enabled=Boolean(state.startup?.monitoring);
-    const ready=liveGeneration(current?.ready)!==liveGeneration(state.target);
-    const blocked=ready?liveBlockReason():'';
-    const acquisition=current?.ready?.acquisition||state.target?.acquisition||{};
-    const missing=[...new Set(Object.values(acquisition).map(c=>c.status))]
-      .filter(status=>['failed','incomplete','unavailable'].includes(status)).join(', ');
-    const summary=(this.message?'Live: needs attention':!enabled?'Saved only':
-      !current?.active?'Saved / not monitored':blocked?'Update waiting':`Live: ${current.state}`)+
-      (missing?` / source ${missing}`:'');
-    if($('live-summary').textContent!==summary)$('live-summary').textContent=summary;
-    $('live-summary').setAttribute('data-attention',String(Boolean(missing||this.message)));
-    const active=(this.status?.targets||[]).filter(t=>t.active).map(t=>t.id).join(', ');
-    const description=[enabled?`Monitoring: ${active||'none'}`:'Monitoring off; open with --watch to enable.',
-      blocked,this.message,current?.error,current?.degraded,
-      ...Object.values(acquisition).map(c=>`Latest source analysis: ${c.status} (${c.code})`)].filter(Boolean).join('. ');
-    if($('live-status').textContent!==description)$('live-status').textContent=description;
-    $('live-toggle').disabled=!enabled;
-    $('live-toggle').textContent=current?.active?'Pause this target':'Monitor this target';
-    $('live-toggle').onclick=()=>this.control(current?.active?'pause':'activate');
-    $('live-retry').disabled=!enabled||!current?.active;
-    $('live-retry').onclick=()=>this.control('retry');
+    const current=this.status?.targets.find(t=>t.id===state.target?.id);
+    state.analysis?.render(this.status,this.message);
     if(current?.state==='fresh'&&current.ready?.run===state.target.run&&state.target.freshness!=='checked'){
       state.target.freshness='checked';renderCoverage();
     }

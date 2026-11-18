@@ -7,7 +7,7 @@ from pathlib import Path
 import threading
 import time
 
-from . import LaniakeaError,map_index
+from . import LaniakeaError,map_index,profiles
 from .review_store import Review
 from .workspace import read_json
 
@@ -55,9 +55,11 @@ class Snapshots:
         entry=next(item for item in self.index if item['id']==target)
         request=self.workspace.request_at(target,run)
         roots=request['target'].get('roots',{}) if request else entry['roots']
+        describe=getattr(profiles.get(manifest['profile']),'analysis_metadata',None)
         return Context(self.workspace,target,run,view,{**entry,'run':manifest['run'],
                         'acquisition':manifest['coverage'].get('acquisition',{}),
-                        'roots':{**roots,**manifest.get('roots',{})}})
+                        'roots':{**roots,**manifest.get('roots',{})},
+                        **(describe(manifest,request) if describe else {})})
 
     def admit(self,target,run,view_name,prepared=None,validation=None):
         with self.lock:

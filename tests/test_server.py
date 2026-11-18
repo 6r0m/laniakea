@@ -21,6 +21,29 @@ from support import copy_sample, fake_engine, recorded_ubt
 
 
 class Server(unittest.TestCase):
+    def test_check_choices_are_validated_coalesced_and_do_not_commit_before_work(self):
+        from laniakea.monitor import Monitor
+        from test_monitor import Watcher
+        workspace=self.server.workspace_for_tests
+        self.server.monitor=Monitor(workspace,self.server.snapshots,notifications=Watcher)
+        self.addCleanup(self.server.monitor.stop)
+        entry=self.server.snapshots.latest('sample');original=workspace.request('sample')
+        body={'action':'checks','target':'sample','run':entry['run'],'revision':0,
+              'checks':{'native':'auto','duplication':'auto'}}
+        status,raw=self.post('/monitor/control',body)
+        self.assertEqual(status,200)
+        first=json.loads(raw)['targets'][0];self.assertEqual(first['requested']['checks'],body['checks'])
+        self.assertEqual(workspace.request('sample'),original)
+        status,raw=self.post('/monitor/control',body)
+        self.assertEqual(status,200)
+        self.assertEqual(json.loads(raw)['targets'][0]['revision'],first['revision'])
+        self.assertEqual(self.post('/monitor/control',{**body,'revision':False})[0],400)
+        self.assertEqual(self.post('/monitor/control',{**body,'checks':{'native':'off','duplication':'off'}})[0],409)
+        self.assertEqual(self.post('/monitor/control',{**body,'revision':first['revision'],
+            'checks':{'foundation':'off','native':'auto','duplication':'auto'}})[0],400)
+        self.assertEqual(self.post('/monitor/control',{**body,'run':'obsolete','revision':first['revision']})[0],409)
+        self.assertEqual(workspace.request('sample'),original)
+
     def test_two_tabs_keep_distinct_read_indexes_for_the_same_run(self):
         from laniakea import map_index
         workspace=self.server.workspace_for_tests;target=workspace.load('sample')

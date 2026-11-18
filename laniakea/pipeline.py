@@ -8,19 +8,19 @@ from . import LaniakeaError, __version__, health, profiles, schema, shards
 from .workspace import read_json, write_json
 
 
-def extract(workspace, target, *, symbols=False, health_options=None):
+def extract(workspace, target, *, symbols=False, health_options=None, checks=None):
     """Run the target's profile into a new run. latest.json moves only after every file validated and was written."""
     with workspace.extraction_lock(target["id"]):
         workspace.propose(target['id'], target)
-        return _extract_locked(workspace, target, symbols, health_options)
+        return _extract_locked(workspace, target, symbols, health_options, checks)
 
 
-def _extract_locked(workspace, target, symbols, health_options=None):
-    run,manifest=stage(workspace,target,symbols=symbols,health_options=health_options)
+def _extract_locked(workspace, target, symbols, health_options=None, checks=None):
+    run,manifest=stage(workspace,target,symbols=symbols,health_options=health_options,checks=checks)
     return workspace.commit_run(target['id'],run),manifest
 
 
-def stage(workspace, target, *, symbols=False, health_options=None, automatic=False):
+def stage(workspace, target, *, symbols=False, health_options=None, automatic=False, checks=None):
     """Validate a candidate without publication. The caller must hold the target writer lock."""
     profile = profiles.get(target["profile"])
     start = perf_counter()
@@ -31,10 +31,12 @@ def stage(workspace, target, *, symbols=False, health_options=None, automatic=Fa
         if automatic:write_json(run/'automatic.json',{'version':1})
         profile_start = perf_counter()
         options={'health_options':{**health_options,'tools':workspace.root/'tools/health/cpd'}} if health_options is not None else {}
+        if checks is not None:options['checks']=checks
         graph, fields = profile.extract(target, run, previous,
                                         tools_dir=workspace.root / "tools" / profile.NAME if symbols else None, **options)
         recipe=fields.pop('recipe',{'symbols':symbols,
                           'health':{'mode':'required',**health_options} if health_options is not None else {'mode':'off'}})
+        if checks is not None:recipe['checks']=checks
         profile_seconds = perf_counter() - profile_start
         schema.validate(graph)
         shards_start = perf_counter()

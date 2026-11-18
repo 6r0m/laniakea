@@ -2,6 +2,7 @@
 """Session-local analysis scheduling. Workers stage; this single controller alone publishes."""
 
 import json
+import math
 import os
 from pathlib import Path
 import sys
@@ -9,10 +10,14 @@ import threading
 import time
 import uuid
 
-from . import LaniakeaError
+from . import LaniakeaError,profiles
 from .notifications import Notifications
 from .owned_process import Process
 from .workspace import WriterBusy,write_json
+
+
+class ChecksConflict(ValueError):
+    """The form describes different applied or pending settings; no work was changed."""
 
 
 def relevant(spec,name):
@@ -29,8 +34,31 @@ class Task:
         write_json(request,{'workspace':str(workspace.root),'target':target,'operation':operation,'recipe':recipe})
         self.process=Process([sys.executable,'-m','laniakea.monitor_worker',str(request)],self.root/'worker.log',
                              cwd=Path(__file__).resolve().parent.parent)
+        self.started=time.monotonic();self.progress=None;self.progress_at=0
+
+    def _progress(self):
+        now=time.monotonic()
+        if now-self.progress_at<.25:return
+        self.progress_at=now
+        try:
+            with (self.root/'progress.json').open('rb') as stream:raw=stream.read(4097)
+            if len(raw)>4096:raise ValueError('progress exceeded its size limit')
+            value=json.loads(raw)
+            if not isinstance(value,dict) or not isinstance(value.get('phase'),str) or len(value['phase'])>64 or \
+                    not isinstance(value.get('label'),str) or len(value['label'])>160 or \
+                    isinstance(value.get('seconds'),bool) or not isinstance(value.get('seconds'),(int,float)) or \
+                    not math.isfinite(value['seconds']) or value['seconds']<0:
+                raise ValueError('invalid progress summary')
+            if ('completed' in value or 'total' in value) and (any(isinstance(value.get(k),bool) or
+                    not isinstance(value.get(k),int) for k in ('completed','total')) or
+                    not 0<=value['completed']<=value['total']<=1000000):raise ValueError('invalid progress counts')
+            self.progress={k:value[k] for k in ('phase','label','seconds','completed','total') if k in value}
+            self.progress['seconds']=round(now-self.started,2)
+        except FileNotFoundError:pass
+        except (OSError,ValueError) as error:self.progress={'phase':'status','label':'Progress unavailable','detail':str(error)}
 
     def poll(self):
+        self._progress()
         code=self.process.poll()
         if code is None:return None
         try:
@@ -66,11 +94,15 @@ class Monitor:
                 raise ValueError('target is not a registered saved map')
             state=self.states.get(target_id)
             if state and state['active']:return
+            if state:
+                state.update(active=True,state='checking',phase='discover',due=self.clock(),
+                             generation=state['generation']+1,error=None,failure=None,attempts=0)
+                self.condition.notify_all();return
             self.states[target_id]={'active':True,'state':'checking','phase':'cleanup','generation':1,
                 'due':self.clock(),'first':self.clock(),'reconcile':self.clock()+self.RECONCILE,
                 'identity':None,'failure':None,'attempts':0,'watches':[],'recipe':None,
                 'run':self.workspace.latest(target_id).name,'error':None,'degraded':None,'force':False,
-                'after_cleanup':('discover','checking')}
+                'after_cleanup':('discover','checking'),'requested':None,'revision':0,'checks':[],'replace':False}
             self.condition.notify_all()
 
     def pause(self,target_id):
@@ -79,6 +111,26 @@ class Monitor:
             if state:
                 state.update(active=False,state='paused',phase=None);state['generation']+=1
                 self._watches();self.condition.notify_all()
+
+    def configure(self,target_id,choices,run,revision):
+        with self.condition:
+            if self.stopping:raise LaniakeaError('viewer is stopping')
+            entry=self.contexts.latest(target_id)
+            profile=profiles.get(self.workspace.load(target_id)['profile'])
+            proposed=profile.configure_checks(entry['recipe'],choices)
+            state=self.states.get(target_id)
+            latest=self.workspace.latest(target_id)
+            if entry['run']!=run or not latest or latest.name!=run:
+                raise ChecksConflict('The project changed. Reload the current check settings before applying.')
+            if isinstance(revision,bool) or not isinstance(revision,int):raise ValueError('revision must be an integer')
+            if state and state['requested']==proposed and state['active']:return
+            if revision!=(state['revision'] if state else 0):
+                raise ChecksConflict('Another tab changed check settings. Reload settings before applying.')
+            self.activate(target_id);state=self.states[target_id]
+            state.update(requested=proposed,recipe=None,revision=state['revision']+1,generation=state['generation']+1,
+                         phase='discover',due=self.clock(),identity=None,failure=None,error=None,force=True,
+                         replace=bool(self.current and self.current['target']==target_id))
+            self.condition.notify_all()
 
     def retry(self,target_id):
         with self.condition:
@@ -119,13 +171,20 @@ class Monitor:
             result=[]
             for entry in self.contexts.index:
                 state=self.states.get(entry['id'])
+                current=self.current if self.current and self.current['target']==entry['id'] else None
+                progress=getattr(current['task'],'progress',None) if current and state and \
+                    current['generation']==state['generation'] else None
                 watch_errors=[error for spec,error in getattr(self.watcher,'failures',{}).items() if state and
                               any((os.path.normcase(s['path']),s['recursive'])==spec for s in state['watches'])]
                 result.append({'id':entry['id'],'active':bool(state and state['active']),
-                    'state':state['state'] if state else 'saved','error':state['error'] if state else None,
+                    'state':'stopping' if current and state and (not state['active'] or state['replace']) else
+                            state['state'] if state else 'saved','error':state['error'] if state else None,
                     'degraded':watch_errors[0] if watch_errors else state['degraded'] if state else None,
                     'source_bodies_monitored':state.get('source_bodies_monitored') if state else None,
-                    'ready':self.contexts.latest(entry['id'])})
+                    'ready':self.contexts.latest(entry['id']),
+                    'requested':state['requested'] if state else None,'revision':state['revision'] if state else 0,
+                    'checks':state['checks'] if state and state['checks'] else self.contexts.latest(entry['id']).get('checks',[]),
+                    'progress':progress})
             return {'stopping':self.stopping,'targets':result,'error':self.error}
 
     def _start(self,target_id,state):
@@ -136,7 +195,8 @@ class Monitor:
             except WriterBusy:
                 # Lock refusal is a known writer, not an analyzer failure. No child or tight retry is created.
                 state.update(state='waiting for writer',due=self.clock()+2);return
-        recipe=self.contexts.protected(target_id) if phase=='cleanup' else state['recipe']
+        recipe=self.contexts.protected(target_id) if phase=='cleanup' else \
+            state['requested'] if phase=='discover' else state['recipe']
         try:task=self.task_factory(self.workspace,target_id,phase,recipe)
         except BaseException:
             if lease:lease.__exit__(*sys.exc_info())
@@ -183,7 +243,7 @@ class Monitor:
             return
         if job['phase']!='cleanup':state['error']=None
         if job['phase']=='discover':
-            state.update(recipe=result['recipe'],watches=result['watches'],phase='probe',due=now)
+            state.update(recipe=result['recipe'],watches=result['watches'],checks=result.get('checks',[]),phase='probe',due=now)
             self._watches()
         elif job['phase']=='prepare':
             self.contexts.admit(target_id,self.workspace.target_dir(target_id)/'runs'/result['run'],result['view'],
@@ -191,10 +251,15 @@ class Monitor:
             state.update(run=result['run'],identity=None,failure=None,phase='discover',due=now)
         elif job['phase']=='probe':
             identity=result['identity'];previous=state['identity']
-            state.update(watches=result['watches'],source_bodies_monitored=result['source_bodies_monitored'],degraded=None,
+            state.update(watches=result['watches'],source_bodies_monitored=result['source_bodies_monitored'],degraded=result.get('cache_warning'),
                          reconcile=now+self.RECONCILE)
             self._watches()
             force=state['force'];state['force']=False
+            if not force and result.get('previous_failure'):
+                state.update(identity=identity,failure=identity,state='retry required',error=result['previous_failure']['error'])
+                for row in state['checks']:
+                    if row['id']=='native':row.update(status='failed',code='unchanged_failure',detail='Previous attempt failed; Retry to run again.')
+                return
             if not force and state['failure']==identity:
                 state.update(state='retry required');return
             if not force and (identity==previous or previous is None and not result['needs_initial_refresh'] and \
@@ -210,8 +275,10 @@ class Monitor:
             prepared=self.contexts.prepare(target_id,partial,result['view'],result['validation'])
             run=self.workspace.commit_run(target_id,partial)
             self.contexts.admit(target_id,run,result['view'],prepared=prepared)
-            state.update(run=run.name,identity=result['identity'],failure=None,attempts=0,state='fresh',
-                         reconcile=now+self.RECONCILE,phase='cleanup',due=now,after_cleanup=(None,'fresh'))
+            followup=('discover','checking') if result.get('checks_pending') else (None,'fresh')
+            state.update(run=run.name,identity=result['identity'],failure=None,attempts=0,state='fresh',requested=None,
+                         checks=result.get('checks',state['checks']),revision=state['revision']+1,
+                         reconcile=now+self.RECONCILE,phase='cleanup',due=now,after_cleanup=followup)
         elif job['phase']=='cleanup':
             if result.get('deferred'):
                 state.update(state='waiting for read index',phase='cleanup',due=now+2)
@@ -223,8 +290,9 @@ class Monitor:
         with self.condition:
             if self.current:
                 job=self.current;state=self.states[job['target']]
-                if self.stopping or not state['active']:
+                if self.stopping or not state['active'] or state['replace']:
                     self._close_current()
+                    state['replace']=False
                 else:
                     response=job['task'].poll()
                     if response is not None:

@@ -165,7 +165,8 @@
         "target": {"type": "object", "required": ["id", "profile", "project_file"],
           "properties": {"id": {"type": "string"}, "profile": {"type": "string"}, "project_file": {"type": "string"}}},
         "recipe": {"type": "object", "required": ["symbols", "health"], "additionalProperties": false,
-          "properties": {"symbols": {"type": "boolean"}, "health": {"type": "object"}}}
+          "properties": {"symbols": {"type": "boolean"}, "health": {"type": "object"},
+            "checks": {"type": "object", "additionalProperties": {"enum": ["auto", "on", "off"]}}}}
       }
     },
     "health": {
@@ -199,7 +200,7 @@
       }
     },
     "acquisition": {
-      "type": "object", "required": ["provider", "mode", "prefixes", "minimum_tokens", "status", "code"],
+      "type": "object", "required": ["provider", "mode", "status", "code"],
       "additionalProperties": false,
       "properties": {
         "provider": {"type": "string"}, "mode": {"enum": ["auto", "required", "off"]},

@@ -2,6 +2,8 @@
 // Evaluate this Playwright function on the served synthetic sample.
 async (page) => {
   const base = page.url().split('/').slice(0,3).join('/');
+  const view=async p=>{if(!await p.locator('#view-controls').evaluate(n=>n.open))await p.locator('#view-summary').click();};
+  const layout=async(p,mode)=>{await view(p);await p.selectOption('#layout',mode);await p.locator('#view-summary').click();};
   const check = (ok, message) => { if (!ok) throw new Error(message); };
   const frames = () => page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
   const point = id => page.evaluate(id => {
@@ -54,18 +56,18 @@ async (page) => {
   try {
     const initialMode=await page.locator('#layout').inputValue();
     for(const mode of ['auto','galaxy','breadthfirst','cose','grid']) {
-      await page.selectOption('#layout',mode);await page.waitForFunction(()=>!state.gestureActive);
+      await layout(page,mode);await page.waitForFunction(()=>!state.gestureActive);
       check(await page.evaluate(()=>!configurationVisible()&&!state.cy.getElementById(state.universe.root).length),
         `Configuration default restored root wires in ${mode}`);
       const before=await page.evaluate(()=>({edges:state.cy.edges().map(e=>e.id()).sort().join(),
         positions:JSON.stringify([...state.universe.positions])}));
-      await page.locator('#toggle-configuration').click();
+      await view(page);await page.locator('#toggle-configuration').click();
       check(await page.evaluate(before=>state.cy.nodes('.configured').length>0&&
         !state.cy.getElementById(state.universe.root).length&&state.cy.edges().map(e=>e.id()).sort().join()===before.edges&&
         JSON.stringify([...state.universe.positions])===before.positions,before),`Marks changed architecture or positions in ${mode}`);
-      await page.locator('#toggle-configuration').click();
+      await view(page);await page.locator('#toggle-configuration').click();
     }
-    await page.selectOption('#layout',initialMode);
+    await layout(page,initialMode);
     await page.evaluate(()=>flyToNode('plugin:SampleDisabled',false));
     await wheel('plugin:SampleDisabled',true,-120);
     await page.waitForFunction(()=>!state.gestureActive&&!state.viewportFrame);
@@ -80,7 +82,7 @@ async (page) => {
     await page.evaluate(()=>{state.universe.expanded=new Set([state.universe.root]);setSceneScope(state.universe.root);refreshMap();fitMap();});
     check(await page.evaluate(()=>!$('map-tooltip').textContent.includes('Outside analysed target')),
       'Returning to the analysed root retained an unrelated coverage hint');
-    await page.selectOption('#layout','galaxy');await frames();
+    await layout(page,'galaxy');await frames();
     await page.waitForFunction(()=>!state.gestureActive&&state.visibleLabels);
     check(await page.evaluate(()=>!configurationVisible()&&state.universe.positions.get('engine').x===0&&
       state.universe.positions.get('engine').y===0&&!state.cy.getElementById(state.universe.root).length),
@@ -92,14 +94,14 @@ async (page) => {
     const configuration=page.locator('#toggle-configuration');
     const architecture=await page.evaluate(()=>({edges:state.cy.edges().map(e=>e.id()).sort().join(),
       pins:JSON.stringify(state.positionCache.layouts),positions:JSON.stringify([...state.universe.positions])}));
-    await configuration.focus();await page.keyboard.press('Enter');await frames();
+    await view(page);await configuration.focus();await page.keyboard.press('Enter');await frames();
     check(await configuration.getAttribute('aria-pressed')==='true'&&await page.evaluate(()=>
       !state.cy.getElementById(state.universe.root).length&&state.cy.nodes('.configured').length>0),
       'Keyboard configuration marks must outline targets without restoring the root endpoint');
     check(await page.evaluate(before=>state.cy.edges().map(e=>e.id()).sort().join()===before.edges&&
       JSON.stringify(state.positionCache.layouts)===before.pins&&JSON.stringify([...state.universe.positions])===before.positions,
       architecture),'Annotations changed architecture edges or positions');
-    await page.keyboard.press('Enter');await frames();
+    await view(page);await configuration.focus();await page.keyboard.press('Enter');await frames();
     check(await accounted(),'Configuration subset filtering lost or double-counted references');
     const projectDetails=page.getByRole('button',{name:'Project details',exact:true});
     const contextBefore=await page.evaluate(()=>({file:state.file,zoom:worldZoom(),
@@ -119,7 +121,7 @@ async (page) => {
     await projectDetails.click();
     await page.keyboard.press('Escape');await page.evaluate(()=>refreshMap());
     check(await page.locator('#details').isHidden(),'Escape must close context without reopening Project details');
-    await projectDetails.click();await page.getByRole('button',{name:'Clear selection',exact:true}).click();
+    await projectDetails.click();await view(page);await page.getByRole('button',{name:'Clear selection',exact:true}).click();
     check(await page.locator('#details').isHidden(),'Clear must close Project details');
     await page.evaluate(()=>flyToNode('plugin:SampleCore'));
     await page.waitForFunction(()=>!state.gestureActive);
@@ -136,7 +138,7 @@ async (page) => {
     await projectDetails.focus();await page.keyboard.press('Enter');await frames();
     check(await page.evaluate(()=>state.selection?.projectContext),'Nested-scope Project action lost keyboard inspection');
     await page.evaluate(()=>{renderDetails(null);state.universe.expanded=new Set([state.universe.root]);setSceneScope(state.universe.root);});
-    await page.selectOption('#layout',initialMode);await frames();
+    await layout(page,initialMode);await frames();
     await page.evaluate(()=>{
       globalThis.bannerProbe=state.target;
       state.target={...state.target,stale:true,changed_count:40,
@@ -229,8 +231,8 @@ async (page) => {
       'Connection close left inspection open or selected');
     await page.evaluate(()=>selectNode('folder:Sample'));
     await page.getByRole('button',{name:'Collapse constellation',exact:true}).click();
-    await page.getByRole('button',{name:'Clear selection',exact:true}).click();
-    await page.getByRole('button',{name:'Fit map',exact:true}).click();await frames();
+    await view(page);await page.getByRole('button',{name:'Clear selection',exact:true}).click();
+    await view(page);await page.getByRole('button',{name:'Fit map',exact:true}).click();await frames();
     await page.evaluate(()=>selectNode('folder:Sample'));
     const groupControl=page.locator('#details [data-action="toggle-group"]');
     check(await groupControl.innerText()==='Expand constellation'&&await groupControl.getAttribute('aria-expanded')==='false',
@@ -244,8 +246,8 @@ async (page) => {
     check(await page.evaluate(()=>groupProbe.button===document.querySelector('#details [data-action="toggle-group"]')&&
       groupProbe.pager===document.querySelector('#details .reference-pager')),'Semantic zoom recreated the reader\'s reference pager');
     await groupControl.click();await page.evaluate(()=>delete globalThis.groupProbe);
-    await page.getByRole('button',{name:'Clear selection',exact:true}).click();
-    await page.getByRole('button',{name:'Fit map',exact:true}).click();await frames();
+    await view(page);await page.getByRole('button',{name:'Clear selection',exact:true}).click();
+    await view(page);await page.getByRole('button',{name:'Fit map',exact:true}).click();await frames();
     const unaffected=await page.evaluate(()=>({...state.universe.positions.get('folder:Experimental')}));
     const openSteps=await wheel('folder:Sample',true,-120);
     check(await accounted(),'References disappeared while opening the folder');
@@ -360,7 +362,7 @@ async (page) => {
     const flight=await page.evaluate(()=>({...state.cy.pan()}));
     check(Math.abs(flight.x-empty.pan.x)>30&&posts.length===flightPosts,'Dragging space did not fly without writing pins');
     const beforeReset=await page.evaluate(()=>({...state.universe.positions.get('engine')}));
-    await page.getByRole('button',{name:'Fit map',exact:true}).click();
+    await view(page);await page.getByRole('button',{name:'Fit map',exact:true}).click();
     check(await page.evaluate(()=>state.file===state.manifest.entry&&state.scopeShard.scope===state.universe.root&&
       location.hash===hashFor(state.target.id,state.manifest.entry)&&$('up').disabled&&
       $('crumbs').querySelector('[aria-current="page"]').textContent.startsWith(state.manifest.project)),
@@ -393,7 +395,7 @@ async (page) => {
     try {
       const p=await fresh.newPage();await p.goto(`${base}/`);
       await p.waitForFunction(()=>typeof state!=='undefined'&&state.cy&&state.positionCache);
-      await p.selectOption('#layout',initialMode);
+      await layout(p,initialMode);
       const restored=await p.evaluate(()=>({engine:{...state.universe.positions.get('engine')},
         deep:{...state.universe.positions.get('module:SampleCore')},error:$('error').hidden}));
       check(restored.error,'Fresh bare-address startup failed');
@@ -408,7 +410,7 @@ async (page) => {
       count:Object.keys(state.positionCache.layouts[$('layout').value]||{}).length}));
     check(savedBeforeReset.count>0,'Reset refusal needs saved synthetic positions');
     const beforeCancel=posts.length,cancelDialog=page.waitForEvent('dialog');
-    const cancelClick=page.getByRole('button',{name:'Reset layout',exact:true}).click();
+    await view(page);const cancelClick=page.getByRole('button',{name:'Reset layout',exact:true}).click();
     const refused=await cancelDialog;
     const resetMessage=refused.message();
     check(refused.type()==='confirm'&&resetMessage.includes(savedBeforeReset.project)&&resetMessage.includes(savedBeforeReset.modeLabel)&&
@@ -417,7 +419,7 @@ async (page) => {
     check(posts.length===beforeCancel&&await page.evaluate(before=>JSON.stringify(state.positionCache.layouts)===before.pins&&
       JSON.stringify([...state.universe.positions])===before.positions&&!$('reset-layout').disabled,savedBeforeReset),
       'Cancelling reset changed or saved positions');
-    const acceptDialog=page.waitForEvent('dialog'),acceptClick=page.getByRole('button',{name:'Reset layout',exact:true}).click();
+    await view(page);const acceptDialog=page.waitForEvent('dialog'),acceptClick=page.getByRole('button',{name:'Reset layout',exact:true}).click();
     const accepted=await acceptDialog;await accepted.accept();await acceptClick;
     await page.waitForFunction(()=>state.positionCache.pending===0&&state.positionCache.errors.size===0&&
       !Object.hasOwn(state.positionCache.layouts,$('layout').value));
@@ -460,7 +462,7 @@ async (page) => {
     check(await page.evaluate(()=>$('inspector-page-details').scrollTop===0&&$('inspector-page-details').scrollLeft===0),
       'New inspection retained the previous list scroll');
     await page.setViewportSize({width:390,height:844});await frames();
-    await page.getByRole('button',{name:'Fit map',exact:true}).click();
+    await view(page);await page.getByRole('button',{name:'Fit map',exact:true}).click();
     const narrow=await page.evaluate(()=>({width:document.documentElement.scrollWidth,viewport:innerWidth,
       count:state.cy.nodes().length,error:$('error').hidden}));
     check(narrow.width<=narrow.viewport&&narrow.count>0&&narrow.error,'Narrow viewport overflows or loses the map');
@@ -474,7 +476,7 @@ async (page) => {
     await closeDetails.click();check(await page.locator('#details').isHidden(),'Narrow details close failed');
     await page.setViewportSize({width:1440,height:1000});
     await page.evaluate(()=>{renderDetails(null);state.universe.expanded=new Set([state.universe.root]);});
-    await page.selectOption('#layout','galaxy');await frames();
+    await layout(page,'galaxy');await frames();
     const legacy=await page.evaluate(()=>JSON.stringify(Object.fromEntries(Object.entries(state.positionCache.layouts).filter(([key])=>key!=='galaxy'))));
     await page.waitForFunction(()=>!state.gestureActive);
     const center=await point('engine');

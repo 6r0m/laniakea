@@ -61,6 +61,7 @@ async function start() {
   }
   const select = $('target');
   state.review = new ArchitectureReview();
+  state.analysis = new AnalysisControls();
   for (const target of state.targets) select.add(new Option(`${target.project} (${target.id})`, target.id));
   select.onchange = () => show(select.value, null, 'push');
   const saved = recall('layout');
@@ -121,8 +122,16 @@ async function start() {
   const id = known(state.targets.some(target => target.id === wanted.target) ? wanted.target : state.startup.target);
   await show(id, wanted.target === id ? wanted.file : null, 'replace');
   state.live=new LiveUpdates();state.live.start();
-  $('live-controls').addEventListener('toggle',()=>state.live.positionControls());
-  window.addEventListener('resize',()=>state.live.positionControls());
+  const positionView=()=>{if($('view-controls').open){
+    const box=$('view-summary').getBoundingClientRect(),style=$('view-controls').style;
+    style.setProperty('--view-top',(box.bottom+8)+'px');
+    style.setProperty('--view-left',Math.max(12,Math.min(box.left,innerWidth-292))+'px');
+  }};
+  $('view-controls').addEventListener('toggle',positionView);window.addEventListener('resize',positionView);
+  document.querySelector('.view-options').addEventListener('click',event=>{
+    if(event.target.closest('button')){$('view-controls').open=false;$('view-summary').focus();}
+  });
+  document.addEventListener('pointerdown',event=>{if(!event.target.closest('#view-controls'))$('view-controls').open=false;});
   document.addEventListener('visibilitychange',()=>state.live.tick());
   window.addEventListener('pagehide',()=>state.live.stop());
   window.addEventListener('pageshow',()=>{if(state.live.stopped)state.live.start();});
@@ -210,6 +219,7 @@ async function show(id, file, mode) {
     if (!restoreView(savedScene) && shard.scope !== universe.root) frameNode(shard.scope);
     renderDetails(null);
     if(changed&&state.review?.enabled)state.review.load();
+    if(changed)state.analysis?.render(state.live?.status);
     return true;
   } catch (error) {
     if (navigation === state.navigation) {
@@ -236,7 +246,8 @@ function togglePanel(name, open = $(name).hidden) {
     $(`toggle-${other}`).setAttribute('aria-expanded', 'false');
     if(name==='details')state.review?.panel(false);
   }
-  if(open&&name==='filters')state.review?.panel(false);
+  if(open&&name==='filters'){state.review?.panel(false);state.analysis?.panel(false);}
+  if(open&&name==='details'&&innerWidth<=1000)state.analysis?.panel(false);
 }
 
 function openScope(file) { return show(state.target.id, file, 'push'); }
@@ -257,10 +268,13 @@ async function up() {
 
 function onKey(event) {
   const typing = event.target.closest && event.target.closest('input, select, textarea');
+  if(event.key==='Escape'&&$('view-controls').open){$('view-controls').open=false;$('view-summary').focus();return;}
+  if(event.key==='Escape'&&!$('analysis').hidden&&!$('details').contains(event.target)){
+    state.analysis?.panel(false);$('toggle-analysis').focus();return;
+  }
   if (typing || event.altKey || event.ctrlKey || event.metaKey) return;
   if (event.key === 'Backspace') { event.preventDefault(); up(); }
   if (event.key === '/') { event.preventDefault(); $('find').focus(); }
-  if(event.key==='Escape'&&$('live-controls').open){$('live-controls').open=false;$('live-summary').focus();return;}
   if (event.key === 'Escape') { $('type-key').open=false;unfocus(true); renderDetails(null); }
   if (event.target === $('graph') && state.cy && ['+', '=', '-'].includes(event.key)) {
     event.preventDefault();

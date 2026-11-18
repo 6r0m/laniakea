@@ -26,6 +26,7 @@ function viewer() {
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/positions.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/references.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/inspector.js'), 'utf8'), context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/analysis.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/live.js'), 'utf8'), context);
   vm.runInContext(source.slice(0, source.lastIndexOf('start().catch')), context);
   vm.runInContext(`

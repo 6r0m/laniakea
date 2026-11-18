@@ -25,46 +25,47 @@
       <div id="find-results" role="group" aria-label="Search matches" hidden></div>
     </div>
     <span id="find-hint" aria-live="polite"></span>
-    <label>Layout
-      <select id="layout">
-        <option value="auto">orbits</option>
-        <option value="galaxy">galaxy</option>
-        <option value="breadthfirst">hierarchy</option>
-        <option value="cose">connections</option>
-        <option value="grid">grid</option>
-      </select>
-    </label>
   </header>
   <div id="banner" role="status" hidden></div>
   <div id="error" role="alert" hidden></div>
   <div class="scope-bar">
-    <details id="live-controls"><summary id="live-summary" aria-live="polite">Checking updates...</summary>
-      <div class="live-options"><p id="live-status" role="status"></p>
-        <button id="live-toggle" type="button">Monitor this target</button>
-        <button id="live-retry" type="button">Retry analysis</button></div>
-    </details>
-    <button id="toggle-filters" type="button" aria-controls="filters" aria-expanded="false">Browse &amp; filters</button>
-    <span id="scope-summary" role="status"></span>
-    <button id="toggle-configuration" type="button" aria-pressed="false" hidden>Config marks</button>
+    <button id="toggle-analysis" type="button" aria-controls="analysis" aria-expanded="false" aria-live="polite">Checks: waiting</button>
     <button id="toggle-review" type="button" aria-expanded="false" aria-controls="review" aria-live="polite">Review: checking...</button>
-    <span id="layout-hint" role="status" hidden></span>
-    <button id="fit" type="button">Fit map</button>
-    <button id="reset-layout" type="button" title="Forget saved positions for this map and layout">Reset layout</button>
-    <button id="arrange-files" type="button" hidden title="Arrange interface and implementation files in this scope only">Arrange files</button>
-    <span id="source-layout-status" role="status" hidden></span>
-    <span id="position-status" role="status"></span>
-    <button id="clear" type="button">Clear selection</button>
+    <details id="view-controls"><summary id="view-summary">View</summary><div class="view-options">
+      <button id="toggle-filters" type="button" aria-controls="filters" aria-expanded="false">Browse &amp; filters</button>
+      <label>Layout <select id="layout"><option value="auto">orbits</option><option value="galaxy">galaxy</option>
+        <option value="breadthfirst">hierarchy</option><option value="cose">connections</option><option value="grid">grid</option></select></label>
+      <button id="toggle-configuration" type="button" aria-pressed="false" hidden>Config marks</button>
+      <button id="fit" type="button">Fit map</button>
+      <button id="arrange-files" type="button" hidden title="Arrange interface and implementation files in this scope only">Arrange files</button>
+      <button id="reset-layout" type="button" title="Forget saved positions for this map and layout">Reset layout</button>
+      <button id="clear" type="button">Clear selection</button>
+    </div></details>
     <button id="toggle-details" type="button" aria-controls="details" aria-expanded="false">Inspector</button>
   </div>
+  <div class="map-context"><span id="scope-summary" role="status"></span><span id="position-status" role="status"></span>
+    <span id="layout-hint" role="status" hidden></span><span id="source-layout-status" role="status" hidden></span></div>
   <main>
+    <aside id="analysis" aria-label="Analysis checks" hidden>
+      <div class="review-actions"><h2>Analysis</h2><button id="analysis-close" type="button" aria-label="Close analysis">Close</button></div>
+      <p id="analysis-status" role="status"></p><p id="analysis-progress" role="status" hidden></p>
+      <p id="analysis-error" role="alert" hidden></p>
+      <div class="analysis-actions"><button id="analysis-stop" type="button" hidden>Stop checks</button>
+        <button id="analysis-run" type="button" disabled>Run checks</button>
+        <button id="analysis-retry" type="button" hidden>Retry</button>
+        <button id="analysis-discard" type="button" hidden>Reload settings</button></div>
+      <label class="filter"><input id="analysis-auto" name="analysis-auto" type="checkbox">Automatic checks on source changes</label>
+      <button id="analysis-recommended" type="button">Run recommended checks</button>
+      <div id="analysis-checks"></div>
+    </aside>
     <aside id="filters" aria-label="Browse and filters" hidden></aside>
     <aside id="review" aria-label="Code and architecture review" hidden>
       <div class="review-actions"><h2>Review</h2><button id="review-close" type="button" aria-label="Close review">Close</button></div>
       <p id="review-status" role="status"></p><p id="review-context" class="muted"></p>
-      <label><input id="review-enabled" type="checkbox" name="review-enabled" checked>Review this snapshot</label>
+      <label><input id="review-enabled" type="checkbox" name="review-enabled" checked>Evaluate recorded evidence</label>
       <p class="muted">Amber triangle / ?: review candidate. Red stop sign / !: policy violation. Hover to explain; click for evidence.</p>
       <label><input id="review-ack" type="checkbox" name="review-ack">Show acknowledged</label>
-      <button id="review-recheck" type="button">Recheck</button>
+      <button id="review-recheck" type="button" title="Re-evaluate recorded evidence; does not collect source data">Refresh findings</button>
       <details><summary>Policy &amp; availability</summary><p id="review-policy"></p><ul id="review-checks"></ul></details>
       <div id="review-items"></div><div id="review-pager" class="review-actions"></div>
     </aside>
@@ -95,6 +96,7 @@
   <script src="references.js"></script>
   <script src="review.js"></script>
   <script src="inspector.js"></script>
+  <script src="analysis.js"></script>
   <script src="live.js"></script>
   <script src="app.js"></script>
 </body>
