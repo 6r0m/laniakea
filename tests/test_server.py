@@ -21,6 +21,40 @@ from support import copy_sample, fake_engine, recorded_ubt
 
 
 class Server(unittest.TestCase):
+    def test_two_tabs_keep_distinct_read_indexes_for_the_same_run(self):
+        from laniakea import map_index
+        workspace=self.server.workspace_for_tests;target=workspace.load('sample')
+        with recorded_ubt(Path(target['project_file']).parent,Path(target['engine_root'])):
+            run,_=pipeline.extract(workspace,target)
+        first=map_index.ensure(workspace,'sample',run)
+        a=self.server.snapshots.admit('sample',run,first.root.name)
+        def claim(tab,entry):
+            status,body=self.get(f'/monitor/status?target=sample&run={run.name}&client={tab}&index={entry["map_identity"]}')
+            self.assertEqual(status,200)
+            return json.loads(body)['context_retained']
+        self.assertTrue(claim('tab-a',a))
+        with patch.object(map_index,'generator_identity',return_value='b'*64):
+            second=map_index.ensure(workspace,'sample',run)
+            b=self.server.snapshots.admit('sample',run,second.root.name)
+        self.assertNotEqual(a['map_identity'],b['map_identity'])
+        self.assertTrue(claim('tab-a',a));self.assertTrue(claim('tab-b',b))
+        for generation in ('c','d','e'):
+            with patch.object(map_index,'generator_identity',return_value=generation*64):
+                view=map_index.ensure(workspace,'sample',run)
+                latest=self.server.snapshots.admit('sample',run,view.root.name)
+        self.assertEqual(self.get(a['map_url'])[0],200,'The pinned index-A tab lost its map')
+        for entry in (a,b):
+            status,body=self.get(entry['references_url']+'?node=project&direction=incident&limit=1')
+            self.assertEqual(status,200);self.assertTrue(json.loads(body)['items'])
+            self.assertIn(entry['map_identity'],self.server.snapshots.protected('sample')['views'])
+        self.assertFalse(claim('tab-a',{'map_identity':'unknown'}))
+        self.assertTrue(claim('tab-a',a),'A refused claim must preserve the prior lease')
+        self.assertTrue(claim('tab-a',latest))
+        self.assertEqual(self.get(a['map_url'])[0],410)
+        self.assertEqual(self.get(b['map_url'])[0],200,'Tab A released tab B\'s distinct index')
+        self.assertTrue(claim('tab-b',latest))
+        self.assertEqual(self.get(b['map_url'])[0],410)
+
     def test_a_valid_index_for_another_graph_is_refused_before_context_admission(self):
         from laniakea import map_index
         workspace=self.server.workspace_for_tests;target=workspace.load('sample')
@@ -101,7 +135,7 @@ class Server(unittest.TestCase):
         self.assertEqual(self.get(entry['review_url'])[0],200)
         self.assertEqual(entry['acquisition'],manifest['coverage'].get('acquisition',{}))
         self.assertEqual(self.get(entry['data_url'].replace(run.name,'expired')+'manifest.json')[0],410)
-        status,body=self.get(f'/monitor/status?target=sample&run={run.name}&client=synthetic-tab')
+        status,body=self.get(f'/monitor/status?target=sample&run={run.name}&client=synthetic-tab&index={self.server.snapshots.latest('sample')["map_identity"]}')
         self.assertEqual(status,200);self.assertTrue(json.loads(body)['context_retained'])
         self.assertEqual(self.get('/monitor/status?target=sample')[0],400)
 

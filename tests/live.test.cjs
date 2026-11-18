@@ -9,6 +9,23 @@ function fixture(){
     globalThis.live=new LiveUpdates();globalThis.layouts=unsavedPositionCaches;`);
   return v;
 }
+
+test('native checkpoint styles retain functions without freezing stylesheet interaction',()=>{
+  const renderer=require('../viewer/vendor/cytoscape.min.js')({headless:true,styleEnabled:true,
+    elements:[{data:{id:'sample',size:24,ink:'#112233'}}],
+    style:[{selector:'node',style:{opacity:1}},{selector:'.marked',style:{opacity:0.5}}]});
+  try{
+    const node=renderer.nodes();node.style({width:n=>n.data('size'),'background-color':n=>n.data('ink')});
+    const {context,run}=fixture();context.renderer=renderer;
+    const [[id,overrides]]=run('renderedOverrides(renderer)');assert.equal(id,'sample');
+    assert.equal(overrides.opacity,undefined);assert.equal(typeof overrides.width,'function');
+    node.style({width:100,opacity:0.1});node.removeStyle().style(Object.fromEntries(Object.entries(overrides)));
+    node.data({size:48,ink:'#334455'}).addClass('marked');
+    node.style(Object.fromEntries(Object.entries(overrides)));
+    assert.equal(node.width(),48);assert.equal(node.style('background-color'),'rgb(51,68,85)');
+    assert.equal(node.style('opacity'),'0.5');
+  }finally{renderer.destroy();}
+});
 test('live adoption waits for gestures, unsaved positions and Review decisions',()=>{
   const {run}=fixture();
   assert.equal(run('liveBlockReason()'),'');

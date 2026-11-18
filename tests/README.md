@@ -36,7 +36,9 @@ It also verifies that restarting an automatic failed-CPD snapshot launches neith
 or explicit Retry, while preserving the failed coverage.
 `test_monitor.py` checks coalescing, contention, supersession, activation, fairness and bounded automatic history.
 `test_monitor_inputs.py` checks profile-selected inputs, changed receipt/product sets and unpublished staging. The server
-suite refuses a valid read index from another graph before context admission. `test_notifications.py` and
+suite refuses a valid read index from another graph before context admission. It also pins two indexes for one run through
+independent tab heartbeats, checks their exact pages after further replacements and verifies independent release.
+`test_notifications.py` and
 `test_owned_process.py` exercise real Windows directory replacement, cancellation, controller death and pre-execution
 containment refusal. The lifecycle suite verifies authenticated shutdown during blocked owned work and foreign-process survival.
 It also injects polling failure with a real worker descendant and verifies process, notification and lease cleanup without
@@ -73,7 +75,7 @@ Source-file fixtures must use the normal pipeline/read index/server and real exa
 | [inspector.browser.js](inspector.browser.js) | Review fixture: accessible tabs, separate findings/details, retained drafts/evidence/scroll, lazy references, late responses and narrow panels |
 | [health.browser.js](health.browser.js) | `test_health.browser_fixture`: source evidence paging, file badges, triage/reopen, late-close, narrow layout and pin preservation |
 | [monitor.browser.js](monitor.browser.js) | Two registered sample targets: launch/deep-link precedence, inactive browsing and same-origin session controls |
-| [live.browser.js](live.browser.js) | Namespace fixture and a harness publication callback: adoption, camera, references, drag/save/draft deferral, Review isolation, independent tabs and removed focus |
+| [live.browser.js](live.browser.js) | Namespace fixture and a harness publication callback: adoption, injected layout/partial-render recovery, camera, references, drag/save/draft deferral, Review isolation, independent tabs and removed focus |
 
 Other functions use the served [sample](../sample/SampleProject/SampleProject.uproject), with synthetic overlays.
 Keep real-project screenshots outside the clone and other observations in the ignored workspace.

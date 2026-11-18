@@ -2,6 +2,25 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
 
+test('cancelled Review rechecks cannot reload or report a late failure into the current generation',async()=>{
+  const {ArchitectureReview}=require('../viewer/review.js'),saved={$:global.$,labels:global.readableLabels};
+  global.$=()=>({replaceChildren(){},textContent:''});global.readableLabels=()=>{};
+  try{
+    for(const failure of [false,true]){
+      let complete,fail,loads=0,statuses=0;
+      const owner=Object.assign(Object.create(ArchitectureReview.prototype),{enabled:true,epoch:0,
+        requests:new Set(),pages:new Map(),referenceIndex:new Map(),findingIndex:new Map(),
+        project(){},refreshInspection(){},status(){statuses++;},load:async()=>{loads++;},
+        request:()=>new Promise((resolve,reject)=>{complete=resolve;fail=reject;})});
+      const pending=owner.recheck(),before=statuses;owner.cancel();
+      if(failure)fail(Error('late old failure'));else complete({});
+      await pending;
+      assert.equal(loads,0);assert.equal(statuses,before);assert.equal(owner.error,null);
+      assert.equal(owner.enabled,false);
+    }
+  }finally{global.$=saved.$;global.readableLabels=saved.labels;}
+});
+
 test('wire findings follow exact reference groups through rollups, deep endpoints and filtering',()=>{
   const {ReviewReferenceIndex,ReviewEdgeProjection}=require('../viewer/review.js');
   const finding={id:'native',severity:'candidate',groups:[1,2],subjects:['A','B']};

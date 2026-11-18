@@ -1,6 +1,6 @@
 # Continuous useful analysis with safe reuse
 
-**Status:** DONE - Gates 1-3 verified within the recorded scope
+**Status:** DONE - Gates 1-3 verified; Gate 3 review corrections accepted
 
 The investigation and plan preserve their original evidence. The final review record documents implementation and closure.
 
@@ -1049,3 +1049,41 @@ Only changes authorized after this review are implemented; no new services or sp
   the delivered gates or their acceptance receipts; no user data or analyzed source was cleaned.
   Owned helper sessions were subsequently stopped through their original execution controls, and the marker-based fixture
   used its normal shutdown path. The main live viewer remains healthy; copied diagnostics remain under ignored scratch.
+
+
+### 2026-11-18 - Gate 3 recovery and exact-index retention
+
+- Both reviewer findings are valid. The task was reopened for these corrections; the earlier closure entry remains historical.
+  Before the fix, the injected-layout browser check reported a partially adopted map. The same-run two-tab regression
+  returned HTTP 410 for the first tab's topology despite a successful retention claim:
+  [server red evidence](../../workspace/tmp/gate3-review/index-red.log).
+- Adoption now checkpoints the native scene, bypass styles, UI nodes, camera, URL and prior owners. Candidate readers and
+  Review are independent until synchronous rendering succeeds. Failure cancels candidate work and restores the previous
+  scene without invoking the failed layout/projection again. Recovery preserves function-valued styles and leaves ordinary
+  stylesheet interaction reactive. A failure of recovery itself explicitly requires reload instead of promising restoration.
+- The browser regression injects both an early layout error and an error after an actual redraw, including candidate-only
+  node data, altered sizes and opacity. It verifies prior owners, exact Inspector DOM nodes, scene, styles, camera and history,
+  visible error reporting, subsequent successful adoption and isolation from late Review responses. A focused
+  cancellation probe additionally reproduced an old recheck resuming after cancellation; epoch guards now suppress both
+  its late reload and late failure, with a regression covering both outcomes.
+- Read contexts and heartbeat claims now include target, run and index identity. Two tabs retain different indexes for one
+  run across further regenerations; exact reference pages remain readable. Unknown claims cannot replace a valid lease,
+  and switching one tab releases only that tab's old version. Run-bound data/layout validation and existing cleanup remain
+  with their original owners. No new persistence, parser, renderer or service was introduced.
+- Verification: 96 affected Python checks passed without skips; all 182 JavaScript checks passed. Twelve existing Chromium
+  scenarios plus the extended live-adoption scenario passed. Scope includes HTTP/reference routing, monitoring, lifecycle,
+  immutable indexes, Review, Inspector, namespace files, native style behavior, documentation and privacy. Engine/native/CPD
+  extraction was not repeated for these viewer/read-context corrections; Gates 1-2 remain accepted and unchanged.
+  Receipts: [Python](../../workspace/tmp/gate3-review/python-results.json),
+  [JavaScript](../../workspace/tmp/gate3-review/javascript.log),
+  [existing browser scenarios](../../workspace/tmp/gate3-review/all/browser-initial-results.json),
+  [final Review/Inspector rechecks](../../workspace/tmp/gate3-review/all/browser-results.json),
+  [live recovery](../../workspace/tmp/gate3-review/browser-results.json).
+- The normal viewer was stopped through authenticated down and restarted through ordinary up. The real saved-map browser
+  smoke passed with monitoring active, index-bound references, no runtime errors and no position writes. Saved layouts,
+  policy and triage remained byte-identical:
+  [runtime smoke](../../workspace/tmp/gate3-review/main-results.json),
+  [protected state](../../workspace/tmp/gate3-review/user-state-result.json).
+- The stable monitoring, viewer and verification owners describe these contracts. Interface review found no new focus,
+  control or error-feedback gap in the changed paths. Final documentation, privacy, ASCII, syntax and whitespace checks
+  passed. Gate 3 is accepted within this verified scope, and the task returns to done. No staging or commit was performed.

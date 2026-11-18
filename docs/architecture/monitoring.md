@@ -56,7 +56,10 @@ to the same generation. Map URLs also bind the validated index identity, so rege
 Old URLs never acquire new reference identities. Expired contexts return HTTP 410. Active readers,
 the initial context and the latest/recovery contexts protect their artifacts from cleanup. Manual runs and user stores are
 never automatically removed; disposable automatic history is tagged separately.
-Browser status heartbeats retain each tab's current read context for a bounded interval. A tab replaces its own claim when
+Contexts and browser status heartbeats identify target, run and validated index. Different indexes for one run coexist while
+claimed, so retaining a run alone cannot falsely promise access to a replaced index. Unknown identities cannot acquire or
+replace a claim. Data and layout routes use the shared immutable run; map, reference and Review routes require the exact index.
+A tab retains its current read context for a bounded interval and replaces its own claim when
 it adopts or switches targets; it cannot release another tab's context. Expired claims stop protecting abandoned generations.
 This state lives only in the existing read-context owner and does not become another persistent store.
 

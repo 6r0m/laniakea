@@ -250,11 +250,11 @@ class Handler(BaseHTTPRequestHandler):
                                'monitoring':getattr(self.server,'monitor',None) is not None}).encode(),'application/json')
         if path=='/monitor/status':
             query=parse_qs(urlsplit(self.path).query,keep_blank_values=True)
-            if query and (set(query)!={'target','run','client'} or any(len(values)!=1 for values in query.values()) or
+            if query and (set(query)!={'target','run','client','index'} or any(len(values)!=1 for values in query.values()) or
                     not 1<=len(query['client'][0])<=64 or any(c not in
                     'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_' for c in query['client'][0])):
-                return self._send(400,b'expected one target, run and bounded browser identifier\n')
-            retained=self.server.snapshots.touch(query['target'][0],query['run'][0],query['client'][0]) if query else None
+                return self._send(400,b'expected one target, run, index and bounded browser identifier\n')
+            retained=self.server.snapshots.touch(query['target'][0],query['run'][0],query['client'][0],query['index'][0]) if query else None
             monitor=getattr(self.server,'monitor',None)
             data=monitor.status() if monitor else {'targets':[{'id':e['id'],'active':False,'state':'saved',
                   'ready':self.server.snapshots.latest(e['id'])} for e in self.server.index]}
@@ -361,7 +361,7 @@ def make_server(workspace, port=0, *, scan=True, launch_target=None):
     server.index = index
     server.views = views
     server.snapshots=Snapshots(workspace,index,views)
-    server.reviews={entry['id']:server.snapshots.contexts[entry['id'],entry['run']].review for entry in index}
+    server.reviews={entry['id']:server.snapshots.contexts[entry['id'],entry['run'],entry['map_identity']].review for entry in index}
     server.launch_target=launch_target
     server.layouts = LayoutStore(workspace)
     server.layout_node_ids = {}

@@ -69,6 +69,9 @@ class ArchitectureReview {
     this.referenceIndex.clear();this.findingIndex.clear();this.links.clear();this.nodeLinks.clear();this.ownerBadges.clear();
     this.panel(false);this.status();
   }
+  cancel() {
+    this.enabled=false;this.epoch++;for(const controller of this.requests)controller.abort();this.requests.clear();
+  }
   panel(open=$('review').hidden) {
     $('review').hidden=!open;$('toggle-review').setAttribute('aria-expanded',String(open));
     if(open){togglePanel('filters',false);if(typeof innerWidth!=='undefined'&&innerWidth<=1000)togglePanel('details',false);}
@@ -149,12 +152,14 @@ class ArchitectureReview {
   }
   async recheck() {
     this.epoch++;for(const c of this.requests)c.abort();this.pages.clear();this.data=null;this.project();readableLabels();
+    const epoch=this.epoch;
     this.referenceIndex.clear();this.findingIndex.clear();
     for(const id of ['review-items','review-pager','review-checks'])$(id).replaceChildren();
     this.refreshInspection();
     this.loading=true;this.error=null;this.status();$('review-status').textContent='Rechecking...';
-    try {await this.request({}, {action:'recheck'});await this.load();}
-    catch(error){if(error.name!=='AbortError'){this.loading=false;this.error=error.message;this.status();$('review-status').textContent=error.message;}}
+    try {await this.request({}, {action:'recheck'});if(epoch===this.epoch)await this.load();}
+    catch(error){if(epoch===this.epoch&&error.name!=='AbortError'){
+      this.loading=false;this.error=error.message;this.status();$('review-status').textContent=error.message;}}
   }
   project() {
     if(!state.cy||!state.shard)return;

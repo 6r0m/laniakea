@@ -125,7 +125,7 @@ class Scheduler(unittest.TestCase):
         self.monitor.step();self.assertEqual(self.contexts.latest('sample')['run'],run.name)
         self.settle();self.assertEqual(self.contexts.latest('sample')['run'],self.workspace.latest('sample').name)
         self.assertTrue(run.is_dir())
-        self.assertIn(('sample',self.run.name),self.contexts.contexts)
+        self.assertIn(self.contexts.baseline['sample'],self.contexts.contexts)
 
     def test_history_is_inactive_until_requested_and_multiple_active_targets_make_progress(self):
         target=self.workspace.register('other',{**self.workspace.load('sample'),'id':'other'})
@@ -179,24 +179,25 @@ class Scheduler(unittest.TestCase):
         rule=self.project/'Source/SampleProject/SampleProject.Build.cs'
         def change():
             rule.write_bytes(rule.read_bytes()+b'\n// next\n');self.dirty();self.settle()
-        change();run=self.workspace.latest('sample');self.assertTrue(self.contexts.touch('sample',run.name,'browser'))
+        change();run=self.workspace.latest('sample');identity=self.contexts.latest('sample')['map_identity']
+        self.assertTrue(self.contexts.touch('sample',run.name,'browser',identity))
         for _ in range(4):change()
-        self.assertTrue(run.exists());self.assertIn(('sample',run.name),self.contexts.contexts)
+        self.assertTrue(run.exists());self.assertIn(('sample',run.name,identity),self.contexts.contexts)
         with patch('laniakea.snapshots.time.monotonic',return_value=time.monotonic()+121):
             self.contexts.protected('sample')
-        self.assertNotIn(('sample',run.name),self.contexts.contexts)
+        self.assertNotIn(('sample',run.name,identity),self.contexts.contexts)
 
     def test_each_tab_releases_its_old_context_without_releasing_another_tab(self):
         self.monitor.activate('sample');self.settle()
         rule=self.project/'Source/SampleProject/SampleProject.Build.cs'
         def change():
             rule.write_bytes(rule.read_bytes()+b'\n// next\n');self.dirty();self.settle()
-        change();run=self.workspace.latest('sample')
-        self.contexts.touch('sample',run.name,'one');self.contexts.touch('sample',run.name,'two')
+        change();run=self.workspace.latest('sample');identity=self.contexts.latest('sample')['map_identity']
+        self.contexts.touch('sample',run.name,'one',identity);self.contexts.touch('sample',run.name,'two',identity)
         for _ in range(4):change()
-        latest=self.workspace.latest('sample')
-        self.contexts.touch('sample',latest.name,'one');self.assertIn(('sample',run.name),self.contexts.contexts)
-        self.contexts.touch('sample',latest.name,'two');self.assertNotIn(('sample',run.name),self.contexts.contexts)
+        latest=self.workspace.latest('sample');new_identity=self.contexts.latest('sample')['map_identity']
+        self.contexts.touch('sample',latest.name,'one',new_identity);self.assertIn(('sample',run.name,identity),self.contexts.contexts)
+        self.contexts.touch('sample',latest.name,'two',new_identity);self.assertNotIn(('sample',run.name,identity),self.contexts.contexts)
 
 
 if __name__=='__main__':unittest.main()

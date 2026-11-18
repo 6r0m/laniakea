@@ -11,7 +11,45 @@ async (page,{publish})=>{
     return {id,run:state.target.run};
   });
   await page.waitForFunction(()=>!state.framing&&!state.gestureActive);
-  const view=await page.evaluate(()=>({pan:{...state.cy.pan()},zoom:worldZoom(),scope:state.scopeShard.scope,
+  let view;
+  await page.evaluate(id=>selectNode(id),before.id);
+  await page.waitForFunction(()=>!state.referencePages.pending.size&&!liveBlockReason());
+  for(const operation of ['layout','refreshMap']){
+    await page.evaluate(operation=>{
+      const elements=()=>state.cy.elements().map(e=>e.json()).sort((a,b)=>a.data.id.localeCompare(b.data.id));
+      window.priorAdoption={target:state.target,manifest:state.manifest,universe:state.universe,
+        cache:state.positionCache,reader:state.referencePages,review:state.review,inspector:state.inspector,
+        details:[...$('details').childNodes],text:$('details').innerText,elements:JSON.stringify(elements()),
+        styles:JSON.stringify(renderedOverrides(state.cy).sort(([a],[b])=>a.localeCompare(b))),
+        pan:state.cy.pan(),zoom:worldZoom(),url:location.href,history:JSON.stringify(history.state),
+        operation,original:window[operation]};
+      window[operation]=()=>{
+        if(operation==='refreshMap'){
+          priorAdoption.original();state.cy.nodes().data('candidateOnly','must not survive recovery')
+            .style({width:12345,opacity:0.25});
+        }
+        throw Error('injected '+operation+' failure');
+      };
+    },operation);
+    await publish('remove');await poll();
+    await page.evaluate(()=>{window[priorAdoption.operation]=priorAdoption.original;});
+    check(await page.evaluate(()=>state.target===priorAdoption.target&&state.manifest===priorAdoption.manifest&&
+      state.universe===priorAdoption.universe&&state.positionCache===priorAdoption.cache&&
+      state.referencePages===priorAdoption.reader&&state.review===priorAdoption.review&&
+      state.inspector===priorAdoption.inspector&&
+      priorAdoption.details.every((node,i)=>$('details').childNodes[i]===node)&&$('details').innerText===priorAdoption.text&&
+      JSON.stringify(state.cy.elements().map(e=>e.json()).sort((a,b)=>a.data.id.localeCompare(b.data.id)))===priorAdoption.elements&&
+      JSON.stringify(renderedOverrides(state.cy).sort(([a],[b])=>a.localeCompare(b)))===priorAdoption.styles&&
+      location.href===priorAdoption.url&&JSON.stringify(history.state)===priorAdoption.history&&
+      JSON.stringify(state.cy.pan())===JSON.stringify(priorAdoption.pan)&&worldZoom()===priorAdoption.zoom),
+      'Failed '+operation+' left a partially adopted map, scene or Inspector');
+    check(await page.evaluate(()=>state.live.message.includes('injected '+priorAdoption.operation+' failure')),
+      'Rendering failure is not observable');
+    await page.evaluate(()=>{delete window.priorAdoption;state.live.failed=null;});
+  }
+  await page.evaluate(()=>renderDetails(null));
+  await page.waitForFunction(()=>!liveBlockReason());
+  view=await page.evaluate(()=>({pan:{...state.cy.pan()},zoom:worldZoom(),scope:state.scopeShard.scope,
     expanded:[...state.universe.expanded],url:location.hash,mode:$('layout').value}));
   let run=await publish();
   await page.evaluate(()=>{state.pointerDown=true;});await poll();
@@ -31,6 +69,7 @@ async (page,{publish})=>{
     'New exact references or position writes use the old generation');
   await page.evaluate(id=>selectNode(id),before.id);
   const oldRun=run;
+  await page.waitForFunction(()=>!liveBlockReason());
   let release;
   const held=new Promise(resolve=>{release=resolve;});
   const reviewURL=url=>url.pathname.endsWith('/review');
@@ -76,5 +115,5 @@ async (page,{publish})=>{
   await page.locator('#live-toggle').focus();await page.keyboard.press('Escape');
   check(await page.evaluate(()=>!$('live-controls').open&&document.activeElement===$('live-summary')),'Live controls do not close by keyboard');
   return {adoption:true,camera:true,deepScope:true,filters:true,immutableURLs:true,dragAndSaveDeferral:true,
-    drafts:true,closedInspector:true,removedFocus:true,narrowMap:true,reviewIsolation:true,multipleTabs:true};
+    drafts:true,closedInspector:true,removedFocus:true,narrowMap:true,reviewIsolation:true,multipleTabs:true,renderRollback:true};
 }

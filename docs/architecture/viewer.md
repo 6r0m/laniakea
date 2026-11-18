@@ -416,14 +416,17 @@ Saved-only opening labels unchecked source freshness in the coverage footer rath
 ## Live snapshots
 
 The live coordinator polls small session metadata, less often in hidden tabs, and stages manifest, topology, navigation
-index and layouts from one ready generation. It replaces the current map only after staging succeeds. Invalid or expired
-data leaves the last good map available with an explicit update error. Review evaluation is independent and never delays
-the map; obsolete Review and exact-page requests are cancelled or ignored by their generation guards.
+index and layouts from one ready generation. Adoption checkpoints the native scene, style overrides and UI nodes before
+rendering. Previous readers and inspection owners remain intact until that synchronous transition succeeds. A render failure
+restores the prior map, camera, URL, Inspector and readers without invoking the failed layout or projection again. Candidate
+requests are cancelled; an unrecoverable renderer error explicitly requires reload rather than claiming successful recovery.
+Invalid or expired data leaves the last good map available with an explicit update error. Review evaluation is independent
+and never delays the map; obsolete Review and exact-page requests are cancelled or ignored by their generation guards.
 When the validated read-index identity and projection hints are unchanged, the coordinator reuses topology and unchanged
 geometry while refreshing generation-bound readers, coverage and Review. A changed identity always prepares a new universe.
 
-Adoption reuses scene, position, reference and Inspector owners. It retains the camera, layout mode, surviving expanded
-containers, filters, selected entities and Inspector intent. Removed focus falls back through its recorded ancestors with
+Adoption uses the existing scene, position, reference and Inspector components. It retains the camera, layout mode, surviving
+expanded containers, filters, selected entities and Inspector intent. Removed focus falls back through its recorded ancestors with
 an explanation. Exact reference IDs are not carried across generations. Back/Forward and target switching use the adopted
 generation's immutable data URLs.
 
