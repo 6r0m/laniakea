@@ -209,6 +209,80 @@ class AnalysisControls(unittest.TestCase):
                 contextlib.redirect_stderr(io.StringIO()),self.assertRaisesRegex(LaniakeaError,'actual analyzer failure'):
             progress.emit('native','Running');raise LaniakeaError('actual analyzer failure')
 
+    def test_unreadable_native_failure_cache_does_not_refuse_a_probe(self):
+        from test_build_context import BuildContext
+        from laniakea.unreal import checks
+        self.build('--health','off');BuildContext.receipt(self,'SampleProjectEditor','Development')
+        with patch('laniakea.unreal.tools.load',return_value={'manifest':{}}):
+            recipe=execute(self.workspace,'sample','discover')['recipe']
+            with patch.object(checks,'failure_path') as path:
+                path.return_value.open.side_effect=PermissionError('cache read locked\n'+'x'*2000)
+                result=execute(self.workspace,'sample','probe',recipe)
+        self.assertIsNone(result['previous_failure'])
+        self.assertIn('cache read locked',result['cache_warning'])
+        self.assertLess(len(result['cache_warning']),512);self.assertNotIn('\n',result['cache_warning'])
+        self.assertTrue(result['needs_initial_refresh'])
+
+    def test_native_failure_cache_write_cannot_replace_the_compiler_error(self):
+        from test_build_context import BuildContext
+        from laniakea.unreal import checks
+        from laniakea.unreal.compiler import NativeDiagnosticsError
+        from laniakea.unreal.tools import digest
+        self.build('--health','off');BuildContext.receipt(self,'SampleProjectEditor','Development')
+        published=self.workspace.latest('sample');source=self.project/'Source/SampleProject/SampleProject.cpp'
+        failure=NativeDiagnosticsError('primary compiler diagnostic',{str(source):digest(source)},self.project)
+        with patch('laniakea.unreal.tools.load',return_value={'manifest':{}}):
+            recipe=execute(self.workspace,'sample','discover')['recipe']
+            with self.workspace.extraction_lock('sample'),patch.object(pipeline,'stage',side_effect=failure), \
+                    patch.object(checks,'write_json',side_effect=PermissionError('cache write locked')):
+                with self.assertRaises(NativeDiagnosticsError) as caught:execute(self.workspace,'sample','stage',recipe)
+        self.assertIs(caught.exception,failure)
+        self.assertTrue(str(failure).startswith('primary compiler diagnostic'))
+        self.assertIn('cache write locked',str(failure))
+        self.assertEqual(self.workspace.latest('sample'),published)
+
+    def test_failed_cache_cleanup_cannot_reject_success_or_override_its_published_identity(self):
+        from test_build_context import BuildContext
+        from laniakea.unreal import checks
+        self.build('--health','off');BuildContext.receipt(self,'SampleProjectEditor','Development')
+        published=self.workspace.latest('sample')
+        def indexed(_target,_run,graph,*_):
+            return graph,{'enabled':True,'external_inputs':{},'units':1,'unknown':{'source':0,'target':0}}
+        with patch('laniakea.unreal.tools.load',return_value={'manifest':{}}):
+            recipe=execute(self.workspace,'sample','discover')['recipe']
+            before=execute(self.workspace,'sample','probe',recipe)
+            cache=checks.failure_path(self.workspace,'sample')
+            write_json(cache,{'version':2,'kind':'native-source-diagnostics','identity':before['identity'],'error':'old diagnostic'})
+            self.assertIsNotNone(execute(self.workspace,'sample','probe',recipe)['previous_failure'])
+            self.assertIsNotNone(checks.previous_failure(self.workspace,'sample',before['identity'],recipe,
+                read_json(published/'manifest.json'),{'identity':before['identity']}))
+            unlink=Path.unlink
+            def locked(path,*args,**kwargs):
+                if path==cache:raise PermissionError('cache delete locked')
+                return unlink(path,*args,**kwargs)
+            with self.workspace.extraction_lock('sample'),recorded_ubt(self.project,self.engine), \
+                    patch('laniakea.unreal.compiler.extract',side_effect=indexed),patch.object(Path,'unlink',locked):
+                result=execute(self.workspace,'sample','stage',recipe)
+            self.assertIn('cache delete locked',result['cache_warning'])
+            self.assertEqual(self.workspace.latest('sample'),published)
+            candidate=self.workspace.target_dir('sample')/'runs'/result['candidate']
+            self.assertTrue(candidate.is_dir());self.assertTrue(cache.is_file())
+            # The negative record must not win after the successful candidate is actually published.
+            stale={'version':2,'kind':'native-source-diagnostics','identity':result['identity'],'error':'old diagnostic'}
+            write_json(cache,stale)
+            with self.workspace.extraction_lock('sample'):self.workspace.commit_run('sample',candidate)
+            with patch.object(checks,'failure_path',side_effect=AssertionError('published success must precede cache I/O')):
+                restarted=execute(Workspace(self.workspace.root),'sample','probe',recipe)
+            self.assertIsNone(restarted['previous_failure'])
+            self.assertEqual(restarted['previous_identity'],restarted['identity'])
+            self.assertFalse(restarted['needs_initial_refresh'])
+            self.assertEqual(read_json(cache),stale)
+            source=self.project/'Source/SampleProject/SampleProject.cpp'
+            source.write_bytes(source.read_bytes()+b'\n// changed since native success\n')
+            changed=execute(self.workspace,'sample','probe',recipe)
+            write_json(cache,{**stale,'identity':changed['identity']})
+            self.assertIsNotNone(execute(self.workspace,'sample','probe',recipe)['previous_failure'])
+
 
 
 if __name__=='__main__':unittest.main()

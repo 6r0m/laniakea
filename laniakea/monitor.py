@@ -278,6 +278,7 @@ class Monitor:
             followup=('discover','checking') if result.get('checks_pending') else (None,'fresh')
             state.update(run=run.name,identity=result['identity'],failure=None,attempts=0,state='fresh',requested=None,
                          checks=result.get('checks',state['checks']),revision=state['revision']+1,
+                         degraded=result.get('cache_warning',state['degraded']),
                          reconcile=now+self.RECONCILE,phase='cleanup',due=now,after_cleanup=followup)
         elif job['phase']=='cleanup':
             if result.get('deferred'):

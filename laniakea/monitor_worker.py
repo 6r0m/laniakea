@@ -21,7 +21,7 @@ def execute(workspace,target_id,operation,recipe=None):
     if operation=='probe':
         recipe,result=profile.monitor_inputs(workspace,target,manifest,recipe)
         automatic=read_json(run/'automatic.json') if (run/'automatic.json').is_file() else {}
-        previous=getattr(profile,'previous_check_failure',lambda *_:None)(workspace,target_id,result['identity'],recipe)
+        previous=getattr(profile,'previous_check_failure',lambda *_:None)(workspace,target_id,result['identity'],recipe,manifest,automatic)
         return {**result,'recipe':recipe,
                 'previous_failure':previous if previous and 'error' in previous else None,
                 'cache_warning':previous.get('cache_error') if previous else None,
@@ -39,7 +39,8 @@ def execute(workspace,target_id,operation,recipe=None):
             staged,candidate=pipeline.stage(workspace,target,symbols=recipe['symbols'],health_options=recipe['health'],
                                              automatic=True,checks=recipe.get('checks'))
         except BaseException as error:
-            getattr(profile,'remember_check_failure',lambda *_:None)(workspace,target_id,recipe,before['identity'],error)
+            warning=getattr(profile,'remember_check_failure',lambda *_:None)(workspace,target_id,recipe,before['identity'],error)
+            if warning:error.args=(f'{error}; {warning}',)
             raise
         progress.emit('publication','Validating the new map')
         view,validation=map_index.validation(workspace,target_id,staged)
@@ -48,10 +49,10 @@ def execute(workspace,target_id,operation,recipe=None):
         if before['identity']!=settled['identity']:
             raise LaniakeaError('inputs changed during background analysis; candidate was not published')
         profile.validate_monitor_inputs(target,candidate)
-        getattr(profile,'clear_check_failure',lambda *_:None)(workspace,target_id,recipe)
+        warning=getattr(profile,'clear_check_failure',lambda *_:None)(workspace,target_id,recipe)
         followup=profile.monitor_roots(workspace,target,candidate,recipe) if recipe.get('checks') else None
         write_json(staged/'automatic.json',{'version':1,'identity':after['identity'],'view':view.root.name})
-        return {**after,'recipe':recipe,'candidate':staged.name,'view':view.root.name,'validation':validation,
+        return {**after,'recipe':recipe,'candidate':staged.name,'view':view.root.name,'validation':validation,'cache_warning':warning,
                 'checks':followup['checks'] if followup else [],
                 'checks_pending':bool(followup and followup['recipe']['symbols']!=recipe['symbols'])}
     except BaseException:

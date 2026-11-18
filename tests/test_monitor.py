@@ -86,6 +86,23 @@ class Scheduler(unittest.TestCase):
         self.assertEqual(self.workspace.latest('sample'),self.run)
         self.assertEqual(self.monitor.status()['targets'][0]['state'],'paused')
 
+    def test_cache_cleanup_warning_remains_visible_without_preventing_publication(self):
+        from unittest.mock import patch
+        self.monitor.activate('sample');self.settle()
+        rule=self.project/'Source/SampleProject/SampleProject.Build.cs'
+        rule.write_bytes(rule.read_bytes()+b'\n// changed\n')
+        original=execute
+        def warned(*args,**kwargs):
+            result=original(*args,**kwargs)
+            if args[2]=='stage':result['cache_warning']='Native failure cache cleanup unavailable: cache locked'
+            return result
+        with patch('test_monitor.execute',side_effect=warned):self.dirty();self.settle()
+        status=self.monitor.status()['targets'][0]
+        self.assertEqual(status['state'],'fresh')
+        self.assertIn('cache locked',status['degraded'])
+        self.assertNotEqual(self.workspace.latest('sample'),self.run)
+        self.assertEqual(self.contexts.latest('sample')['run'],self.workspace.latest('sample').name)
+
     def test_pause_reports_stopping_until_the_owned_job_has_closed(self):
         self.monitor.activate('sample');self.settle()
         rule=self.project/'Source/SampleProject/SampleProject.Build.cs';rule.write_bytes(rule.read_bytes()+b'\n// changed\n')

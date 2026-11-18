@@ -36,6 +36,8 @@ It also verifies that restarting an automatic failed-CPD snapshot launches neith
 or explicit Retry, while preserving the failed coverage.
 `test_analysis_controls.py` checks first-opening intent, legacy settings, native prerequisites and failed-attempt reuse.
 It also rejects unrelated/superseded negative-cache entries and injects optional progress-output failure during valid extraction.
+Permission fault injection covers native negative-cache reads, writes and cleanup, preserving primary outcomes and preferring
+published native success over a stale refusal. The scheduler exposes cleanup warnings without blocking publication.
 `test_monitor.py` checks coalescing, contention, supersession, activation, fairness and bounded automatic history.
 `test_monitor_inputs.py` checks profile-selected inputs, changed receipt/product sets and unpublished staging. The server
 suite refuses a valid read index from another graph before context admission. It also pins two indexes for one run through

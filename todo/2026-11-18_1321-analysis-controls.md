@@ -434,3 +434,18 @@ real acceptance evidence, and no unrelated or operator-staged work is altered.
   baseline for the reported defects. Diagnostic category probes used the pinned local LLVM rather than message guessing.
 - Documentation/privacy checks passed. Main saved stores are checked byte-for-byte, temporary servers are stopped, and the
   normal viewer is restarted through its owned lifecycle. D5's full real-project runtime gate is still pending.
+
+### 2026-11-18 - Native negative-cache I/O isolation
+
+- F5 is valid. Three red fault-injection tests reproduced cache read refusal, replacement of the primary compiler error
+  during cache write, and rejection of a validated candidate during cache cleanup. Cache failures return bounded diagnostics;
+  the primary error type and diagnostic survive, and successful staging/publication remains authoritative.
+- The profile receives the worker's existing published manifest and automatic identity. A completed native snapshot with
+  that identity takes precedence over a stale negative entry without reading it. Module-only baselines and changed identities
+  do not bypass valid failure reuse. The scheduler exposes cleanup warnings through its existing degraded status.
+- Acceptance: 134 affected Python checks passed without skips, including real LLVM/CPD on synthetic sources, server/lifecycle
+  and publication checks. The 44 cache/control/monitor/documentation/privacy checks also passed under Python 3.11.
+  Evidence remains under `workspace/tmp/native-cache-isolation/`. No new subsystem or cache authority was introduced.
+- D5 remains unchanged: final real-project native Stop/resume/adoption acceptance is pending. This task stays PARTIAL.
+- The normal viewer restarted through its owned lifecycle and answered HTTP 200. Protected layouts and Review stores
+  remained byte-identical. Documentation/privacy and Python 3.9 grammar checks passed; nothing was staged or committed.

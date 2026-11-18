@@ -62,6 +62,9 @@ environment used by preprocessing. Unknown/new external inputs cannot establish 
 independent of the last good map; unclassified records never establish completed analysis or a reusable refusal.
 Required On requests, UBT/other provider errors, superseded inputs, access/resource failures and unrecognized diagnostics
 cannot create native negative-cache entries. They retain the ordinary session failure/Retry behavior.
+Negative-cache read, write and cleanup I/O failures produce bounded diagnostics without changing the primary acquisition
+outcome. An unreadable cache cannot refuse analysis. A published automatic native result takes precedence over an old
+negative record with the same input identity, even when that record could not be deleted.
 Reusing a snapshot never promotes failed coverage to completed analysis or zero findings.
 
 An unrecorded optional external header appearing outside watched inputs does not itself guarantee scheduling. Native

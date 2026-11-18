@@ -95,12 +95,20 @@ def failure_path(workspace,target_id):
     return workspace.target_dir(target_id)/'cache/analysis/native-failure.json'
 
 
-def previous_failure(workspace,target_id,identity,recipe=None):
+def _cache_error(operation,error):
+    return f'Native failure cache {operation} unavailable: {" ".join(str(error).split())[:400]}'
+
+
+def previous_failure(workspace,target_id,identity,recipe=None,manifest=None,automatic=None):
     if recipe is not None and (recipe.get('checks',{}).get('native')!='auto' or not recipe['symbols']):return None
+    # Publication is authoritative even when an older disposable refusal could not be deleted.
+    if (automatic or {}).get('identity')==identity and any(s['id']=='compiler' for s in (manifest or {}).get('sources',[])):
+        return None
     path=failure_path(workspace,target_id)
     try:
         with path.open('rb') as stream:raw=stream.read(8193)
     except FileNotFoundError:return None
+    except OSError as error:return {'cache_error':_cache_error('read',error)+'; recomputing.'}
     if len(raw)>8192:return {'cache_error':'Native failure cache exceeds its size limit; recomputing.'}
     try:value=json.loads(raw)
     except (ValueError,UnicodeError):return {'cache_error':'Native failure cache is invalid; recomputing.'}
@@ -115,26 +123,28 @@ def remember_failure(workspace,target_id,recipe,identity,error):
     from .compiler import NativeDiagnosticsError
     if not isinstance(error,NativeDiagnosticsError) or not error.inputs or error.copy_root is None:return
     from . import monitor,graph
-    target=workspace.load(target_id)
     try:
+        target=workspace.load(target_id)
         current=monitor.inspect(workspace,target,
                                 read_json(workspace.latest(target_id)/'manifest.json'),recipe)
     except (OSError,LaniakeaError,ValueError) as refusal:
-        error.args=(f'{error}; failure reuse unavailable: {refusal}',)
-        return
+        return _cache_error('validation',refusal)
     if current['identity']!=identity:return
     # Unknown/new external inputs are not part of this identity and cannot justify persistent refusal.
     for name,value in error.inputs.items():
         relative=graph._relative(name,error.copy_root)
         key=relative if relative is not None else 'external:'+name
         if current['inputs'].get(key)!=value:return
-    write_json(failure_path(workspace,target_id),{'version':2,'kind':'native-source-diagnostics',
-                                                'identity':identity,'error':str(error)[:1500]})
+    try:
+        write_json(failure_path(workspace,target_id),{'version':2,'kind':'native-source-diagnostics',
+                                                    'identity':identity,'error':str(error)[:1500]})
+    except OSError as refusal:return _cache_error('write',refusal)
 
 
 def clear_failure(workspace,target_id,recipe):
     if recipe.get('checks',{}).get('native')=='auto' and recipe['symbols']:
-        failure_path(workspace,target_id).unlink(missing_ok=True)
+        try:failure_path(workspace,target_id).unlink(missing_ok=True)
+        except OSError as error:return _cache_error('cleanup',error)
 
 
 def snapshot_outcome(manifest,choices,enabled):
