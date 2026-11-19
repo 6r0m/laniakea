@@ -583,6 +583,13 @@ test('stale warnings disclose complete diagnostics without filling the collapsed
   assert.match(run("$('banner').children[0].children[0].textContent"),/30 inputs changed/);
   assert.ok(!run("$('banner').children[0].children[0].textContent").includes('VeryLongChangedHeader'));
   assert.equal(run("$('banner').children[0].children.find(n=>n.tag==='ul').children.length"),20);
+  run("globalThis.staleDisclosure=$('banner').children[0];staleDisclosure.open=true;realRenderBanner();");
+  assert.equal(run("$('banner').children[0]===staleDisclosure"),true,'Status refresh replaced the useful legacy disclosure');
+  run(`state.live={status:{targets:[{id:'sample',comparison:{baseline:'newer-run',scope:{build:{status:'compared'}}}}]}};
+    realRenderBanner();`);
+  assert.equal(run("$('banner').hidden"),false,'A different baseline suppressed legacy paths');
+  run("state.live.status.targets[0].comparison.baseline=state.target.run;realRenderBanner();");
+  assert.equal(run("$('banner').hidden"),true,'Live comparison retained duplicate stale paths');
   run('state.target.stale=false;realRenderBanner();');
   assert.equal(run("$('banner').hidden"),true);
 });

@@ -254,6 +254,22 @@ class Handler(BaseHTTPRequestHandler):
         if path=='/data/startup.json':
             return self._send(200,json.dumps({'target':self.server.launch_target,
                                'monitoring':getattr(self.server,'monitor',None) is not None}).encode(),'application/json')
+        if path=='/monitor/changes':
+            from .monitor import ComparisonConflict
+            monitor=getattr(self.server,'monitor',None)
+            if monitor is None:return self._send(409,b'live input comparison is unavailable\n')
+            try:
+                raw=parse_qs(urlsplit(self.path).query,keep_blank_values=True)
+                if any(len(v)!=1 for v in raw.values()):raise ValueError('repeated comparison query')
+                query={k:v[0] for k,v in raw.items()}
+                for key in ('cursor','limit'):
+                    if key in query:
+                        if not query[key].isdecimal():raise ValueError('invalid changed-input page')
+                        query[key]=int(query[key])
+                data=monitor.changes(query)
+                return self._send(200,json.dumps(data,separators=(',',':')).encode(),'application/json')
+            except ComparisonConflict as error:return self._send(409,str(error).encode())
+            except (ValueError,UnicodeError) as error:return self._send(400,str(error).encode())
         if path=='/monitor/status':
             query=parse_qs(urlsplit(self.path).query,keep_blank_values=True)
             if query and (set(query)!={'target','run','client','index'} or any(len(values)!=1 for values in query.values()) or

@@ -3,6 +3,7 @@
 
 import hashlib
 import json
+import os
 from pathlib import Path
 
 from .. import LaniakeaError
@@ -72,8 +73,77 @@ def inspect(workspace,target,manifest,request):
                            for path in [*package.glob('*.py'),*package.joinpath('unreal').glob('*.py')]}
     identity=hashlib.sha256(json.dumps({'inputs':values,'request':request,'tools':tool_state},
                                      sort_keys=True,separators=(',',':')).encode()).hexdigest()
-    return {'identity':identity,'inputs':values,'changed':changed,'watches':watches(workspace,target,manifest,plugins,code,request),
+    scope={'prefixes':[] if request['symbols'] else health[0]['prefixes'],
+           'excludes':[] if request['symbols'] else target.get('excludes',[])} if code else None
+    return {'identity':identity,'inputs':values,'source_scope':scope,'changed':changed,'watches':watches(workspace,target,manifest,plugins,code,request),
             'source_bodies_monitored':bool(code)}
+
+
+def compare_inputs(workspace,target,manifest,request,current,run):
+    """Describe only domains whose recorded and observed inventories are comparable."""
+    baseline=workspace.request_at(target['id'],run)
+    prior=baseline['target'] if baseline else None
+    roots_match=bool(prior) and all(os.path.normcase(os.path.abspath(prior[key]))==
+        os.path.normcase(os.path.abspath(target[key])) for key in ('project_file','engine_root'))
+    native=any(s['id']=='compiler' for s in manifest['sources'])
+    acquired=manifest['coverage'].get('acquisition',{}).get('source-duplication',{})
+    old_scope=({'prefixes':[],'excludes':[]} if native else
+        {'prefixes':manifest['health']['prefixes'],'excludes':prior.get('excludes',[]) if prior else []}
+        if 'health' in manifest and acquired.get('status')=='completed' else None)
+    new_scope=current.get('source_scope')
+    equal_scope=old_scope is not None and new_scope is not None and all(
+        sorted(old_scope[k])==sorted(new_scope[k]) for k in ('prefixes','excludes'))
+    source_status='not-monitored' if new_scope is None else 'not-recorded' if old_scope is None else \
+                  'compared' if equal_scope else 'scope-changed'
+    scope={'build':{'label':'Build rules and descriptors','status':'compared'},
+           'source':{'label':'C++ source content','status':source_status},
+           'external':{'label':'Recorded external inputs','status':'compared' if native and request['symbols'] else
+                       'not-monitored' if not request['symbols'] else 'not-recorded'}}
+    if not roots_match:
+        for item in scope.values():item['status']='unavailable'
+    before=manifest['inputs'];after=current['inputs'];rows=[];counts={};total=0
+    def category(key):
+        if key.startswith('external:'):return 'external','Recorded external inputs'
+        lower=key.casefold()
+        if lower.endswith(('.build.cs','.target.cs')):return 'build','Build rules'
+        if lower.endswith(('.uproject','.uplugin')):return 'build','Project descriptors'
+        if lower.endswith('.target'):return 'build','Build evidence'
+        if Path(key).suffix.lower() in source_inputs.EXTENSIONS:
+            return 'source','Implementation files' if lower.endswith(('.c','.cc','.cpp','.cxx')) else 'Headers'
+        return 'other','Other recorded inputs'
+    roots={**target.get('roots',{}),**manifest.get('roots',{})}
+    def location(key):
+        if not key.startswith('external:'):return {'root':'project','path':key}
+        path=Path(os.path.abspath(key[len('external:'):]))
+        for name,root in roots.items():
+            if not isinstance(root,str):continue
+            try:return {'root':name,'path':path.relative_to(Path(os.path.abspath(root))).as_posix()}
+            except ValueError:pass
+        return None
+    for key in sorted(before.keys()|after.keys()):
+        domain,label=category(key)
+        if not roots_match or domain!='other' and scope[domain]['status']!='compared':continue
+        if domain=='other' and key not in before:continue
+        previous=before.get(key);observed=after.get(key)
+        if previous==observed:continue
+        change='added' if previous is None else 'removed' if observed in (None,'missing') else 'modified'
+        item={'path':key,'category':label,'change':change}
+        loc=location(key)
+        if loc:
+            if key.startswith('external:'):item['path']=loc['root']+': '+loc['path']
+            if change!='removed':item['source']=loc
+        total+=1;counts[label]=counts.get(label,0)+1
+        if len(rows)<10000 and len(item['path'])<=4096:rows.append(item)
+    guidance=[]
+    if total:
+        if any(label in counts for label in ('Build rules','Project descriptors','Build evidence','Other recorded inputs')):
+            guidance.append('Recorded module architecture may need rechecking.')
+        if native:guidance.append('Recorded C++ references may be outdated.')
+        if acquired.get('status')=='completed':guidance.append('Recorded duplication evidence may be outdated.')
+    return {'baseline':manifest['run'],'scope':scope,'rows':rows,'total':total,'counts':counts,'complete':len(rows)==total,
+            'limits':['Only recorded, currently monitored input domains are compared.',
+                      'Configuration and tool/environment details have no per-input comparison baseline.'],
+            'guidance':guidance}
 
 
 def validate(target,manifest):

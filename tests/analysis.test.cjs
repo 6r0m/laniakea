@@ -2,6 +2,29 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const {checksSummary}=require('../viewer/analysis.js');
 
+test('input changes belong to the displayed checkpoint and never imply an architecture error',()=>{
+  const {inputChangeSummary}=require('../viewer/analysis.js');
+  assert.equal(typeof inputChangeSummary,'function','missing change presentation');
+  const target={id:'sample',run:'old'},comparison={baseline:'old',observation:'a',status:'current',total:2,
+    counts:{Headers:2},scope:{source:{status:'compared'}},complete:true,context:'changed'};
+  const shown=inputChangeSummary({comparison},target);
+  assert.match(shown.label,/changes detected/i);assert.equal(shown.available,true);
+  assert.equal(inputChangeSummary({comparison:{...comparison,baseline:'new'}},target).available,false);
+  assert.match(inputChangeSummary({comparison:{...comparison,status:'paused'}},target).label,/paused/i);
+});
+
+test('a missing input baseline and a known empty scoped comparison remain different',()=>{
+  const {inputChangeSummary}=require('../viewer/analysis.js');
+  assert.equal(typeof inputChangeSummary,'function','missing change presentation');
+  const target={id:'sample',run:'old'};
+  assert.match(inputChangeSummary(null,target).label,/not available|not checked/i);
+  const empty={baseline:'old',status:'current',total:0,context:'unchanged',scope:{build:{status:'compared'},source:{status:'not-monitored'}}};
+  const shown=inputChangeSummary({comparison:empty},target);
+  assert.match(shown.label,/compared inputs/i);assert.match(shown.detail,/not monitored/i);
+  const unknown=inputChangeSummary({comparison:{...empty,scope:{build:{status:'unavailable'}}}},target);
+  assert.equal(unknown.available,false);assert.match(unknown.label,/not available/i);
+});
+
 test('late check settings responses cannot change another target form or status',async()=>{
   const {AnalysisControls}=require('../viewer/analysis.js'),previous=global.state;
   const control=Object.create(AnalysisControls.prototype);control.render=()=>{};

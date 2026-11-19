@@ -107,6 +107,14 @@ a:hover { text-decoration-thickness: 2px; }
 .map-context { display:flex; align-items:center; gap:16px; padding:0 20px; height:26px; flex:none;
   border-bottom:1px solid var(--line); font-size:12px; }
 .map-context > span:not(:first-child) { flex-shrink:0; }
+.map-context #layout-hint,.map-context #source-layout-status { flex-shrink:1; min-width:0; overflow:hidden;
+  white-space:nowrap; text-overflow:ellipsis; }
+#input-change-status { flex:0 0 164px; min-width:0; padding:2px 4px; font-size:12px; text-align:left;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; border-color:transparent; color:var(--muted); }
+#input-change-list { padding-left:20px; margin:8px 0; overflow-wrap:anywhere; }
+#input-change-list li { margin-bottom:10px; }
+#input-change-list small { display:block; color:var(--muted); }
+#input-change-scope p { margin:4px 0; }
 #view-summary { padding:5px 9px; min-height:32px; border:1px solid var(--line); border-radius:5px; }
 .view-options { position:fixed; z-index:40; top:var(--view-top,96px); left:var(--view-left,12px); width:280px; max-width:calc(100vw - 24px);
   max-height:calc(100vh - var(--view-top,96px) - 12px); overflow:auto;

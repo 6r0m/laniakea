@@ -58,6 +58,11 @@ def monitor_inputs(workspace,target,manifest,recipe=None):
     return recipe,monitor.inspect(workspace,target,manifest,recipe)
 
 
+def input_comparison(workspace,target,manifest,recipe,current,run):
+    from .monitor import compare_inputs
+    return compare_inputs(workspace,target,manifest,recipe,current,run)
+
+
 def validate_monitor_inputs(target,manifest):
     from . import monitor
     monitor.validate(target,manifest)

@@ -76,6 +76,26 @@ An unrecorded optional external header appearing outside watched inputs does not
 preprocessing guards detect it on the next extraction; Retry, a build or another observed input change can initiate that
 extraction. Recorded external inputs are monitored. This is a trigger limitation, not permission to reuse invalid native facts.
 
+## Input-change comparison
+
+The profile projects comparable changes from the existing fingerprint pass; it does not scan again or decide when work
+should run. The worker binds its advisory result to the published run. Monitor accepts only the matching job/generation
+and retains one bounded observation per target in memory. Canonical graphs, acquisition coverage and user stores are unchanged.
+
+Status includes scope, category counts, time and an observation identity, without paths or raw fingerprints.
+`GET /monitor/changes` pages that cached observation using target, baseline run and expected observation identity. Cursors
+are offsets with at most 100 paths per page. Replaced observations or mismatched runs return HTTP 409. Requests cannot select
+filesystem paths, read sources, load tools or start checks. Detail is limited to 10,000 paths and 2 MiB of serialized rows;
+full detected counts remain available and incomplete detail is explicit. Malformed advisory metadata degrades comparison
+without changing an otherwise valid analysis/publication outcome. Actual input-read failures retain normal failure semantics.
+
+An event makes the previous observation pending. Pause, failed watches, input errors and inactive targets cannot claim a
+current comparison. Publication rebinds comparison to the new run using its validated worker observation. The browser only
+shows counts/paths for its displayed baseline; a newer baseline waits for ordinary adoption. A monitoring identity can
+establish that overall context differs, but cannot attribute changes to configuration or tools lacking recorded values.
+An empty comparable path list never certifies the whole project as unchanged. Domain interpretation belongs to
+[the profile](unreal-profile.md#input-comparison-domains); presentation belongs to [the viewer](viewer.md#coverage-and-freshness-presentation).
+
 ## Publication and shutdown
 
 The controller holds the existing extraction lock while a worker stages and validates a candidate. Before/after identity

@@ -43,7 +43,7 @@ function adoptionCheckpoint() {
   const focus=document.activeElement;
   const roots=['details','review','filters','analysis','toggle-analysis','banner','coverage','crumbs','find-results','find-hint','scope-summary',
     'position-status','source-layout-status','layout-hint','map-tooltip','map-empty','hover-card','icon-key','review-legend',
-    'toggle-review','toggle-details','toggle-configuration','configuration-legend','up','arrange-files','find','graph'];
+    'toggle-review','toggle-details','toggle-configuration','configuration-legend','up','arrange-files','find','graph','input-change-status'];
   const dom=roots.map(id=>{
     const node=$(id);
     return {node,children:id==='graph'?null:[...node.childNodes],attrs:[...node.attributes].map(a=>[a.name,a.value]),

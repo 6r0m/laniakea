@@ -131,9 +131,18 @@ class CpdProcess(unittest.TestCase):
                 probe=execute(self.workspace,'sample','probe')
                 self.assertFalse(probe['needs_initial_refresh'])
                 self.assertEqual(probe['previous_identity'],probe['identity'])
+                self.assertEqual(probe['comparison']['scope']['source']['status'],'compared')
+                self.assertEqual(probe['comparison']['total'],0)
                 config.write_text('[Synthetic]\nValue=next-stopped-session\n')
                 changed=execute(self.workspace,'sample','probe')
                 self.assertNotEqual(changed['previous_identity'],changed['identity'])
+                self.assertEqual(changed['comparison']['context'],'changed')
+                self.assertEqual(changed['comparison']['total'],0,'Unrecorded Config was invented as a source edit')
+                source=self.project/'Source/SampleProject/First.cpp';source.write_bytes(source.read_bytes()+b'\n// edit\n')
+                with patch('laniakea.unreal.cpd.subprocess.run',side_effect=AssertionError('probe launched CPD')):
+                    observed=execute(self.workspace,'sample','probe')['comparison']
+                self.assertEqual(observed['total'],1)
+                self.assertEqual(observed['rows'][0]['category'],'Implementation files')
         finally:owner.stop()
 
     def extract(self):

@@ -72,6 +72,10 @@ class NativeHealth(unittest.TestCase):
         source=self.project/'Source/SampleProject/First.cpp'
         source.write_text(f'#include "{header.as_posix()}"\n'+source.read_text()+'\nint ReadExternal(){return SampleExternalValue();}\n')
         result,candidate=self.invoke(stage=True)
+        self.assertEqual(result['comparison']['baseline'],candidate['run'])
+        self.assertEqual(result['comparison']['scope']['source']['status'],'compared')
+        self.assertEqual(result['comparison']['scope']['external']['status'],'compared')
+        self.assertEqual(result['comparison']['total'],0)
         key=next(key for key in candidate['inputs'] if external_key(key))
         self.assertEqual(candidate['inputs'][key],tools.digest(header))
         path=self.workspace.target_dir('sample')/'runs'/result['candidate']

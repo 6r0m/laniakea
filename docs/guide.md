@@ -31,6 +31,11 @@ Auto uses available prerequisites; On makes a check required; Off explicitly ski
 map publishes. Failed or cancelled attempts keep the previous saved settings. Existing projects retain their recorded
 choices; **Run recommended checks** explicitly enables the automatic modes.
 
+Keep exploring the recorded map while editing. The change summary opens **Checks**, where **Changes since recorded analysis**
+shows comparable inputs and **Show paths** lists added, modified and removed files. It also explains unmonitored or unavailable
+source coverage. **Build evidence** can mean a rewritten receipt, not edited code or a successful build. These are recheck
+hints, not architecture findings. Use the existing Run/Retry controls when ready; paging does not start checks or enable Off modes.
+
 **Review** inspects findings in recorded evidence. **View** contains layout, filters, configuration marks, fitting and
 arrangement. **Inspector** opens the current selection. Zero findings with missing checks does not certify the architecture.
 

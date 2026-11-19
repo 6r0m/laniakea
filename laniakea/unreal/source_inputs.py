@@ -42,5 +42,6 @@ def fingerprints(project, manifest=None, *, prefixes=(), excludes=()):
     for key in (manifest or {}).get("inputs", {}):
         if key.startswith("external:"):
             path = Path(key[len("external:"):])
-            result[key] = hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else "missing"
+            try:result[key] = hashlib.sha256(path.read_bytes()).hexdigest()
+            except FileNotFoundError:result[key] = 'missing'
     return result

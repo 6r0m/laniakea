@@ -65,7 +65,7 @@ function inspectionViewer(styleEnabled = false) {
 function treeElements(run) {
   run(`globalThis.el=(tag,text,attrs={})=>({tag,textContent:text||'',attrs,children:[],isConnected:true,
     append(...items){this.children.push(...items);},replaceChildren(...items){this.children=items;},
-    setAttribute(name,value){this.attrs[name]=value;},remove(){},scrollIntoView(){this.scrolled=true;},
+    setAttribute(name,value){this.attrs[name]=value;},getAttribute(name){return this.attrs[name]??null;},remove(){},scrollIntoView(){this.scrolled=true;},
     querySelector(selector){const attribute=selector.match(/^\\[([^=]+)="([^"]+)"\\]$/);
       return this.children.flatMap(function walk(n){return[n,...(n.children||[]).flatMap(walk)];})
         .find(n=>attribute?n.attrs?.[attribute[1]]===attribute[2]:n.tag===selector)||null;}});

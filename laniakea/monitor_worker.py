@@ -9,6 +9,19 @@ from . import AnalysisBusy,LaniakeaError,map_index,pipeline,profiles,schema,prog
 from .workspace import Workspace,read_json,write_json
 
 
+def comparison(profile,workspace,target,manifest,recipe,current,run,automatic=None):
+    describe=getattr(profile,'input_comparison',None)
+    if describe is None:return None
+    from .monitor import comparison_data
+    try:
+        value=comparison_data(describe(workspace,target,manifest,recipe,current,run))
+        prior=(automatic or {}).get('identity')
+        value['context']='unknown' if not prior else 'unchanged' if prior==current['identity'] else 'changed'
+        return value
+    except (OSError,LaniakeaError,ValueError,TypeError,KeyError) as error:
+        return {'baseline':manifest['run'],'error':'Input comparison unavailable: '+str(error)[:400]}
+
+
 def execute(workspace,target_id,operation,recipe=None):
     if operation=='cleanup':
         from .automatic_history import prune
@@ -22,7 +35,8 @@ def execute(workspace,target_id,operation,recipe=None):
         recipe,result=profile.monitor_inputs(workspace,target,manifest,recipe)
         automatic=read_json(run/'automatic.json') if (run/'automatic.json').is_file() else {}
         previous=getattr(profile,'previous_check_failure',lambda *_:None)(workspace,target_id,result['identity'],recipe,manifest,automatic)
-        return {**result,'recipe':recipe,
+        observed=comparison(profile,workspace,target,manifest,recipe,result,run,automatic)
+        return {**{k:v for k,v in result.items() if k not in {'inputs','source_scope'}},'recipe':recipe,'comparison':observed,
                 'previous_failure':previous if previous and 'error' in previous else None,
                 'cache_warning':previous.get('cache_error') if previous else None,
                 'previous_identity':automatic.get('identity'),
@@ -52,7 +66,9 @@ def execute(workspace,target_id,operation,recipe=None):
         warning=getattr(profile,'clear_check_failure',lambda *_:None)(workspace,target_id,recipe)
         followup=profile.monitor_roots(workspace,target,candidate,recipe) if recipe.get('checks') else None
         write_json(staged/'automatic.json',{'version':1,'identity':after['identity'],'view':view.root.name})
+        observed=comparison(profile,workspace,target,candidate,recipe,after,staged,{'identity':after['identity']})
         return {**after,'recipe':recipe,'candidate':staged.name,'view':view.root.name,'validation':validation,'cache_warning':warning,
+                'comparison':observed,
                 'checks':followup['checks'] if followup else [],
                 'checks_pending':bool(followup and followup['recipe']['symbols']!=recipe['symbols'])}
     except BaseException:

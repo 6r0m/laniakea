@@ -11,6 +11,7 @@ How `laniakea/unreal/` reads a project, and the engine behaviour it is built aro
 - Running UBT
 - What UBT writes into the project
 - Compiler-facing preparation
+- Input comparison domains
 - Native symbol analysis
 - Source duplication
 - External dependency ownership
@@ -122,6 +123,23 @@ the lost-symbol failure with a synthetic adjacent PCH before checking restored s
 Compiler diagnostics and symbol/reference checks remain necessary even after successful tool exit. clangd's callable
 reference flag alone is not proof of an actual call; the version-pinned SymbolCollector sets it from symbol kind.
 Native AST validation is needed before such references can be labelled as statically resolved calls.
+
+## Input comparison domains
+
+Live change inspection compares recorded build rules, descriptors and receipt fingerprints independently of C++ coverage.
+Receipt fingerprints include modification time, so a byte-identical rewritten receipt is a **build evidence** change;
+it proves neither edited source nor a successful compilation. Added/modified/removed counts describe input paths, not modules.
+
+C++ comparison requires a recorded native or completed duplication corpus and the same currently monitored prefixes,
+exclusions and project/Engine roots. Off choices, unavailable tools, absent baselines and changed scopes do not manufacture
+file additions or removals. Native comparison includes previously recorded external inputs, not every potentially reachable
+header. Only proven absence is removal; unreadable inputs remain failures. Known files use existing root-relative navigation;
+removed or unmapped files have no source link.
+
+Configuration and tool/environment values participate in monitoring identity but lack a per-input published baseline.
+They remain explicitly unattributed context rather than invented file edits. Guidance says recorded architecture/references
+or duplication evidence may need rechecking; changed inputs are not new dependency facts or Review findings.
+The [monitoring owner](monitoring.md#input-change-comparison) defines lifecycle, limits and cached reads.
 
 ## Native symbol analysis
 

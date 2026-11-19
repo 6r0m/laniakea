@@ -298,9 +298,14 @@ function onKey(event) {
 function renderBanner() {
   const banner = $('banner');
   const t = state.target;
-  banner.hidden = !t.stale;
+  const current=state.live?.status?.targets.find(item=>item.id===t.id);
+  const comparison=inputChangeSummary(current,t);
+  const key=JSON.stringify([t.id,t.run,t.stale,t.changed_count,t.changed,comparison.available]);
+  if(banner.getAttribute('data-comparison')===key)return;
+  banner.setAttribute('data-comparison',key);
+  banner.hidden = !t.stale||comparison.available;
   banner.replaceChildren();
-  if (t.stale) {
+  if (t.stale&&!comparison.available) {
     const details = el('details');
     details.append(el('summary', `Snapshot out of date: ${t.changed_count} inputs changed`),
       el('p', `Showing run ${t.run}. Run: python laniakea.py build ${t.id}. Live mode adopts validated updates; saved-only viewing requires reopening the viewer.`));

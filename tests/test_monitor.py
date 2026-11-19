@@ -86,6 +86,80 @@ class Scheduler(unittest.TestCase):
         self.assertEqual(self.workspace.latest('sample'),self.run)
         self.assertEqual(self.monitor.status()['targets'][0]['state'],'paused')
 
+    def test_comparison_is_cached_paged_and_bound_to_run_and_observation(self):
+        self.monitor.activate('sample');self.settle()
+        rule=self.project/'Source/SampleProject/SampleProject.Build.cs';rule.write_bytes(rule.read_bytes()+b'\n// edit\n')
+        self.dirty();self.monitor.step();self.monitor.step();self.monitor.step()
+        self.assertEqual(self.monitor.current['phase'],'stage')
+        summary=self.monitor.status()['targets'][0].get('comparison')
+        self.assertIsInstance(summary,dict,'status does not expose the cached comparison')
+        from unittest.mock import patch
+        query={'target':'sample','run':self.run.name,'observation':summary['observation'],'cursor':0,'limit':1}
+        with patch('laniakea.unreal.monitor.inspect',side_effect=AssertionError('HTTP comparison scanned sources')):
+            page=self.monitor.changes(query)
+        self.assertEqual(page['total'],1);self.assertEqual(len(page['items']),1)
+        self.assertEqual(page['items'][0]['change'],'modified')
+        self.assertNotIn('rows',summary)
+        with self.assertRaises(ValueError):self.monitor.changes({**query,'run':'other'})
+        self.monitor.pause('sample')
+        self.assertEqual(self.monitor.status()['targets'][0]['comparison']['status'],'paused')
+
+    def test_comparison_fault_is_advisory_and_cannot_reject_a_valid_publication(self):
+        from unittest.mock import patch
+        original=execute
+        def malformed(*args,**kwargs):
+            result=original(*args,**kwargs)
+            if args[2] in ('probe','stage'):result['comparison']={'baseline':self.run.name,'rows':'invalid'}
+            return result
+        self.monitor.activate('sample');self.settle()
+        rule=self.project/'Source/SampleProject/SampleProject.Build.cs';rule.write_bytes(rule.read_bytes()+b'\n// edit\n')
+        with patch('test_monitor.execute',side_effect=malformed):self.dirty();self.settle()
+        self.assertNotEqual(self.workspace.latest('sample'),self.run)
+        self.assertEqual(self.monitor.status()['targets'][0]['state'],'fresh')
+        summary=self.monitor.status()['targets'][0].get('comparison')
+        self.assertIsInstance(summary,dict)
+        self.assertEqual(summary['status'],'unavailable')
+
+    def test_comparison_limits_pagination_and_replacement_preserve_exact_counts(self):
+        from copy import deepcopy
+        from laniakea.monitor import comparison_data,ComparisonConflict
+        self.monitor.activate('sample');self.settle();state=self.monitor.states['sample']
+        value=deepcopy(state['comparison']);value['rows']=[{'path':f'Source/{i}.h','category':'Headers','change':'added'} for i in range(123)]
+        value.update(total=123,counts={'Headers':123},complete=True)
+        result={'identity':'current','comparison':value}
+        self.monitor._accept_comparison(state,result,self.run.name,state['generation'])
+        query={'target':'sample','run':self.run.name,'observation':state['comparison']['observation'],'limit':50}
+        pages=[self.monitor.changes({**query,'cursor':cursor}) for cursor in (0,50,100)]
+        self.assertEqual([len(p['items']) for p in pages],[50,50,23]);self.assertIsNone(pages[-1]['next'])
+        self.assertEqual(len({row['path'] for p in pages for row in p['items']}),123)
+        self.dirty();self.assertEqual(self.monitor.status()['targets'][0]['comparison']['status'],'checking')
+        self.monitor._accept_comparison(state,result,self.run.name,state['generation'])
+        self.assertEqual(state['comparison']['observation'],query['observation'],'Unchanged data discarded the loaded page')
+        value['rows'][0]['change']='modified'
+        self.monitor._accept_comparison(state,result,self.run.name,state['generation'])
+        with self.assertRaises(ComparisonConflict):self.monitor.changes(query)
+        large={**value,'rows':[{'path':str(i)+'x'*4000,'category':'Headers','change':'added'} for i in range(800)],
+               'counts':{'Headers':800},'total':800}
+        bounded=comparison_data(large)
+        self.assertFalse(bounded['complete']);self.assertEqual(bounded['total'],800)
+        self.assertLess(len(bounded['rows']),800)
+        for bad in [{**value,'counts':{'Headers':124}},{**value,'total':True},
+                    {**value,'rows':[{'path':'a','category':'Headers','change':'added','source':{'root':'project','path':'../outside'}}]}]:
+            with self.assertRaises(ValueError):comparison_data(bad)
+
+    def test_successful_publication_rebinds_comparison_and_degraded_watch_never_claims_current(self):
+        self.monitor.activate('sample');self.settle()
+        rule=self.project/'Source/SampleProject/SampleProject.Build.cs';rule.write_bytes(rule.read_bytes()+b'\n// edit\n')
+        self.dirty();self.settle()
+        summary=self.monitor.status()['targets'][0]['comparison']
+        self.assertEqual(summary['baseline'],self.workspace.latest('sample').name);self.assertEqual(summary['total'],0)
+        state=self.monitor.states['sample'];watch=state['watches'][0]
+        import os
+        self.monitor.watcher.failures={(os.path.normcase(watch['path']),watch['recursive']):'notification failed'}
+        self.assertEqual(self.monitor.status()['targets'][0]['comparison']['status'],'degraded')
+        page=self.monitor.changes({'target':'sample','run':summary['baseline'],'observation':summary['observation']})
+        self.assertEqual(page['status'],'degraded')
+
     def test_cache_cleanup_warning_remains_visible_without_preventing_publication(self):
         from unittest.mock import patch
         self.monitor.activate('sample');self.settle()

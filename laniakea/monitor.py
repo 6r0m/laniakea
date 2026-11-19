@@ -2,6 +2,8 @@
 """Session-local analysis scheduling. Workers stage; this single controller alone publishes."""
 
 import json
+import copy
+import hashlib
 import math
 import os
 from pathlib import Path
@@ -18,6 +20,63 @@ from .workspace import WriterBusy,write_json
 
 class ChecksConflict(ValueError):
     """The form describes different applied or pending settings; no work was changed."""
+
+
+class ComparisonConflict(ValueError):
+    """The requested live observation has been replaced; no page from another observation is returned."""
+
+
+def comparison_data(value):
+    """Bound advisory data before worker transport and again at controller admission."""
+    if not isinstance(value,dict):raise ValueError('invalid input comparison')
+    def text(item,limit=512):
+        if not isinstance(item,str) or not item or len(item)>limit:raise ValueError('invalid comparison text')
+        return item
+    def count(item):
+        if isinstance(item,bool) or not isinstance(item,int) or not 0<=item<=1000000:
+            raise ValueError('invalid comparison count')
+        return item
+    total=count(value.get('total'));counts=value.get('counts');scope=value.get('scope');rows=value.get('rows')
+    if not isinstance(counts,dict) or len(counts)>16 or sum(count(v) for v in counts.values())!=total:
+        raise ValueError('invalid comparison totals')
+    counts={text(k,80):v for k,v in counts.items()}
+    if not isinstance(scope,dict) or not 1<=len(scope)<=8:raise ValueError('invalid comparison scope')
+    domains={}
+    for key,item in scope.items():
+        if not isinstance(item,dict) or item.get('status') not in {
+                'compared','not-monitored','not-recorded','scope-changed','unavailable'}:
+            raise ValueError('invalid comparison domain')
+        domains[text(key,64)]={'label':text(item.get('label'),100),'status':item['status']}
+    if not isinstance(rows,list) or len(rows)>10000 or type(value.get('complete')) is not bool:
+        raise ValueError('invalid comparison paths')
+    clean=[];seen=set();observed={};size=0
+    for item in rows:
+        if not isinstance(item,dict):raise ValueError('invalid changed input')
+        path=text(item.get('path'),4096);category=text(item.get('category'),80);change=item.get('change')
+        if path in seen or category not in counts or change not in {'added','modified','removed'}:
+            raise ValueError('invalid changed input identity')
+        seen.add(path);observed[category]=observed.get(category,0)+1
+        row={'path':path,'category':category,'change':change}
+        if 'source' in item:
+            location=item['source']
+            if not isinstance(location,dict):raise ValueError('invalid input location')
+            root=text(location.get('root'),80);relative=text(location.get('path'),4096)
+            if Path(relative).is_absolute() or '..' in Path(relative).parts or ':' in relative or '\x00' in relative:
+                raise ValueError('input location escapes its root')
+            if change!='removed':row['source']={'root':root,'path':relative}
+        size+=len(json.dumps(row,ensure_ascii=True,separators=(',',':')))
+        if size<=2*1024*1024:clean.append(row)
+    if len(rows)>total or any(observed[k]>counts[k] for k in observed):raise ValueError('comparison paths exceed totals')
+    if value['complete'] and len(rows)!=total:raise ValueError('incomplete comparison claimed complete')
+    lists={}
+    for key in ('limits','guidance'):
+        items=value.get(key,[])
+        if not isinstance(items,list) or len(items)>8:raise ValueError('invalid comparison explanation')
+        lists[key]=[text(item) for item in items]
+    context=value.get('context','unknown')
+    if context not in {'unknown','unchanged','changed'}:raise ValueError('invalid comparison context')
+    return {'baseline':text(value.get('baseline'),100),'scope':domains,'rows':clean,'counts':counts,'total':total,
+            'complete':value['complete'] and len(clean)==total,'context':context,**lists}
 
 
 def relevant(spec,name):
@@ -184,8 +243,51 @@ class Monitor:
                     'ready':self.contexts.latest(entry['id']),
                     'requested':state['requested'] if state else None,'revision':state['revision'] if state else 0,
                     'checks':state['checks'] if state and state['checks'] else self.contexts.latest(entry['id']).get('checks',[]),
-                    'progress':progress})
+                    'progress':progress,'comparison':self._comparison_summary(state,watch_errors[0] if watch_errors else None)})
             return {'stopping':self.stopping,'targets':result,'error':self.error}
+
+    def _accept_comparison(self,state,result,baseline,generation):
+        value=result.get('comparison')
+        try:
+            if value is None:raise ValueError('No input comparison is available for this profile.')
+            if isinstance(value,dict) and value.get('error'):raise ValueError(value['error'])
+            value=comparison_data(value)
+            if value['baseline']!=baseline:raise ValueError('Input comparison belongs to another run.')
+            token=hashlib.sha256(json.dumps([result['identity'],value],sort_keys=True).encode()).hexdigest()
+            state['comparison']={**value,'observation':token,'observed_at':time.time()}
+            state['comparison_generation']=generation;state['comparison_error']=None
+        except (ValueError,TypeError,KeyError) as error:
+            if state.get('comparison',{}).get('baseline')!=baseline:state.pop('comparison',None)
+            state['comparison_error']=str(error)[:512]
+
+    def _comparison_summary(self,state,degraded=None):
+        if state is None:return {'status':'unavailable','reason':'Change detection is not active for this target.'}
+        if degraded is None:
+            degraded=next((error for spec,error in getattr(self.watcher,'failures',{}).items()
+                if any((os.path.normcase(s['path']),s['recursive'])==spec for s in state['watches'])),None)
+        value=state.get('comparison')
+        status='paused' if not state['active'] else 'unavailable' if state.get('comparison_error') or state.get('error') else \
+               'degraded' if degraded or state.get('degraded') else 'checking' if not value or \
+               state.get('comparison_generation')!=state['generation'] else 'current'
+        reason=state.get('comparison_error') or state.get('error') or degraded or state.get('degraded')
+        return {**copy.deepcopy({k:v for k,v in (value or {}).items() if k!='rows'}),
+                'available':len(value['rows']) if value else 0,'status':status,**({'reason':reason} if reason else {})}
+
+    def changes(self,query):
+        if not isinstance(query,dict) or set(query)-{'target','run','observation','cursor','limit'} or \
+                any(not isinstance(query.get(k),str) or not 0<len(query[k])<=100 for k in ('target','run','observation')):
+            raise ValueError('expected target, run and input comparison identity')
+        cursor=query.get('cursor',0);limit=query.get('limit',50)
+        if type(cursor) is not int or not 0<=cursor<=1000000 or type(limit) is not int or not 1<=limit<=100:
+            raise ValueError('invalid changed-input page')
+        with self.condition:
+            state=self.states.get(query['target']);value=state.get('comparison') if state else None
+            if not value or value['baseline']!=query['run'] or value['observation']!=query['observation']:
+                raise ComparisonConflict('Input comparison changed or is unavailable; refresh Checks.')
+            if cursor>len(value['rows']):raise ValueError('changed-input cursor exceeds available paths')
+            end=min(cursor+limit,len(value['rows']))
+            return {**self._comparison_summary(state),'items':copy.deepcopy(value['rows'][cursor:end]),
+                    'cursor':cursor,'next':end if end<len(value['rows']) else None}
 
     def _start(self,target_id,state):
         phase=state['phase'];lease=None
@@ -253,6 +355,7 @@ class Monitor:
             identity=result['identity'];previous=state['identity']
             state.update(watches=result['watches'],source_bodies_monitored=result['source_bodies_monitored'],degraded=result.get('cache_warning'),
                          reconcile=now+self.RECONCILE)
+            self._accept_comparison(state,result,job['run'],job['generation'])
             self._watches()
             force=state['force'];state['force']=False
             if not force and result.get('previous_failure'):
@@ -280,6 +383,7 @@ class Monitor:
                          checks=result.get('checks',state['checks']),revision=state['revision']+1,
                          degraded=result.get('cache_warning',state['degraded']),
                          reconcile=now+self.RECONCILE,phase='cleanup',due=now,after_cleanup=followup)
+            self._accept_comparison(state,result,run.name,job['generation'])
         elif job['phase']=='cleanup':
             if result.get('deferred'):
                 state.update(state='waiting for read index',phase='cleanup',due=now+2)

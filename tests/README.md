@@ -39,8 +39,11 @@ It also rejects unrelated/superseded negative-cache entries and injects optional
 Permission fault injection covers native negative-cache reads, writes and cleanup, preserving primary outcomes and preferring
 published native success over a stale refusal. The scheduler exposes cleanup warnings without blocking publication.
 `test_monitor.py` checks coalescing, contention, supersession, activation, fairness and bounded automatic history.
-`test_monitor_inputs.py` checks profile-selected inputs, changed receipt/product sets and unpublished staging. The server
-suite refuses a valid read index from another graph before context admission. It also pins two indexes for one run through
+`test_monitor_inputs.py` checks profile-selected inputs, changed receipt/product sets, comparison scopes and unpublished staging.
+The Monitor suite checks generation-bound comparison paging, truthful limits and advisory failure isolation. The server
+refuses mismatched observation tokens and arbitrary path parameters without scanning source files. Receipt timestamp-only
+changes remain build evidence. The server suite refuses a valid read index from another graph before context admission.
+It also pins two indexes for one run through
 independent tab heartbeats, checks their exact pages after further replacements and verifies independent release.
 `test_notifications.py` and
 `test_owned_process.py` exercise real Windows directory replacement, cancellation, controller death and pre-execution
@@ -79,6 +82,7 @@ Source-file fixtures must use the normal pipeline/read index/server and real exa
 | [inspector.browser.js](inspector.browser.js) | Review fixture: accessible tabs, separate findings/details, retained drafts/evidence/scroll, lazy references, late responses and narrow panels |
 | [health.browser.js](health.browser.js) | `test_health.browser_fixture`: source evidence paging, file badges, triage/reopen, late-close, narrow layout and pin preservation |
 | [analysis.browser.js](analysis.browser.js) | Mandatory foundation, selectable source checks, Apply/Stop, retained maps, responsive controls and keyboard focus |
+| [input-changes.browser.js](input-changes.browser.js) | Cached path paging, Off scopes, removed-file links, focus, drafts, late close/target responses, displayed baseline, adoption and legacy stale paths |
 | [check-coverage.browser.js](check-coverage.browser.js) | Module-only to synthetic native publication: displayed/ready coverage, failed-save deferral, adoption and pin preservation |
 | [monitor.browser.js](monitor.browser.js) | Two registered sample targets: launch/deep-link precedence, inactive browsing and same-origin session controls |
 | [live.browser.js](live.browser.js) | Namespace fixture and a harness publication callback: adoption, injected layout/partial-render recovery, camera, references, drag/save/draft deferral, Review isolation, independent tabs and removed focus |

@@ -21,6 +21,29 @@ from support import copy_sample, fake_engine, recorded_ubt
 
 
 class Server(unittest.TestCase):
+    def test_change_pages_read_cached_observations_without_scanning_sources(self):
+        from laniakea.monitor import Monitor
+        from laniakea.monitor_worker import execute
+        from test_monitor import Watcher
+        workspace=self.server.workspace_for_tests;run=workspace.latest('sample')
+        self.assertEqual(self.get('/monitor/changes?target=sample&run='+run.name+'&observation=none')[0],409)
+        monitor=Monitor(workspace,self.server.snapshots,notifications=Watcher);self.server.monitor=monitor
+        self.addCleanup(monitor.stop);monitor.activate('sample')
+        result=execute(workspace,'sample','probe');state=monitor.states['sample'];state['recipe']=result['recipe']
+        monitor._finish({'target':'sample','phase':'probe','run':run.name,'generation':state['generation']},
+                        {'status':'completed','result':result})
+        summary=monitor.status()['targets'][0]['comparison']
+        address=f'/monitor/changes?target=sample&run={run.name}&observation={summary["observation"]}'
+        with patch('laniakea.unreal.monitor.inspect',side_effect=AssertionError('read endpoint scanned sources')), \
+                patch.object(pipeline,'freshness',side_effect=AssertionError('read endpoint checked freshness')):
+            status,body=self.get(address+'&cursor=0&limit=1')
+            self.assertEqual(status,200)
+            self.assertEqual(json.loads(body)['items'][0]['path'],'Source/SampleProject/SampleProject.Build.cs')
+            self.assertEqual(self.get(address+'&path=../../outside')[0],400)
+            self.assertEqual(self.get(address+'&cursor=-1')[0],400)
+            self.assertEqual(self.get(address+'&limit=1001')[0],400)
+            self.assertEqual(self.get(address.replace(summary['observation'],'expired'))[0],409)
+
     def test_check_choices_are_validated_coalesced_and_do_not_commit_before_work(self):
         from laniakea.monitor import Monitor
         from test_monitor import Watcher

@@ -44,7 +44,8 @@
     <button id="toggle-details" type="button" aria-controls="details" aria-expanded="false">Inspector</button>
   </div>
   <div class="map-context"><span id="scope-summary" role="status"></span><span id="position-status" role="status"></span>
-    <span id="layout-hint" role="status" hidden></span><span id="source-layout-status" role="status" hidden></span></div>
+    <span id="layout-hint" role="status" hidden></span><span id="source-layout-status" role="status" hidden></span>
+    <button id="input-change-status" type="button" title="Inspect input changes in Checks">Changes: not checked</button></div>
   <main>
     <aside id="analysis" aria-label="Analysis checks" hidden>
       <div class="review-actions"><h2>Analysis</h2><button id="analysis-close" type="button" aria-label="Close analysis">Close</button></div>
@@ -57,6 +58,21 @@
         <button id="analysis-discard" type="button" hidden>Reload settings</button></div>
       <label class="filter"><input id="analysis-auto" name="analysis-auto" type="checkbox">Automatic checks on source changes</label>
       <button id="analysis-recommended" type="button">Run recommended checks</button>
+      <section id="analysis-changes" class="analysis-check" aria-labelledby="input-change-heading">
+        <h3 id="input-change-heading">Changes since recorded analysis</h3>
+        <p id="input-change-summary" role="status"></p><p id="input-change-detail" class="muted"></p>
+        <div id="input-change-scope"></div>
+        <p id="input-change-guidance"></p>
+        <details><summary>Comparison limits</summary><p id="input-change-limits"></p></details>
+        <button id="input-change-show" type="button" hidden>Show paths</button>
+        <div id="input-change-paths" hidden>
+          <p id="input-change-page-status" role="status"></p>
+          <ul id="input-change-list"></ul>
+          <div class="analysis-actions"><button id="input-change-previous" type="button">Previous paths</button>
+            <button id="input-change-next" type="button">Next paths</button></div>
+        </div>
+        <p class="muted">Input changes are advisory, not architecture findings. Use Run checks above to recheck; Off choices stay Off.</p>
+      </section>
       <div id="analysis-checks"></div>
     </aside>
     <aside id="filters" aria-label="Browse and filters" hidden></aside>

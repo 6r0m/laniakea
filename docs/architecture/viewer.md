@@ -411,8 +411,20 @@ Zooming into an outside-target or unanalysed scope leaves a named coverage hint 
 Node hover and inspection also explain that only recorded structure is available. These statuses do not prove that
 configuration disabled the node; the viewer does not infer that cause from target absence.
 
-The staleness warning stays visible as a compact summary; its disclosure retains changed paths, the run and recovery action.
-Saved-only opening labels unchecked source freshness in the coverage footer rather than implying that the snapshot is fresh.
+Checks contains the live input comparison, scoped category counts and paged changed paths. Its compact entry uses the existing
+fixed-height map context strip; asynchronous observations do not insert a banner or refit the camera. Paths and counts belong
+only to the displayed run. A newer baseline is withheld until normal adoption, while paused/degraded observations remain
+explicitly last observed. Missing comparison and known-empty compared domains are distinct; neither implies complete coverage.
+
+Paging is read-only and has its own cancellation epoch, separate from submitted check choices. Close, target and observation
+changes cancel obsolete requests; late replies cannot reopen Checks, replace another target or erase drafts. Unchanged polls
+retain the loaded page and focused source link. Removed/unmapped paths have no invented links; known files open at their start,
+without claiming changed lines. Existing Run/Retry/Auto controls remain the only analysis actions.
+
+When a matching live comparison exists, it replaces the startup banner's duplicate path disclosure. Without it, a scan-enabled
+startup retains its useful stale paths and recovery action. Saved-only opening labels unchecked source freshness in the
+coverage footer rather than implying that the snapshot is fresh. The [monitoring contract](monitoring.md#input-change-comparison)
+owns comparison identity and bounds.
 
 ## Live snapshots
 

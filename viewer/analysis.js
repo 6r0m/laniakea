@@ -18,6 +18,27 @@ function checksSummary(current,target,message='') {
       current?.error,current?.degraded,message].filter(Boolean).join('. ')};
 }
 
+function inputChangeSummary(current,target) {
+  const value=current?.comparison;
+  if(!value?.baseline||value.baseline!==target?.run)return {available:false,label:'Changes: not checked',
+    detail:value?.baseline?'Comparison awaits the newer map. Finish pending edits or map gestures to adopt it.':
+      value?.reason||'Input comparison is not available. Recorded architecture remains available.'};
+  if(!Object.values(value.scope||{}).some(item=>item.status==='compared'))return {available:false,label:'Changes: not available',
+    detail:'No recorded input domains can be compared with the current scope. Recorded architecture remains available.'};
+  const states={paused:'paused',checking:'checking',unavailable:'unavailable',degraded:'degraded'};
+  const last=states[value.status],count=value.total;
+  const label=last?`Changes: ${last}`:count?`${count} input changes detected`:
+    value.context==='changed'?'Monitored context changed':'No changes in compared inputs';
+  const scopes=Object.values(value.scope||{}).filter(item=>item.status!=='compared');
+  const names={'not-monitored':'not monitored','not-recorded':'not recorded','scope-changed':'scope changed',unavailable:'unavailable'};
+  const detail=[last?'Last observation only; this is not a current freshness claim.':'Compared with the displayed recorded analysis.',
+    value.context==='unknown'?'Monitoring-context baseline unavailable.':
+      value.context==='changed'?'Monitored inputs or settings differ.':'',
+    ...scopes.map(item=>`${item.label||'C++ source content'}: ${names[item.status]||item.status}.`),
+    !value.complete?'Path detail is limited; counts include all detected comparable changes.':'',value.reason].filter(Boolean).join(' ');
+  return {available:true,label,detail};
+}
+
 class AnalysisControls {
   constructor(){
     this.dismissed=new Set();this.edited=false;this.saving=false;this.formKey=null;
@@ -30,13 +51,22 @@ class AnalysisControls {
     $('analysis-discard').onclick=()=>{this.edited=false;this.formKey=null;this.error='';this.render(this.status);};
     $('analysis-auto').onchange=()=>this.control($('analysis-auto').checked?'activate':'pause');
     $('analysis-retry').onclick=()=>this.control('retry');
+    $('input-change-status').onclick=()=>{this.panel(true);$('analysis-changes').scrollIntoView({block:'nearest'});};
+    $('input-change-show').onclick=()=>{
+      if(this.pathsOpen){this.cancelPaths();this.pathsOpen=false;this.renderChanges(this.changeCurrent);}
+      else {this.pathsOpen=true;this.renderChanges(this.changeCurrent);}
+    };
+    $('input-change-previous').onclick=()=>this.loadPaths(Math.max(0,(this.pathPage?.cursor||0)-50));
+    $('input-change-next').onclick=()=>{if(this.pathPage?.next!==null)this.loadPaths(this.pathPage.next);};
   }
   dirty(){return this.edited||this.saving;}
   panel(open=$('analysis').hidden){
     $('analysis').hidden=!open;$('toggle-analysis').setAttribute('aria-expanded',String(open));
     if(open){state.review?.panel(false);togglePanel('filters',false);
       if(innerWidth<=1000)togglePanel('details',false);}
-    else {this.dismissed.add(state.target?.id);if($('analysis').contains(document.activeElement))$('toggle-analysis').focus();}
+    else {this.cancelPaths();this.dismissed.add(state.target?.id);
+      if($('analysis').contains(document.activeElement))$('toggle-analysis').focus();}
+    if(open&&this.pathsOpen)this.renderChanges(this.changeCurrent);
   }
   build(rows,current){
     const root=$('analysis-checks');root.replaceChildren();this.choices={};
@@ -79,6 +109,7 @@ class AnalysisControls {
     const key=JSON.stringify([ready.id,ready.run,current?.revision||0,current?.requested?.checks]);
     if(this.target!==ready.id){this.target=ready.id;this.requestId=(this.requestId||0)+1;
       this.edited=false;this.saving=false;this.formKey=null;this.error='';}
+    this.renderChanges(current);
     if(!this.edited&&!this.saving&&key!==this.formKey){this.build(rows,current);this.formKey=key;
       this.base={run:ready.run,revision:current?.revision||0};}
     const busy=summary.busy,progress=current?.progress;
@@ -132,6 +163,61 @@ class AnalysisControls {
       if(summary.attention&&current.active)this.panel(true);
     }
   }
+  cancelPaths(){this.pathRequest=(this.pathRequest||0)+1;this.pathController?.abort();this.pathLoading=false;}
+  renderChanges(current){
+    this.changeCurrent=current;
+    const value=current?.comparison,summary=inputChangeSummary(current,state.target);
+    const key=JSON.stringify([state.target.id,state.target.run,summary.available?value.observation:null]);
+    if(this.changeKey!==key){this.cancelPaths();this.changeKey=key;this.pathPage=null;this.pathError='';}
+    const indicator=$('input-change-status');indicator.textContent=summary.label;
+    indicator.title=summary.label+'. '+summary.detail;indicator.setAttribute('aria-label',indicator.title+' Open Checks.');
+    $('input-change-summary').textContent=summary.label;
+    $('input-change-detail').textContent=[summary.detail,summary.available&&value.observed_at?
+      'Observed '+new Date(value.observed_at*1000).toLocaleString()+'.':''].filter(Boolean).join(' ');
+    const scopes=$('input-change-scope');scopes.replaceChildren();
+    if(summary.available){
+      for(const [category,count] of Object.entries(value.counts||{}))scopes.append(el('p',`${category}: ${count.toLocaleString()}`));
+      if(!value.complete)scopes.append(el('p',`${value.available||0} of ${value.total.toLocaleString()} changed paths available.`));
+    }
+    $('input-change-guidance').textContent=summary.available?(value.guidance||[]).join(' '):'';
+    $('input-change-limits').textContent=summary.available?(value.limits||[]).join(' '):summary.detail;
+    $('input-change-show').hidden=!summary.available||!value.available;
+    $('input-change-show').textContent=this.pathsOpen?'Hide paths':'Show paths';
+    $('input-change-paths').hidden=!summary.available||!value.available||!this.pathsOpen;
+    if(summary.available&&value.available&&this.pathsOpen&&!this.pathPage&&!this.pathLoading&&!this.pathError&&!$('analysis').hidden)this.loadPaths(0);
+    this.renderPaths();renderBanner();
+  }
+  renderPaths(){
+    const key=JSON.stringify([this.changeKey,this.pathPage,this.pathLoading,this.pathError]);
+    if(this.pathRenderKey===key)return;this.pathRenderKey=key;
+    const root=$('input-change-list'),page=this.pathPage;root.replaceChildren();
+    $('input-change-page-status').textContent=this.pathError|| (this.pathLoading?'Loading paths...':page?
+      `${page.cursor+1}-${page.cursor+page.items.length} of ${page.available} available paths. Links open the file at its start.`:'');
+    for(const item of page?.items||[]){
+      const row=el('li'),link=item.source&&sourceLink({...item.source,line:1});
+      row.append(link||el('span',item.path));if(link)link.textContent=item.path;
+      row.append(el('small',`${item.change} / ${item.category}`));root.append(row);
+    }
+    $('input-change-previous').disabled=this.pathLoading||!page||page.cursor===0;
+    $('input-change-next').disabled=this.pathLoading||!page||page.next===null;
+  }
+  async loadPaths(cursor){
+    const value=this.changeCurrent?.comparison,summary=inputChangeSummary(this.changeCurrent,state.target);
+    if(!summary.available||!this.pathsOpen||$('analysis').hidden)return;
+    this.cancelPaths();const request=this.pathRequest,key=this.changeKey,target=state.target.id,run=state.target.run;
+    this.pathController=new AbortController();this.pathLoading=true;this.pathError='';this.renderPaths();
+    const current=()=>request===this.pathRequest&&key===this.changeKey&&state.target.id===target&&state.target.run===run&&!$('analysis').hidden;
+    const params=new URLSearchParams({target,run,observation:value.observation,cursor,limit:50});
+    try{
+      const response=await fetch('/monitor/changes?'+params,{cache:'no-store',signal:this.pathController.signal});
+      if(!response.ok)throw Error(response.status===409?'The observation changed. Wait for Checks to refresh, then show paths again.':
+        'Could not load paths. Hide and show paths to retry.');
+      const page=await response.json();if(!current())return;
+      if(page.observation!==value.observation||page.baseline!==state.target.run)throw Error('Path page belongs to another observation.');
+      this.pathPage=page;
+    }catch(error){if(current()&&error.name!=='AbortError')this.pathError=error.message;}
+    finally{if(current()){this.pathLoading=false;this.renderPaths();}}
+  }
   async request(body){
     const target=state.target.id,request=this.requestId=(this.requestId||0)+1;
     const current=()=>state.target.id===target&&this.requestId===request;
@@ -150,4 +236,4 @@ class AnalysisControls {
   async control(action){await this.request({action,target:state.target.id});}
 }
 
-if(typeof module!=='undefined')module.exports={checksSummary,AnalysisControls};
+if(typeof module!=='undefined')module.exports={checksSummary,inputChangeSummary,AnalysisControls};
