@@ -25,7 +25,8 @@ not automatically build your project or install tools. A saved run does not prov
 
 Open **Checks** to see what ran, what is running and what needs setup. **Skip for now** or **Stop checks** pauses owned
 background work and retains the previous map. These controls do not interrupt the earlier foreground build command.
-Choose **Run checks** to resume. **Retry** retries a failed attempt; unchanged failures otherwise remain recorded.
+Choose **Run checks** to resume when inputs have settled. Later source edits or build changes can still supersede a long
+scan. **Retry** retries a failed attempt; unchanged failures otherwise remain recorded.
 Auto uses available prerequisites; On makes a check required; Off explicitly skips it. Choices apply only when a validated
 map publishes. Failed or cancelled attempts keep the previous saved settings. Existing projects retain their recorded
 choices; **Run recommended checks** explicitly enables the automatic modes.

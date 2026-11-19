@@ -57,6 +57,11 @@ availability/change check, not a binary content identity. A receipt does not bin
 files or compiler flags to the historical build. JsonExport describes current evaluated rules in the selected configuration;
 it is not a historical source/dependency snapshot. M1 needs no rebuild to display those current rules.
 
+A receipt change is an input event, not a confirmed successful-build notification. IDE tooling can refresh receipts without
+a normal compilation, as reported in Epic's [UBT skip-build receipt discussion](https://forums.unrealengine.com/t/ubt-rewrites-the-target-receipt-on-every-skipbuild-run-breaking-buildgraph-timestamp-checks/2776175).
+Native Auto eligibility uses validated receipt/product context; source changes and explicit requests remain independent
+reconciliation triggers.
+
 Engine evidence: `Configuration/UEBuildTarget.cs`, `PrepareAndWritePartialReceipt`, writes to the normal receipt path with
 empty build products on failure. Normal receipt generation is a write-metadata action depending on target outputs;
 `Modes/WriteMetadataMode.cs` writes it after those prerequisites. `System/TargetReceipt.cs` owns field and path-variable formats.
@@ -131,6 +136,8 @@ With tools and usable build context, `compiler.py` synchronizes a marked, increm
 destination or a copy overlapping the analysed source tree. Source directories survive the asset/cache denylist; secrets,
 Windows device names and large assets are excluded. Only files in the previous copy inventory may be removed. UBT exports
 from the original and copy must agree on dependencies, definitions and PCH settings after root normalization.
+This incremental scratch copy is not a retained historical build snapshot. Publication still validates the current source
+and build context; editing the original during analysis can supersede the copied candidate.
 `source_tree.py` constrains descriptor discovery, source fingerprints and copy reads to the physical project root plus
 descriptor-owning plugin mounts under its logical `Plugins/` tree. Logical paths remain project-relative. An unrelated
 external directory or file link, including a nested escape inside an otherwise declared plugin, is refused before its bytes

@@ -470,3 +470,19 @@ real acceptance evidence, and no unrelated or operator-staged work is altered.
   a proposed scheduling/publication change, not approval to weaken freshness or claim receipt-bound source identity.
   Paused the superseded attempt, stopped the isolated viewer through its owned lifecycle and confirmed unchanged protected
   stores. Browser workers exited; the normal viewer remains available. This record stays PARTIAL.
+
+### 2026-11-19 - Build-aware scheduling review
+
+- The receipt warning is supported by the cited Epic discussion and installed UBT source. Receipt modification is not
+  proof of compilation success or of unchanged authored inputs. Existing product/context validation remains necessary.
+- Qualification: native eligibility, bounded burst settling, content reconciliation and single-job coalescing already exist.
+  A longer native-only settling interval is an optimization hypothesis, not a missing freshness safeguard. A short quiet
+  period cannot establish consistency for the entire scan. The existing analysis copy is not a historical build snapshot.
+- Clarified current limits in the monitoring/profile owners and the existing Run checks guidance. No scheduling constants,
+  build hooks, acquisition defaults, publication rules, cache guards or user stores are changed.
+- Prior private evidence records one interrupted/superseded walkthrough, not a completed native scan or a study of repeated
+  supersession frequency. No new scheduling task is opened from that evidence alone. D6 remains unverified and this task
+  stays PARTIAL; a stable-input walkthrough or a separately prepared isolated project with its own valid context is required.
+- Verification: `test_monitor`, `test_monitor_inputs`, `test_build_context`, `test_analysis_controls`, `test_documentation`
+  and `test_privacy` passed: 55 checks, no skips. Changed documentation passed ASCII and diff checks. No runtime code,
+  staged content, saved user state or running analysis was changed during this review.

@@ -44,6 +44,11 @@ no source scanning or analysis work. Source mounts are revalidated before reads;
 Manual and older runs without a complete automatic input identity require initial reconciliation. Matching canonical source
 hashes alone cannot establish that configuration, tools and all monitored inputs are unchanged.
 
+[Monitor](../../laniakea/monitor.py) settles event bursts with bounded batching before reconciling input identities.
+The batch limit permits reconciliation during sustained activity; it does not guarantee a quiet period. Neither batching
+nor a quiet interval proves that inputs will stay unchanged throughout a long scan. Changes during staging can supersede
+that candidate, so before/after validation and the controller's generation check remain mandatory.
+
 Events are hints, not a durable log. Overflow, failed watches and malformed events expose degraded monitoring. Periodic
 reconciliation recovers missed edits. Replacing a directory changes its watch identity and does not inherit the old
 directory's refusal delay. Engine/toolchain inputs have narrow watches; assets, generated trees and the Engine are not
