@@ -9,10 +9,18 @@ function checksSummary(current,target,message='') {
     outcomes.some(r=>r.status==='failed')||Boolean(current?.error||message);
   const busy=current?.active&&!['fresh','failed','retry required','saved','paused'].includes(current.state);
   const done=rows.filter(r=>r.status==='completed').length;
+  const counts={completed:0,disabled:0,unavailable:0,incomplete:0,pending:0,failed:0};
+  for(const row of rows)counts[Object.hasOwn(counts,row.status)?row.status:'incomplete']++;
   const missing=rows.some(r=>!['completed','disabled'].includes(r.status))||outcomes.some(r=>['incomplete','unavailable'].includes(r.status));
-  const label=current?.state==='stopping'?'Checks: stopping':failed?'Checks: failed':busy?'Checks: running':
-    rows.length?`Checks: ${done}/${rows.length}`:'Checks: unavailable';
-  return {label,attention:failed||missing||Boolean(current?.degraded),done,total:rows.length,busy,
+  const phase=current?.state==='stopping'?'Checks: stopping':failed?'Checks: failed':busy?'Checks: running':null;
+  const breakdown=[[done,'recorded'],[counts.disabled,'off'],[counts.unavailable,'unavailable'],
+    [counts.incomplete,'incomplete'],[counts.pending,'queued']].filter(([count])=>count).map(([count,label])=>`${count} ${label}`);
+  const label=phase||(rows.length?'Checks: '+breakdown.join(' / '):'Checks: unavailable');
+  const short=[[counts.unavailable,'unavailable'],[counts.incomplete,'incomplete'],[counts.pending,'queued'],
+    [counts.disabled,'off'],[done,'recorded']].find(([count])=>count);
+  const compact=phase||(short?`Checks: ${short[0]} ${short[1]}`:'Checks: unavailable');
+  return {label,compact,counts,guidance:rows.length>0&&done<rows.length,
+    attention:failed||missing||Boolean(current?.degraded),done,total:rows.length,busy,
     description:[`Displayed map: ${done} of ${rows.length} checks recorded`,...rows.filter(r=>r.status!=='completed')
       .map(r=>`${r.label}: ${r.status}`),...outcomes.filter(r=>r.status!=='completed').map(r=>`${r.status}: ${r.code}`),
       current?.error,current?.degraded,message].filter(Boolean).join('. ')};
@@ -27,9 +35,10 @@ function inputChangeSummary(current,target) {
     detail:'No recorded input domains can be compared with the current scope. Recorded architecture remains available.'};
   const states={paused:'paused',checking:'checking',unavailable:'unavailable',degraded:'degraded'};
   const last=states[value.status],count=value.total;
-  const label=last?`Changes: ${last}`:count?`${count} input changes detected`:
-    value.context==='changed'?'Monitored context changed':'No changes in compared inputs';
   const scopes=Object.values(value.scope||{}).filter(item=>item.status!=='compared');
+  const label=last?`Changes: ${last}`:count?`${count} input changes detected`:
+    value.context==='changed'?'Monitored context changed':scopes.length||value.context==='unknown'?
+      'Changes: limited scope':'Compared inputs unchanged';
   const names={'not-monitored':'not monitored','not-recorded':'not recorded','scope-changed':'scope changed',unavailable:'unavailable'};
   const detail=[last?'Last observation only; this is not a current freshness claim.':'Compared with the displayed recorded analysis.',
     value.context==='unknown'?'Monitoring-context baseline unavailable.':
@@ -41,13 +50,14 @@ function inputChangeSummary(current,target) {
 
 class AnalysisControls {
   constructor(){
-    this.dismissed=new Set();this.edited=false;this.saving=false;this.formKey=null;
+    this.handled=new Set();this.edited=false;this.saving=false;this.formKey=null;
     $('toggle-analysis').onclick=()=>this.panel();
     $('analysis-close').onclick=()=>this.panel(false);
     $('analysis-run').onclick=()=>this.run();
     $('analysis-stop').onclick=()=>this.control('pause');
     $('analysis-recommended').onclick=()=>{for(const select of $('analysis-checks').querySelectorAll('select'))select.value='auto';
       this.edited=true;this.run();};
+    $('analysis-explore').onclick=()=>{this.panel(false);$('graph').focus({preventScroll:true});};
     $('analysis-discard').onclick=()=>{this.edited=false;this.formKey=null;this.error='';this.render(this.status);};
     $('analysis-auto').onchange=()=>this.control($('analysis-auto').checked?'activate':'pause');
     $('analysis-retry').onclick=()=>this.control('retry');
@@ -60,13 +70,44 @@ class AnalysisControls {
     $('input-change-next').onclick=()=>{if(this.pathPage?.next!==null)this.loadPaths(this.pathPage.next);};
   }
   dirty(){return this.edited||this.saving;}
+  guideKey(){return state.target?.id?'analysis-guide:'+JSON.stringify([state.target.id,
+    state.target.roots?.project||state.target.project||'']):null;}
+  guideHandled(){
+    const key=this.guideKey(),handled=this.handled||=new Set();
+    if(key&&recall(key)==='1')handled.add(key);
+    return !key||handled.has(key);
+  }
+  markHandled(){
+    const key=this.guideKey();if(!key||this.guideHandled())return;
+    this.handled.add(key);remember(key,'1');
+  }
+  guideBlocked(){
+    return Boolean(liveBlockReason()||['review','details','filters'].some(id=>!$(id).hidden)||$('view-controls').open||
+      document.activeElement?.closest?.('input,select,textarea,button,a,summary,[contenteditable="true"]'));
+  }
   panel(open=$('analysis').hidden){
+    const shown=!$('analysis').hidden;
     $('analysis').hidden=!open;$('toggle-analysis').setAttribute('aria-expanded',String(open));
     if(open){state.review?.panel(false);togglePanel('filters',false);
-      if(innerWidth<=1000)togglePanel('details',false);}
-    else {this.cancelPaths();this.dismissed.add(state.target?.id);
+      if(innerWidth<=1000)togglePanel('details',false);
+      if(this.hasGuide)this.markHandled();}
+    else {this.cancelPaths();if(shown)this.markHandled();
       if($('analysis').contains(document.activeElement))$('toggle-analysis').focus();}
     if(open&&this.pathsOpen)this.renderChanges(this.changeCurrent);
+  }
+  renderOverview(summary){
+    const rows=state.target.checks||[],root=$('analysis-overview-checks');
+    this.hasGuide=rows.length>0;$('analysis-overview').hidden=!this.hasGuide;
+    if(!this.hasGuide)return;
+    $('analysis-overview-title').textContent='Your recorded map is ready to explore';
+    $('analysis-overview-copy').textContent='Optional checks can add evidence. Recorded checks and findings do not certify architectural quality.';
+    root.replaceChildren();
+    const names={completed:'Recorded',disabled:'Off',unavailable:'Unavailable',incomplete:'Not recorded',pending:'Queued',failed:'Failed'};
+    for(const row of rows){const item=el('li');
+      item.append(el('span',row.label),el('strong',names[row.status]||'Not recorded',{'data-status':row.status}));root.append(item);}
+    $('analysis-recommendation').textContent=summary.busy?'Checks are running. You can explore now or use Skip/Stop below.':
+      'Recommended checks apply Auto using available tools and build context. They do not install tools, build the project or guarantee completion.'+
+      (summary.counts.disabled?' Off checks have not verified prerequisites.':'');
   }
   build(rows,current){
     const root=$('analysis-checks');root.replaceChildren();this.choices={};
@@ -103,7 +144,9 @@ class AnalysisControls {
     const displayed=state.target,enabled=Boolean(state.startup?.monitoring),summary=checksSummary(current,displayed,message);
     const awaiting=Boolean(current?.ready&&liveGeneration(current.ready)!==liveGeneration(displayed));
     const blocked=awaiting?liveBlockReason():'';
-    const button=$('toggle-analysis');button.textContent=awaiting&&!summary.busy?'Checks: waiting':summary.label;
+    const button=$('toggle-analysis');
+    $('checks-label-wide').textContent=awaiting&&!summary.busy?'Checks: waiting':summary.label;
+    $('checks-label-compact').textContent=awaiting&&!summary.busy?'Checks: waiting':summary.compact;
     button.title=[summary.description,blocked&&`Update waiting: ${blocked}`].filter(Boolean).join('. ');
     button.setAttribute('aria-label','Checks. '+button.title);button.setAttribute('data-attention',String(summary.attention));
     const key=JSON.stringify([ready.id,ready.run,current?.revision||0,current?.requested?.checks]);
@@ -112,16 +155,17 @@ class AnalysisControls {
     this.renderChanges(current);
     if(!this.edited&&!this.saving&&key!==this.formKey){this.build(rows,current);this.formKey=key;
       this.base={run:ready.run,revision:current?.revision||0};}
+    this.renderOverview(summary);
     const busy=summary.busy,progress=current?.progress;
     let explanation=!enabled?'Saved-only view. Open the viewer normally to enable background checks.':
       current?.state==='stopping'?'Stopping owned work. The previous map and saved settings remain available.':
       current?.state==='paused'?'Checks paused for this session. Showing previous results.':
       current?.error?'The attempt failed. Showing the previous map; saved settings were retained.':
       busy?'Checks run locally in the background. You can keep exploring the previous map.':
-      'Recorded results are available below. Completed checks do not certify the whole architecture.';
+      '';
     if(current?.requested)explanation+=' Check choices are pending; they are saved only with a validated update.';
     if(blocked)explanation+=` Update waiting: ${blocked}.`;
-    explanation+=' Coverage below belongs to the displayed map.';
+    $('analysis-status').hidden=!explanation;
     $('analysis-status').textContent=explanation;
     $('analysis-ready').hidden=!awaiting;
     const readyRows=ready.checks||[];
@@ -157,11 +201,9 @@ class AnalysisControls {
     $('analysis-stop').disabled=this.saving||current?.state==='stopping';
     $('analysis-auto').checked=Boolean(current?.active);$('analysis-auto').disabled=!enabled||this.saving||this.edited;
     $('analysis-discard').hidden=!this.edited;$('analysis-retry').hidden=!current?.error||!current?.active;
-    $('analysis-recommended').disabled=!enabled||this.saving;
-    if(current&&!this.dismissed.has(ready.id)&&!this.opened?.has(ready.id)){
-      (this.opened||=new Set()).add(ready.id);
-      if(summary.attention&&current.active)this.panel(true);
-    }
+    $('analysis-recommended').disabled=!enabled||this.saving||this.edited||busy||current?.state==='stopping';
+    if(!$('analysis').hidden&&this.hasGuide)this.markHandled();
+    if(current&&this.hasGuide&&(summary.guidance||summary.attention)&&!this.guideHandled()&&!this.guideBlocked())this.panel(true);
   }
   cancelPaths(){this.pathRequest=(this.pathRequest||0)+1;this.pathController?.abort();this.pathLoading=false;}
   renderChanges(current){

@@ -72,7 +72,7 @@ async(page,{change,hold,inspect=async()=>{}})=>{
   await page.locator('#analysis-discard').click();
   await page.waitForFunction(run=>state.target.run!==run,old.run);
   await page.waitForFunction(()=>state.live.status.targets.find(t=>t.id==='sample').comparison?.baseline===state.target.run);
-  check(/No changes in compared inputs/.test(await page.locator('#input-change-summary').innerText()),'Adoption retained old changes');
+  check(/Changes: limited scope/.test(await page.locator('#input-change-summary').innerText()),'Adoption retained old changes or hid the Off scope');
   check(await page.evaluate(pins=>JSON.stringify(state.positionCache.layouts)===pins,old.pins),'Read-only changes altered pins');
   await page.evaluate(()=>{state.live.stop();state.target.stale=true;state.target.changed=['Source/Legacy.Build.cs'];
     state.target.changed_count=1;state.live.status={targets:[]};renderBanner();});

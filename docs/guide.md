@@ -23,17 +23,22 @@ recommended checks and can already collect duplication evidence; `up` starts the
 background. Tools must be installed locally, and native indexing needs a usable successful-build receipt. Laniakea does
 not automatically build your project or install tools. A saved run does not prove current sources compiled.
 
-Open **Checks** to see what ran, what is running and what needs setup. **Skip for now** or **Stop checks** pauses owned
+On first opening, **Checks** explains the displayed map's recorded coverage, optional checks that are Off and the next action.
+It waits while you read another panel or interact, and remembers presentation or dismissal for that project in this browser.
+**Explore current map** closes it without starting work. Open Checks anytime for current progress or setup details.
+**Skip for now** or **Stop checks** pauses owned
 background work and retains the previous map. These controls do not interrupt the earlier foreground build command.
 Choose **Run checks** to resume when inputs have settled. Later source edits or build changes can still supersede a long
 scan. **Retry** retries a failed attempt; unchanged failures otherwise remain recorded.
 Auto uses available prerequisites; On makes a check required; Off explicitly skips it. Choices apply only when a validated
 map publishes. Failed or cancelled attempts keep the previous saved settings. Existing projects retain their recorded
-choices; **Run recommended checks** explicitly enables the automatic modes.
+choices; **Run recommended checks** explicitly applies Auto and requests checks using available prerequisites. It does not
+install tools, build the project or guarantee completion. Off checks have not verified their prerequisites.
 
 Keep exploring the recorded map while editing. The change summary opens **Checks**, where **Changes since recorded analysis**
 shows comparable inputs and **Show paths** lists added, modified and removed files. It also explains unmonitored or unavailable
-source coverage. **Build evidence** can mean a rewritten receipt, not edited code or a successful build. These are recheck
+source coverage; **Changes: limited scope** does not mean all C++ files were checked. **Build evidence** can mean a rewritten
+receipt, not edited code or a successful build. These are recheck
 hints, not architecture findings. Use the existing Run/Retry controls when ready; paging does not start checks or enable Off modes.
 
 **Review** inspects findings in recorded evidence. **View** contains layout, filters, configuration marks, fitting and

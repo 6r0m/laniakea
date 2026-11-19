@@ -95,9 +95,10 @@ test('review starts enabled with a closed list, and closing that list retains an
     assert.match(node('toggle-review').title,/2 candidates/);
     control.data={counts:{candidate:0,violation:0,acknowledged:0},checks:[
       {status:'failed'},{status:'unavailable'},{status:'available'},{status:'disabled'}]};
-    control.status();assert.match(node('toggle-review').title,/0 findings \/ 1 failed \/ 1 unavailable \/ 1 disabled/);
+    control.status();assert.match(node('toggle-review').title,/0 recorded findings \/ 1 failed \/ 1 unavailable \/ 1 disabled/);
+    assert.equal(node('review-label-wide').textContent,'Review: 0 recorded findings');
     control.data.checks.push({status:'incomplete'});control.status();
-    assert.match(node('toggle-review').title,/0 findings \/ 1 incomplete \/ 1 failed \/ 1 unavailable \/ 1 disabled/);
+    assert.match(node('toggle-review').title,/0 recorded findings \/ 1 incomplete \/ 1 failed \/ 1 unavailable \/ 1 disabled/);
   } finally {global.$=previous;global.togglePanel=previousPanel;}
 });
 

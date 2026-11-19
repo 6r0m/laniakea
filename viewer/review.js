@@ -82,13 +82,15 @@ class ArchitectureReview {
     const button=$('toggle-review'),counts=this.data?.counts;
     const label=!this.target?.review_url?'unavailable':!this.enabled?'off':this.loading?'checking...':this.error?'failed':
       counts?[[counts.violation,'violation'],[counts.candidate,'candidate']].filter(([n])=>n)
-        .map(([n,label])=>`${n} ${label}${n===1?'':'s'}`).join(' / ')||'0 findings':'checking...';
+        .map(([n,label])=>`${n} ${label}${n===1?'':'s'}`).join(' / ')||'0 recorded findings':'checking...';
     const coverage=['incomplete','failed','unavailable','disabled'].map(status=>{
       const count=(this.data?.checks||[]).filter(check=>check.status===status).length;
       return count?`${count} ${status}`:null;
     }).filter(Boolean);
-    button.textContent='Review: '+(!this.target?.review_url?'-':!this.enabled?'off':this.error?'failed':
-      counts?counts.violation+counts.candidate:'...');
+    const phase=!this.target?.review_url?'unavailable':!this.enabled?'off':this.error?'failed':this.loading?'checking...':null;
+    const total=counts?counts.violation+counts.candidate:null;
+    $('review-label-wide').textContent='Review: '+(phase||(total!==null?`${total} recorded findings`:'checking...'));
+    $('review-label-compact').textContent='Review: '+(phase||(total!==null?`${total} findings`:'checking...'));
     button.disabled=!this.target?.review_url;
     button.title=this.error||[label,...coverage].join(' / ')+'. Findings use recorded evidence; source checks are in Analysis.';
     button.setAttribute('aria-label','Review: '+[label,...coverage].join(' / '));

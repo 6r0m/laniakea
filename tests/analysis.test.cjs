@@ -20,7 +20,7 @@ test('a missing input baseline and a known empty scoped comparison remain differ
   assert.match(inputChangeSummary(null,target).label,/not available|not checked/i);
   const empty={baseline:'old',status:'current',total:0,context:'unchanged',scope:{build:{status:'compared'},source:{status:'not-monitored'}}};
   const shown=inputChangeSummary({comparison:empty},target);
-  assert.match(shown.label,/compared inputs/i);assert.match(shown.detail,/not monitored/i);
+  assert.match(shown.label,/limited scope/i);assert.match(shown.detail,/not monitored/i);
   const unknown=inputChangeSummary({comparison:{...empty,scope:{build:{status:'unavailable'}}}},target);
   assert.equal(unknown.available,false);assert.match(unknown.label,/not available/i);
 });
@@ -40,8 +40,73 @@ test('late check settings responses cannot change another target form or status'
 test('check coverage keeps unavailable and skipped acquisition distinct from successful evidence',()=>{
   const target={checks:[{label:'Modules',status:'completed'},{label:'C++',status:'unavailable'},{label:'Clones',status:'disabled'}]};
   const value=checksSummary(null,target);
-  assert.equal(value.label,'Checks: 1/3');assert.equal(value.attention,true);
+  assert.equal(value.label,'Checks: 1 recorded / 1 off / 1 unavailable');assert.equal(value.attention,true);
   assert.match(value.description,/C\+\+: unavailable/);assert.match(value.description,/Clones: disabled/);
+});
+
+test('Off is guidance rather than failure and recorded counts remain explicit',()=>{
+  const value=checksSummary({active:true,state:'fresh'},{checks:[{status:'completed'},{status:'disabled'},{status:'disabled'}]});
+  assert.equal(value.label,'Checks: 1 recorded / 2 off');assert.equal(value.compact,'Checks: 2 off');
+  assert.equal(value.attention,false);assert.equal(value.guidance,true);
+});
+
+function guidanceFixture(){
+  const {viewer,treeElements}=require('./viewer-support.cjs'),v=viewer(),stored=new Map();treeElements(v.run);
+  v.context.localStorage={getItem:key=>stored.get(key)||null,setItem:(key,value)=>stored.set(key,value)};
+  v.run(`document.querySelectorAll=()=>[];state.cy={};state.startup={monitoring:true};state.live={};
+    state.target={id:'sample',run:'recorded',roots:{project:'sample-root'},checks:[
+      {id:'foundation',label:'Modules',status:'completed'},
+      {id:'native',label:'C++ references',status:'disabled'},
+      {id:'duplication',label:'Duplication',status:'disabled'}]};
+    state.review={saving:false,panel(open){$('review').hidden=!open;}};
+    globalThis.status={targets:[{id:'sample',active:true,state:'fresh',ready:state.target}]};
+    globalThis.control=Object.create(AnalysisControls.prototype);control.dismissed=new Set();control.choices={};
+    control.build=()=>{};control.renderChanges=()=>{};state.analysis=control;
+    $('view-controls').open=false;$('analysis').contains=()=>false;`);
+  return {...v,stored};
+}
+
+test('the Off guide appears once, survives reload and is isolated by project rather than run',()=>{
+  const {run,stored}=guidanceFixture();run('control.render(status)');
+  assert.equal(run("$('analysis').hidden"),false);assert.equal(stored.size,1);
+  run(`$('analysis').hidden=true;state.target.run='another-run';
+    control=Object.create(AnalysisControls.prototype);control.dismissed=new Set();control.choices={};
+    control.build=()=>{};control.renderChanges=()=>{};state.analysis=control;control.render(status);`);
+  assert.equal(run("$('analysis').hidden"),true,'Reload repeated a handled introduction');
+  run("state.target.roots.project='another-project';control.render(status)");
+  assert.equal(run("$('analysis').hidden"),false,'A different project inherited handled state');
+});
+
+test('quiet metadata and a hidden coordination close do not consume later attention',()=>{
+  const {run,stored}=guidanceFixture();
+  run("state.target.checks=state.target.checks.slice(0,1);control.panel(false);control.render(status)");
+  assert.equal(stored.size,0);assert.equal(run("$('analysis').hidden"),true);
+  run("status.targets[0].error='Synthetic later failure';control.render(status)");
+  assert.equal(run("$('analysis').hidden"),false,'Quiet first status consumed the opening');
+});
+
+test('automatic guidance yields to reading panels, View and keyboard focus but manual Checks still opens',()=>{
+  for(const id of ['review','details','filters','view-controls','keyboard']){
+    const {run,stored}=guidanceFixture();
+    run(id==='view-controls'?"$('view-controls').open=true":id==='keyboard'?
+      "document.activeElement={closest:()=>({})}":`$('${id}').hidden=false`);
+    run('control.render(status)');
+    assert.equal(run("$('analysis').hidden"),true,`${id} was displaced`);assert.equal(stored.size,0);
+    run(id==='view-controls'?"$('view-controls').open=false":id==='keyboard'?
+      'document.activeElement=null':`$('${id}').hidden=true`);
+    run('control.render(status)');assert.equal(run("$('analysis').hidden"),false,'Deferred guidance was lost');
+  }
+  const {run}=guidanceFixture();run("innerWidth=390;$('review').hidden=false;$('details').hidden=false;control.panel(true)");
+  assert.equal(run("$('review').hidden"),true);assert.equal(run("$('details').hidden"),true);
+});
+
+test('storage refusal retains a session guard and handled guidance never suppresses later failures',()=>{
+  const {run,context}=guidanceFixture();context.localStorage={getItem(){throw Error('blocked');},setItem(){throw Error('blocked');}};
+  run('control.render(status)');assert.equal(run("$('analysis').hidden"),false);
+  run("$('analysis').hidden=true;status.targets[0].error='Synthetic later failure';control.render(status)");
+  assert.equal(run("$('analysis').hidden"),true,'Failure repeated the introduction');
+  assert.equal(run("$('checks-label-wide').textContent"),'Checks: failed');
+  assert.match(run("$('analysis-error').textContent"),/Synthetic later failure/);
 });
 
 test('a newer ready snapshot cannot supply displayed check counts',()=>{

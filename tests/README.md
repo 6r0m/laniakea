@@ -81,7 +81,7 @@ Source-file fixtures must use the normal pipeline/read index/server and real exa
 | [review.browser.js](review.browser.js) | [Review fixture](test_review.py): direct explanation, exact evidence, triage, refused writes, late close and pins |
 | [inspector.browser.js](inspector.browser.js) | Review fixture: accessible tabs, separate findings/details, retained drafts/evidence/scroll, lazy references, late responses and narrow panels |
 | [health.browser.js](health.browser.js) | `test_health.browser_fixture`: source evidence paging, file badges, triage/reopen, late-close, narrow layout and pin preservation |
-| [analysis.browser.js](analysis.browser.js) | Mandatory foundation, selectable source checks, Apply/Stop, retained maps, responsive controls and keyboard focus |
+| [analysis.browser.js](analysis.browser.js) | Mandatory foundation, selectable source checks, Apply/Stop and retained maps; `guidance` exercises first opening, deferred reading panels, dismissal/reload, storage refusal, later failures, responsive themes and keyboard focus |
 | [input-changes.browser.js](input-changes.browser.js) | Cached path paging, Off scopes, removed-file links, focus, drafts, late close/target responses, displayed baseline, adoption and legacy stale paths |
 | [check-coverage.browser.js](check-coverage.browser.js) | Module-only to synthetic native publication: displayed/ready coverage, failed-save deferral, adoption and pin preservation |
 | [monitor.browser.js](monitor.browser.js) | Two registered sample targets: launch/deep-link precedence, inactive browsing and same-origin session controls |

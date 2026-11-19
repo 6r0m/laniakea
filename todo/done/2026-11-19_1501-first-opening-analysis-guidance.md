@@ -1,8 +1,8 @@
 # First-opening analysis guidance
 
-**Status:** REVIEW REQUIRED  
+**Status:** DONE
 **Scope:** viewer guidance, first-opening lifecycle and evidence labels  
-**Stable owners:** [viewer](../docs/architecture/viewer.md), [guide](../docs/guide.md)
+**Stable owners:** [viewer](../../docs/architecture/viewer.md), [guide](../../docs/guide.md)
 
 ## Contents
 
@@ -34,20 +34,23 @@ existing action will do, while remaining free to explore the map. Recorded cover
   - Effect: preserve the accepted new-project Auto policy. This UI slice does not redefine acquisition or legacy choices.
   - Reason: not stated.
   - Date/source: operator's explicit first-opening answer in the Analysis Controls conversation, 2026-11-18.
+- **D2:** Implement this approved plan using implement-approved-change.
+  - Effect: authorize the bounded viewer change and its synthetic/browser acceptance, preserving D1 and the separate D6 gate.
+  - Date/source: operator's explicit implementation request, 2026-11-19.
 
 ### Operator gates
 
-No unresolved technical question blocks this investigation. The supplied recommendation is planning input; implementation
-requires approval of this plan. No production change or activation of an existing project's Off checks is authorized here.
+No unresolved technical question blocks implementation. D2 authorizes this plan; viewing guidance does not authorize
+activation of an existing project's Off checks.
 
 ### Working assumptions
 
-- **A1 [ACTIVE]:** Use the existing Checks panel as the non-modal guide; reuse its actions and status data.
-- **A2 [ACTIVE]:** Remember actual presentation or explicit dismissal per project in browser preferences, preventing poll and
+- **A1 [ADOPTED]:** Use the existing Checks panel as the non-modal guide; reuse its actions and status data.
+- **A2 [ADOPTED]:** Remember actual presentation or explicit dismissal per project in browser preferences, preventing poll and
   reload prompts. Do not consume the opening opportunity before useful guidance or attention exists.
-- **A3 [ACTIVE]:** Replace ambiguous idle ratios and zero-findings labels with explicit recorded/Off/availability wording,
+- **A3 [ADOPTED]:** Replace ambiguous idle ratios and zero-findings labels with explicit recorded/Off/availability wording,
   using compact wording at narrow widths and full descriptions in Checks.
-- **A4 [ACTIVE]:** Keep scoped input-change semantics and expose their limits more clearly; do not change comparison data.
+- **A4 [ADOPTED]:** Keep scoped input-change semantics and expose their limits more clearly; do not change comparison data.
 
 ## Non-goals
 
@@ -59,30 +62,30 @@ requires approval of this plan. No production change or activation of an existin
 
 ## Verified evidence
 
-1. [Analysis summary](../viewer/analysis.js), `checksSummary()`, excludes `disabled` from missing-coverage attention and
+1. [Analysis summary](../../viewer/analysis.js), `checksSummary()`, excludes `disabled` from missing-coverage attention and
    reports completion as an idle ratio. A completed foundation with two disabled checks produces `Checks: 1/3` and
    `attention: false`. That classification intentionally avoids treating Off as failure; the missing part is guidance.
 2. `AnalysisControls.render()` adds a target to `opened` before checking attention. Executing the actual render method
    against a synthetic viewer first without attention and then with a later error produced zero automatic openings.
-   [Diagnostic](../workspace/tmp/first-opening-guidance/probe.cjs), [result](../workspace/tmp/first-opening-guidance/probe.json).
+   [Diagnostic](../../workspace/tmp/first-opening-guidance/probe.cjs), [result](../../workspace/tmp/first-opening-guidance/probe.json).
 3. `dismissed` and `opened` are memory-only. `panel(false)` records dismissal even when called through panel coordination;
-   it does not persist across reload. Existing [browser preference helpers](../viewer/app.js), `recall()` and `remember()`,
+   it does not persist across reload. Existing [browser preference helpers](../../viewer/app.js), `recall()` and `remember()`,
    already tolerate unavailable local storage. They can own this small preference without a backend store.
-4. [Checks markup](../viewer/index.html) already contains Run recommended checks, Run/Apply, Retry, Stop and detailed
+4. [Checks markup](../../viewer/index.html) already contains Run recommended checks, Run/Apply, Retry, Stop and detailed
    availability/setup information. The recommended action sets optional choices to Auto through the normal request path.
    It is not merely an instruction to resume the current choices.
-5. [Review status](../viewer/review.js), `status()`, displays a bare count in the button. Its title already qualifies
+5. [Review status](../../viewer/review.js), `status()`, displays a bare count in the button. Its title already qualifies
    findings as recorded evidence and includes coverage states. The qualification is less visible than the count.
 6. `inputChangeSummary()` already says "compared inputs" and exposes unmonitored scopes in its detail. The fixed-width
-   [context strip](../viewer/app.css) can truncate the label. The finding is about visibility, not an incorrect freshness calculation.
-7. [Viewer lifecycle](../docs/architecture/viewer.md#live-snapshots) distinguishes displayed coverage, pending choices and ready
-   updates. [Check policy](../docs/architecture/monitoring.md#requested-checks) preserves legacy intent and makes missing
+   [context strip](../../viewer/app.css) can truncate the label. The finding is about visibility, not an incorrect freshness calculation.
+7. [Viewer lifecycle](../../docs/architecture/viewer.md#live-snapshots) distinguishes displayed coverage, pending choices and ready
+   updates. [Check policy](../../docs/architecture/monitoring.md#requested-checks) preserves legacy intent and makes missing
    tools/prerequisites explicit. Neither boundary needs a behavior change for A1-A4.
 8. `AnalysisControls.panel(true)` closes Review and filters, and closes Inspector at narrow widths. The existing
    `liveBlockReason()` guards gestures and drafts, but not reading an open panel. A synthetic execution of those actual
    methods returned no block reason before Checks hid all three panels at a narrow width. This verifies the coordination
-   gap, not future browser focus behavior: [probe](../workspace/tmp/first-opening-guidance/panel-priority.cjs),
-   [result](../workspace/tmp/first-opening-guidance/panel-priority.json).
+   gap, not future browser focus behavior: [probe](../../workspace/tmp/first-opening-guidance/panel-priority.cjs),
+   [result](../../workspace/tmp/first-opening-guidance/panel-priority.json).
 
 The code-level findings are verified; the proposed guide, its layout and persistent dismissal have not been implemented or
 browser-tested. The supplied screenshot interpretation is consistent with the code, not proof of full analysis or its absence.
@@ -91,13 +94,13 @@ browser-tested. The supplied screenshot interpretation is consistent with the co
 
 | owner | responsibility |
 |---|---|
-| [Analysis](../viewer/analysis.js) | displayed check summary, form state, guide eligibility and panel presentation |
-| [App](../viewer/app.js) | existing browser preferences, keyboard and panel coordination |
-| [Review](../viewer/review.js) | finding count/severity/coverage presentation; no source acquisition |
-| [Markup](../viewer/index.html) and [styles](../viewer/app.css) | accessible layout, action order and responsive labels |
-| [Live](../viewer/live.js) | adoption guards, generation ownership and render rollback; reuse without a new lifecycle |
-| [Analysis tests](../tests/analysis.test.cjs), [browser acceptance](../tests/analysis.browser.js) | coverage, choices, focus and control regressions |
-| [Review tests](../tests/review.test.cjs), [input-change acceptance](../tests/input-changes.browser.js) | honest findings and scoped freshness |
+| [Analysis](../../viewer/analysis.js) | displayed check summary, form state, guide eligibility and panel presentation |
+| [App](../../viewer/app.js) | existing browser preferences, keyboard and panel coordination |
+| [Review](../../viewer/review.js) | finding count/severity/coverage presentation; no source acquisition |
+| [Markup](../../viewer/index.html) and [styles](../../viewer/app.css) | accessible layout, action order and responsive labels |
+| [Live](../../viewer/live.js) | adoption guards, generation ownership and render rollback; reuse without a new lifecycle |
+| [Analysis tests](../../tests/analysis.test.cjs), [browser acceptance](../../tests/analysis.browser.js) | coverage, choices, focus and control regressions |
+| [Review tests](../../tests/review.test.cjs), [input-change acceptance](../../tests/input-changes.browser.js) | honest findings and scoped freshness |
 
 ## Problem and root cause
 
@@ -195,15 +198,15 @@ While check choices are dirty or submitting, guidance cannot reset them or run a
 
 ## Implementation tasks
 
-- [ ] Add failing summary and lifecycle regressions using the existing viewer fixture; extend Analysis browser acceptance
+- [x] Add failing summary and lifecycle regressions using the existing viewer fixture; extend Analysis browser acceptance
   for an existing project with both optional modes Off and for delayed attention.
-- [ ] Implement contextual coverage/action presentation and guidance eligibility in Analysis; persist handled state through
+- [x] Implement contextual coverage/action presentation and guidance eligibility in Analysis; persist handled state through
   the current preference helpers. Gate automatic opening on active panels and focus before invoking manual coordination or
   recording handled state. Reuse the recommended request handler and existing panel/keyboard paths.
-- [ ] Clarify Checks, Review and input-change labels, retaining availability/severity semantics and responsive action access.
-- [ ] Prove delayed guidance preserves a reading panel and focus, alongside dismissal/reload, project isolation, storage
+- [x] Clarify Checks, Review and input-change labels, retaining availability/severity semantics and responsive action access.
+- [x] Prove delayed guidance preserves a reading panel and focus, alongside dismissal/reload, project isolation, storage
   refusal, drafts, adoption and no unintended control requests. Verify later failures remain visible after dismissal.
-- [ ] Update the stable owners below, inspect the diff and archive this task only after its acceptance passes.
+- [x] Update the stable owners below, inspect the diff and archive this task only after its acceptance passes.
 
 ## Test-first and verification plan
 
@@ -243,21 +246,21 @@ python -m unittest discover -s tests -p test_documentation.py
 python -m unittest discover -s tests -p test_privacy.py
 ```
 
-Run the extended [Analysis scenario](../tests/analysis.browser.js), [displayed-coverage scenario](../tests/check-coverage.browser.js),
-[input-change scenario](../tests/input-changes.browser.js) and affected [live rollback scenario](../tests/live.browser.js).
+Run the extended [Analysis scenario](../../tests/analysis.browser.js), [displayed-coverage scenario](../../tests/check-coverage.browser.js),
+[input-change scenario](../../tests/input-changes.browser.js) and affected [live rollback scenario](../../tests/live.browser.js).
 Use trusted pointer/keyboard actions, reload the same browser context, and test both themes at the listed widths. Preserve
 camera/pins and protected-store hashes; test source/control requests independently of graph inspection. Existing choices
 and D6 remain unchanged. This UI-only scope does not require expensive Engine/native/CPD re-extraction.
 
 ## Documentation plan
 
-- [Viewer](../docs/architecture/viewer.md#live-snapshots) owns first-opening eligibility, handled preferences, focus and
+- [Viewer](../../docs/architecture/viewer.md#live-snapshots) owns first-opening eligibility, handled preferences, focus and
   displayed evidence. Update its existing session-dismissal statement with automatic-versus-manual panel priority and
   independent operational status; do not create a second onboarding document.
-- [Guide](../docs/guide.md#open-a-project) owns the short operator workflow and exact action name. It already explains Auto,
+- [Guide](../../docs/guide.md#open-a-project) owns the short operator workflow and exact action name. It already explains Auto,
   Off and zero findings; edit those paragraphs rather than append a duplicate tutorial.
-- [Verification](../tests/README.md#browser-acceptance) lists the extended scenario. Existing routes remain sufficient.
-- [Monitoring](../docs/architecture/monitoring.md#requested-checks) and [Review](../docs/architecture/review.md) retain policy
+- [Verification](../../tests/README.md#browser-acceptance) lists the extended scenario. Existing routes remain sufficient.
+- [Monitoring](../../docs/architecture/monitoring.md#requested-checks) and [Review](../../docs/architecture/review.md) retain policy
   and evidence semantics; change them only if implementation demonstrates a direct contract correction is needed.
 
 ## Rollout and rollback
@@ -300,3 +303,32 @@ stable documentation and privacy checks pass; D6 and unrelated work are untouche
 - Validation: 25 existing Analysis/Review/Live JavaScript checks and five documentation/privacy checks passed. The revised
   plan is ASCII and passes link/anchor and whitespace checks. These are baseline/plan checks; the new browser regression
   and future implementation are still unverified. No staging or commit was performed.
+
+
+### 2026-11-19 - Approved implementation and acceptance
+
+- D2 authorized implementation. A1-A4 were adopted within the existing Analysis, browser preference, Review and markup owners.
+  The reviewer's reading-panel correction is valid: automatic guidance now yields without closing panels or moving focus/scroll.
+  Manual Checks coordination remains unchanged. No reviewer point required refutation.
+- Contextual displayed coverage and existing recommended actions are visible together. Off remains informational; viewing or
+  dismissing guidance sends no control request. Dirty, submitting or already-running checks cannot be overwritten by the
+  recommended action. Later failures continue updating after the introduction is handled.
+- Test-first: `node --test tests/analysis.test.cjs tests/review.test.cjs` produced eight expected assertion failures for the
+  old lifecycle, labels and absent Off guidance, then passed all 22 after implementation. The fixture's initial DOM stub
+  omission was corrected before red evidence was accepted; it was not counted as a product defect.
+- Green: `node --test tests/*.test.cjs` passed all 194 checks. Documentation and privacy discovery passed three and two checks.
+  `git diff --check` passed. No backend, extraction or schema change required Engine/native/CPD re-extraction.
+- Chrome: the extended Analysis scenario's guidance branch passed eight delayed reading-panel cases at desktop/narrow widths,
+  dismissal/reload, denied storage, draft protection, later failure visibility, explicit recommended Auto and Stop. No implicit
+  control request or runtime error occurred. Trusted interaction and screenshots covered both themes at 390/1080/1440 widths;
+  primary actions fit, the guide remained readable and status-label changes kept the toolbar height fixed.
+- Existing Analysis, displayed-coverage, input-change and live browser scenarios passed. These retain stale-tab/Apply guards,
+  exact paging, adoption deferral, render-error rollback, independent tabs and camera assertions. Disposable harness setup now
+  acknowledges the introductory guide before isolated live-adoption checks, and uses an independent fresh target for the
+  pre-existing Analysis scenario. Existing camera assertions were not weakened.
+- The ordinary live project route displayed guidance and returned to exploration with no control requests or browser errors.
+  All protected layout/policy/triage files remained byte-identical, and live activation/check choices were unchanged. Private
+  receipts are in ignored `workspace/tmp/guidance-implementation/`; screenshots remain outside this clone.
+- The interface checklist and screenshot review found no remaining issue in the changed scope. Durable behavior moved to the
+  existing viewer and guide sections; verification documents the extended scenario. No staging or commit was performed.
+- This task is complete and archived. The separate Analysis Controls D6 runtime acceptance remains PARTIAL and is unchanged.

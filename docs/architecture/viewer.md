@@ -452,6 +452,16 @@ filters and arrangement; the separate summary row keeps changing counts from res
 panel labels coverage from the displayed snapshot separately from newer results awaiting adoption. Attempt progress and
 requested-versus-applied settings do not replace displayed evidence; removing an adoption block updates coverage with the map. Only optional profile checks
 have mode selectors; the map foundation stays mandatory. Review evaluates existing evidence independently.
-Analysis opens once for an active target needing attention and stays closed after dismissal. Settings drafts defer live
-adoption; late control responses cannot overwrite another target's form. Close/Escape restores the primary action's focus.
+Analysis offers first-opening guidance when displayed check coverage is incomplete, including informational Off choices.
+Automatic opening yields to Review, Inspector, filters, View controls, focused controls, gestures and drafts. It does not
+close a reading panel or move focus/scroll; deferred guidance remains eligible through the existing status lifecycle.
+Manual Checks opening retains normal panel coordination. Presentation or visible dismissal is remembered through the existing
+browser preferences, keyed by target and project-root identity rather than run/index. A quiet render or hiding an already-hidden
+panel does not consume that opportunity. Storage refusal retains an in-memory session guard.
+Handled guidance suppresses introductions only; progress, coverage, failure labels and explanations continue updating.
+Idle controls explicitly distinguish recorded checks, Off and unavailable evidence, with compact labels at narrow widths;
+Review counts describe recorded findings, never an architecture score. Limited input comparisons are labeled as limited scope.
+Settings drafts defer live adoption; late control responses cannot overwrite another target's form. Recommended checks reuse
+the normal Auto request and cannot replace dirty/submitting choices or start redundant running work. Close/Escape restores the
+primary action's focus; Explore current map returns focus to the graph without fitting it or starting acquisition.
 Unavailable, failed, disabled and incomplete checks remain distinct from completed checks and zero findings.
