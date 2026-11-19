@@ -78,11 +78,12 @@ class AnalysisControls {
     return !key||handled.has(key);
   }
   markHandled(){
-    const key=this.guideKey();if(!key||this.guideHandled())return;
+    const key=this.guideKey();if(document.hidden||!key||this.guideHandled())return;
     this.handled.add(key);remember(key,'1');
   }
   guideBlocked(){
-    return Boolean(liveBlockReason()||['review','details','filters'].some(id=>!$(id).hidden)||$('view-controls').open||
+    return Boolean(document.hidden||document.activeElement===$('graph')||liveBlockReason()||
+      ['review','details','filters'].some(id=>!$(id).hidden)||$('view-controls').open||
       document.activeElement?.closest?.('input,select,textarea,button,a,summary,[contenteditable="true"]'));
   }
   panel(open=$('analysis').hidden){

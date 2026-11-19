@@ -453,11 +453,13 @@ panel labels coverage from the displayed snapshot separately from newer results 
 requested-versus-applied settings do not replace displayed evidence; removing an adoption block updates coverage with the map. Only optional profile checks
 have mode selectors; the map foundation stays mandatory. Review evaluates existing evidence independently.
 Analysis offers first-opening guidance when displayed check coverage is incomplete, including informational Off choices.
-Automatic opening yields to Review, Inspector, filters, View controls, focused controls, gestures and drafts. It does not
+Automatic opening waits for a visible tab and yields to Review, Inspector, filters, View controls, graph keyboard focus,
+focused controls, gestures and drafts. It does not
 close a reading panel or move focus/scroll; deferred guidance remains eligible through the existing status lifecycle.
 Manual Checks opening retains normal panel coordination. Presentation or visible dismissal is remembered through the existing
 browser preferences, keyed by target and project-root identity rather than run/index. A quiet render or hiding an already-hidden
-panel does not consume that opportunity. Storage refusal retains an in-memory session guard.
+panel does not consume that opportunity. Hidden-tab rendering cannot acknowledge a panel, including one opened before coverage
+arrives; visibility changes reuse the existing status lifecycle. Storage refusal retains an in-memory session guard.
 Handled guidance suppresses introductions only; progress, coverage, failure labels and explanations continue updating.
 Idle controls explicitly distinguish recorded checks, Off and unavailable evidence, with compact labels at narrow widths;
 Review counts describe recorded findings, never an architecture score. Limited input comparisons are labeled as limited scope.

@@ -7,6 +7,50 @@ async (page,{hold=async()=>{},guidance=false,screenshot=async()=>{}}={})=>{
     const settle=p=>p.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
     const camera=p=>p.evaluate(()=>{const cy=state.cy,pan=cy.pan(),zoom=worldZoom();
       return JSON.stringify([(cy.width()/2-pan.x)/zoom,(cy.height()/2-pan.y)/zoom,zoom,[...state.universe.expanded]]);});
+    for(const mode of ['hidden','graph']){
+      const context=await browser.newContext({viewport:{width:1440,height:1000}}),p=await context.newPage();
+      p.on('pageerror',e=>errors.push(e.message));let controls=0,release;
+      const gate=new Promise(r=>release=r);
+      p.on('request',r=>{if(r.url().endsWith('/monitor/control'))controls++;});
+      await p.route('**/monitor/status?*',async route=>{await gate;await route.continue();});
+      try{
+        await p.goto(url);await p.waitForFunction(()=>typeof state!=='undefined'&&state.cy&&state.analysis);
+        if(mode==='hidden')await p.evaluate(()=>{
+          // Headless Chrome keeps tabs visible; inject only this browser input, not the guidance or polling path.
+          Object.defineProperty(document,'hidden',{configurable:true,get:()=>true});
+          document.dispatchEvent(new Event('visibilitychange'));
+        });
+        else {await p.locator('#graph').focus();await p.keyboard.press('-');
+          await p.waitForFunction(()=>!liveBlockReason());
+          check(await p.evaluate(()=>['review','details','filters'].every(id=>$(id).hidden)&&!$('view-controls').open),
+            'Graph-focus regression is masked by an open panel');}
+        await p.waitForFunction(()=>!liveBlockReason());await settle(p);
+        check(await p.evaluate(()=>['review','details','filters'].every(id=>$(id).hidden)&&!$('view-controls').open&&
+          (document.activeElement===document.body||document.activeElement===$('graph'))),
+          'Visibility/focus regression is masked by another reading guard');
+        const before=await camera(p);
+        release();await p.waitForFunction(()=>state.live?.status&&!state.live.running);await settle(p);
+        check(await p.locator('#analysis').isHidden(),`Delayed status interrupted ${mode}`);
+        check(await p.evaluate(()=>!state.analysis.guideHandled()),`${mode} consumed unseen guidance`);
+        check(await p.evaluate(()=>recall(state.analysis.guideKey())===null),`${mode} persisted unseen acknowledgement`);
+        check(await camera(p)===before,`${mode} changed the camera`);
+        if(mode==='graph'){
+          check(await p.evaluate(()=>document.activeElement===$('graph')),'Delayed guidance displaced graph focus');
+          await p.locator('header h1').click();await p.evaluate(()=>state.live.tick());
+          await p.waitForFunction(()=>!$('analysis').hidden);
+          await p.locator('#analysis-explore').click();
+          await p.locator('#toggle-analysis').click();
+          check(await p.locator('#analysis').isVisible(),'Graph focus blocked explicit Checks');
+        }else {
+          await p.evaluate(()=>{delete document.hidden;document.dispatchEvent(new Event('visibilitychange'));});
+          await p.waitForFunction(()=>!document.hidden&&!$('analysis').hidden&&state.analysis.guideHandled());
+          await settle(p);
+          check(await p.evaluate(()=>recall(state.analysis.guideKey())==='1'),'Visible presentation was not remembered');
+          check(await camera(p)===before,'Visible introduction changed world framing');
+        }
+        check(controls===0,`${mode} started analysis without an explicit request`);
+      }finally{release();await context.close();}
+    }
     for(const width of [1440,390])for(const panel of ['review','details','filters','view']){
       const context=await browser.newContext({viewport:{width,height:900}}),p=await context.newPage();
       p.on('pageerror',e=>errors.push(e.message));
@@ -102,7 +146,7 @@ async (page,{hold=async()=>{},guidance=false,screenshot=async()=>{}}={})=>{
       check(await camera(p)===before,'Recommended/Stop changed exploration state');
     }finally{await hold(false);await context.close();}
     check(!errors.length,errors.join('; '));
-    return {firstOpening:true,readingPanels:8,reload:true,focus:true,themes:true,widths:[390,1080,1440],
+    return {firstOpening:true,hiddenVisibilityInput:true,graphKeyboardFocus:true,readingPanels:8,reload:true,focus:true,themes:true,widths:[390,1080,1440],
       noImplicitRequests:true,draftSafety:true,laterFailure:true,storageRefusal:true,recommendedAuto:true,stop:true,errors};
   }
   check(await page.locator('#toggle-analysis').count()===1,'Checks has no persistent primary control');

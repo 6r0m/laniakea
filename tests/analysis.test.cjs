@@ -109,6 +109,30 @@ test('storage refusal retains a session guard and handled guidance never suppres
   assert.match(run("$('analysis-error').textContent"),/Synthetic later failure/);
 });
 
+test('hidden status cannot present or acknowledge guidance before actual visibility',()=>{
+  const {run,stored}=guidanceFixture();
+  run('document.hidden=true;control.render(status)');
+  assert.equal(run("$('analysis').hidden"),true,'Background status opened unseen guidance');
+  assert.equal(stored.size,0,'Background status consumed the introduction');
+  run('document.hidden=false;control.render(status)');
+  assert.equal(run("$('analysis').hidden"),false);assert.equal(stored.size,1);
+  const pending=guidanceFixture();
+  pending.run("control.panel(true);document.hidden=true;control.render(status)");
+  assert.equal(pending.stored.size,0,'A panel opened before coverage acknowledged it while hidden');
+  pending.run('document.hidden=false;control.render(status)');assert.equal(pending.stored.size,1);
+});
+
+test('focused graph defers automatic guidance without disabling manual Checks',()=>{
+  const {run,stored}=guidanceFixture();
+  run("document.activeElement=$('graph');control.render(status)");
+  assert.equal(run("$('analysis').hidden"),true,'Guidance interrupted graph keyboard focus');
+  assert.equal(stored.size,0);assert.equal(run("document.activeElement===$('graph')"),true);
+  run('document.activeElement=null;control.render(status)');
+  assert.equal(run("$('analysis').hidden"),false,'Graph focus consumed deferred guidance');
+  const manual=guidanceFixture();manual.run("document.activeElement=$('graph');control.panel(true)");
+  assert.equal(manual.run("$('analysis').hidden"),false,'Graph focus blocked explicit Checks');
+});
+
 test('a newer ready snapshot cannot supply displayed check counts',()=>{
   const displayed={checks:[{id:'native',label:'C++',status:'incomplete'}]},
     ready={checks:[{id:'native',label:'C++',status:'completed'}]};

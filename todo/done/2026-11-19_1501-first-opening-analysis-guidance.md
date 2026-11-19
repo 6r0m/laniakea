@@ -332,3 +332,23 @@ stable documentation and privacy checks pass; D6 and unrelated work are untouche
 - The interface checklist and screenshot review found no remaining issue in the changed scope. Durable behavior moved to the
   existing viewer and guide sections; verification documents the extended scenario. No staging or commit was performed.
 - This task is complete and archived. The separate Analysis Controls D6 runtime acceptance remains PARTIAL and is unchanged.
+
+### 2026-11-19 - Visibility and keyboard-focus review correction
+
+- F1 and F2 are valid. Status polling still renders while the document is hidden, and the former focus selector omitted
+  the keyboard-focusable graph. The automatic-opening guard now defers for both conditions through the existing lifecycle.
+  The acknowledgement owner also refuses hidden writes, covering a manually opened panel whose coverage arrives later.
+- Qualification to F1: an already-open panel can become visible on the same tab's activation. Absence on that visit is not
+  guaranteed by the code. The actual defect is acknowledgement before visible presentation, which can suppress later openings.
+- Red: both added Analysis unit regressions failed on the unmodified implementation with the expected unseen-opening and
+  graph-focus assertions. The Chrome scenario also rejected the old Analysis source for delayed hidden status; a separate
+  replay caught focused-graph interruption. Checks that no other reading/navigation guard masks these cases are explicit.
+- The first keyboard browser stimulus selected a node and opened Inspector, so its later-opening assertion was invalid.
+  The fixture now uses keyboard zoom and waits for gestures to finish, isolating graph focus without another panel.
+- Green: all 196 JavaScript checks passed. The extended guidance, existing Analysis controls and live-adoption Chrome
+  scenarios passed, including manual access, deferred eligibility, focus/camera preservation and rendering rollback.
+  Headless Chrome retains visible tabs, so the hidden case injects only its Page Visibility input and dispatches the ordinary
+  visibility event; real status requests, rendering and preference writes remain intact. This is not an OS tab-switch test.
+- Stable visibility/focus behavior is documented in the existing viewer owner. No scheduling, acquisition, persistence store,
+  timer or backend changed. Protected layout/policy/triage files remained byte-identical. The task remains archived after
+  this correction; separate Analysis Controls D6 remains pending. No staging or commit was performed.
