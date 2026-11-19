@@ -160,6 +160,32 @@ class Scheduler(unittest.TestCase):
         page=self.monitor.changes({'target':'sample','run':summary['baseline'],'observation':summary['observation']})
         self.assertEqual(page['status'],'degraded')
 
+    def test_manual_publication_invalidates_comparison_until_the_new_baseline_is_probed(self):
+        from unittest.mock import patch
+        from laniakea.monitor import ComparisonConflict
+        self.monitor.activate('sample');self.settle()
+        old=self.monitor.status()['targets'][0]['comparison']
+        self.assertEqual(old['status'],'current');self.assertEqual(old['baseline'],self.run.name)
+        query={'target':'sample','run':self.run.name,'observation':old['observation']}
+        self.monitor.changes(query)
+        rule=self.project/'Source/SampleProject/SampleProject.Build.cs';rule.write_bytes(rule.read_bytes()+b'\n// manual build\n')
+        published,_=pipeline.extract(self.workspace,self.workspace.load('sample'),health_options={'mode':'off'})
+        with patch('laniakea.unreal.monitor.inspect',side_effect=AssertionError('invalidation scanned inputs')):
+            self.monitor.step();self.assertEqual(self.monitor.current['phase'],'prepare')
+            self.assertEqual(self.monitor.status()['targets'][0]['comparison']['status'],'checking')
+            with self.assertRaises(ComparisonConflict):self.monitor.changes(query)
+            self.monitor.step();self.assertEqual(self.contexts.latest('sample')['run'],published.name)
+            pending=self.monitor.status()['targets'][0]['comparison']
+            self.assertEqual(pending['status'],'checking');self.assertNotIn('observation',pending)
+            with self.assertRaises(ComparisonConflict):self.monitor.changes(query)
+        self.monitor.step();self.assertEqual(self.monitor.current['phase'],'probe')
+        self.monitor.step()
+        current=self.monitor.status()['targets'][0]['comparison']
+        self.assertEqual(current['status'],'current');self.assertEqual(current['baseline'],published.name)
+        self.assertNotEqual(current['observation'],old['observation'])
+        page=self.monitor.changes({'target':'sample','run':published.name,'observation':current['observation']})
+        self.assertEqual(page['total'],0)
+
     def test_cache_cleanup_warning_remains_visible_without_preventing_publication(self):
         from unittest.mock import patch
         self.monitor.activate('sample');self.settle()

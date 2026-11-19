@@ -388,3 +388,24 @@ Private, disposable receipts under `workspace/tmp/input-change-implementation/`:
 [live browser](../../workspace/tmp/input-change-implementation/regression-live/browser-results.json),
 [probe measurements](../../workspace/tmp/input-change-implementation/probe-performance.json),
 [passive viewer](../../workspace/tmp/input-change-implementation/main-browser.json), [protected state](../../workspace/tmp/input-change-implementation/protected-stores.json).
+
+### 2026-11-19 - Manual-publication lifecycle correction
+
+- F1 is valid. Detecting a manually published run prepared its read context but retained the previous comparison and page
+  token as current. The regression reproduces that state using ordinary pipeline publication, not a fabricated run pointer.
+- Monitor invalidates comparison data at its existing external-run detection point. Preparation remains scan-free and the
+  existing probe establishes the new baseline; scheduling, publication and canonical read contexts retain their owners.
+  The monitoring contract now states this lifecycle explicitly. No reviewer claim required refutation.
+- The regression failed with `current` instead of `checking`, then passed after the local correction. It also verifies old
+  token rejection during preparation, no input scan for invalidation, and valid paging against the next probed baseline.
+- All 63 affected Monitor/input/server checks passed without skips on both the current Python interpreter and Python 3.11.
+  All 15 Analysis/Live JavaScript checks passed. Existing Chromium input-change and live-adoption scenarios passed, including
+  deferred adoption, expired pages, draft isolation, multiple tabs, render rollback and saved positions.
+- Evidence: [red](../../workspace/tmp/input-change-manual-publication/red.json),
+  [green](../../workspace/tmp/input-change-manual-publication/green.json),
+  [affected Python](../../workspace/tmp/input-change-manual-publication/affected.json),
+  [Python 3.11](../../workspace/tmp/input-change-manual-publication/py311.json),
+  [input-change browser](../../workspace/tmp/input-change-manual-publication/input/browser.json),
+  [live browser](../../workspace/tmp/input-change-manual-publication/live/browser-results.json).
+- This task remains DONE in the archive. The separate Analysis Controls D6 gate is unchanged. No Engine/native/CPD
+  extraction was required for this session-state correction, and no staging or commit was performed.

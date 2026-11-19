@@ -409,6 +409,7 @@ class Monitor:
                 if not state['active']:continue
                 latest=self.workspace.latest(target_id)
                 if latest and latest.name!=state['run']:
+                    for key in ('comparison','comparison_generation','comparison_error'):state.pop(key,None)
                     state.update(phase='prepare',due=now)
                     if not self.current:state['run']=latest.name
                 if not state['phase'] and now>=state['reconcile']:

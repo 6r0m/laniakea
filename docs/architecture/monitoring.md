@@ -90,7 +90,9 @@ full detected counts remain available and incomplete detail is explicit. Malform
 without changing an otherwise valid analysis/publication outcome. Actual input-read failures retain normal failure semantics.
 
 An event makes the previous observation pending. Pause, failed watches, input errors and inactive targets cannot claim a
-current comparison. Publication rebinds comparison to the new run using its validated worker observation. The browser only
+current comparison. Publication rebinds comparison to the new run using its validated worker observation. Detecting an
+externally published run invalidates the old observation and page token; comparison stays pending through context preparation
+until the existing probe establishes the new baseline. The browser only
 shows counts/paths for its displayed baseline; a newer baseline waits for ordinary adoption. A monitoring identity can
 establish that overall context differs, but cannot attribute changes to configuration or tools lacking recorded values.
 An empty comparable path list never certifies the whole project as unchanged. Domain interpretation belongs to
