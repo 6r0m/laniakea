@@ -78,6 +78,11 @@ requires approval of this plan. No production change or activation of an existin
 7. [Viewer lifecycle](../docs/architecture/viewer.md#live-snapshots) distinguishes displayed coverage, pending choices and ready
    updates. [Check policy](../docs/architecture/monitoring.md#requested-checks) preserves legacy intent and makes missing
    tools/prerequisites explicit. Neither boundary needs a behavior change for A1-A4.
+8. `AnalysisControls.panel(true)` closes Review and filters, and closes Inspector at narrow widths. The existing
+   `liveBlockReason()` guards gestures and drafts, but not reading an open panel. A synthetic execution of those actual
+   methods returned no block reason before Checks hid all three panels at a narrow width. This verifies the coordination
+   gap, not future browser focus behavior: [probe](../workspace/tmp/first-opening-guidance/panel-priority.cjs),
+   [result](../workspace/tmp/first-opening-guidance/panel-priority.json).
 
 The code-level findings are verified; the proposed guide, its layout and persistent dismissal have not been implemented or
 browser-tested. The supplied screenshot interpretation is consistent with the code, not proof of full analysis or its absence.
@@ -99,6 +104,8 @@ browser-tested. The supplied screenshot interpretation is consistent with the co
 The current panel explains checks after it is opened, but idle Off projects never qualify for attention. A quiet early poll
 also consumes the one-time opening flag. Ratios and bare zero counts then carry more visual weight than their qualifications.
 Session-only dismissal cannot provide a quiet first-visit experience across reloads.
+Manual panel coordination also cannot be used unconditionally for automatic guidance: a reading user may have no draft or
+gesture while Review, Inspector or browsing is open.
 
 ## Decision
 
@@ -119,6 +126,8 @@ cross-browser acknowledgement and automatic reminders after the guide has been h
    optional checks. Use that same action name rather than introduce a second ambiguous Enable action. Keep setup requirements,
    time/resource expectations and continued map availability clear. When checks are already running, explain progress and
    retain Skip/Stop; do not offer redundant acquisition. Saved-only mode explains disabled actions. Off is informational.
+   Say explicitly that Auto uses available prerequisites: this action does not install tools, build the project or guarantee
+   successful completion. Prerequisites not inspected while Off remain unknown, not missing or ready.
 3. **Continue exploring:** Explore current map closes the panel and returns keyboard focus to the graph. Close/Escape retain
    their existing toolbar-focus behavior. Detailed controls, changes and setup disclosures remain available without duplicate cards.
 
@@ -137,10 +146,18 @@ While check choices are dirty or submitting, guidance cannot reset them or run a
   sharing a short ID. Never include all changing external roots or create a workspace identity service.
 - Actual presentation is remembered, so refreshing an already-seen guide does not prompt again. Explicit Close/Escape/Explore
   also suppress repeat prompts. Programmatic hiding of an already-hidden panel must not acknowledge unseen guidance.
-- Yield automatic opening during gestures, pending form submissions or active interaction drafts; keep the opportunity pending
-  rather than steal focus or replace inspection. Reuse current guards and panel coordination; no new timer or modal.
+- Automatic guidance must not replace an already-open user-selected Review, Inspector or browsing panel, including View
+  controls. Reading without a gesture or draft is sufficient to defer it, at desktop and narrow widths. Do not call the
+  manual panel-opening path while it would close those panels. Manual opening of Checks keeps its existing coordination.
+- Also yield during gestures, pending form submissions, active interaction drafts or keyboard interaction. Preserve the
+  focused element, the reader's scroll position and visible focused content; no automatic focus or scroll jump is allowed.
+  A deferred guide stays eligible and unacknowledged, with its status accessible through the existing Checks control.
+  Re-evaluate through the existing render/status lifecycle when the user finishes; add no timer or modal.
 - Preference access failure preserves exploration and the existing in-memory session guard. Manual Checks access always
   works; browser preferences are best-effort, not canonical state or an acquisition decision.
+- Handled guidance suppresses repeat introductions only. Operational progress, failure labels, coverage and failure details
+  continue updating. A later real failure must still show `Checks: failed` and explain the failed attempt on manual opening;
+  it does not require another introductory popup.
 
 ### Persistent labels and change scope
 
@@ -172,6 +189,7 @@ While check choices are dirty or submitting, guidance cannot reset them or run a
    Completed checks and zero recorded findings never certify the architecture or all source freshness.
 3. Preserve camera, zoom, expanded layers, pins, selection, Inspector, Review decisions and dirty forms. A user-opened side
    panel can resize the viewport normally, but no action in this slice fits or resets the map.
+   Automatic guidance never closes a user-selected panel or moves focus/scroll to displace current reading.
 4. Dismissal survives reload when storage works, remains per project, and does not affect backend policy/triage or check intent.
 5. Preserve offline operation, escaped text, keyboard access and current themes. No temporary-plan links from living artifacts.
 
@@ -180,9 +198,11 @@ While check choices are dirty or submitting, guidance cannot reset them or run a
 - [ ] Add failing summary and lifecycle regressions using the existing viewer fixture; extend Analysis browser acceptance
   for an existing project with both optional modes Off and for delayed attention.
 - [ ] Implement contextual coverage/action presentation and guidance eligibility in Analysis; persist handled state through
-  the current preference helpers. Reuse the recommended request handler and existing panel/keyboard paths.
+  the current preference helpers. Gate automatic opening on active panels and focus before invoking manual coordination or
+  recording handled state. Reuse the recommended request handler and existing panel/keyboard paths.
 - [ ] Clarify Checks, Review and input-change labels, retaining availability/severity semantics and responsive action access.
-- [ ] Prove dismissal/reload, project isolation, storage refusal, drafts, adoption, keyboard focus and no unintended control requests.
+- [ ] Prove delayed guidance preserves a reading panel and focus, alongside dismissal/reload, project isolation, storage
+  refusal, drafts, adoption and no unintended control requests. Verify later failures remain visible after dismissal.
 - [ ] Update the stable owners below, inspect the diff and archive this task only after its acceptance passes.
 
 ## Test-first and verification plan
@@ -193,10 +213,13 @@ While check choices are dirty or submitting, guidance cannot reset them or run a
 |---|---|
 | Existing Off project / Analysis unit + browser regression | No guide despite absent optional evidence; idle ratio hides Off |
 | Quiet first poll then attention / lifecycle regression | Opening consumed before any panel is shown |
+| Delayed status while reading Review, Inspector or browsing / browser regression | Automatic Checks closes an open panel or changes focus/scroll without a draft or gesture |
 | Close, Escape, Explore, reload / browser regression | Repeated prompting, wrong focus, or acquisition on dismissal |
 | Hidden programmatic close and separate projects / lifecycle regression | Unseen guide acknowledged or one project's preference suppresses another |
 | Ready/displayed mismatch and submitting choices / existing guards plus focused assertions | New coverage leaks into old map or the guide overwrites a draft |
 | Running, missing tools, failed and completed cases / summary guards | All states collapse into Off, not completed or zero findings |
+| Recommended action with unknown prerequisites / acceptance assertion | Copy promises installation, a project build or successful completion merely by selecting Auto |
+| Actual failure after guidance dismissal / summary + browser regression | The handled preference suppresses `Checks: failed` or its explanation along with the introduction |
 | Storage unavailable / lifecycle regression | Map fails or the same session prompts on every poll |
 | No-change partial scope / summary + browser regression | Compact wording implies all C++ files were checked |
 | Keyboard, themes, widths and actual readable hierarchy / browser acceptance + design judgment | Hidden actions, excessive copy or lost map context |
@@ -204,6 +227,13 @@ While check choices are dirty or submitting, guidance cannot reset them or run a
 Use synthetic Sample data and the existing Analysis/coverage/live harness patterns. Assert no `/monitor/control` request before
 the explicit recommended action; then verify the ordinary request, existing Skip/Stop and retained Off settings on dismissal.
 Readability is a human review of screenshots, not a string allowlist or a fabricated quality metric.
+
+For the delayed-status regression, hold the initial Monitor response for a module-only Sample project with optional checks
+Off. Open Review through its real control and focus a control in that panel, with no draft and no gesture. Release the
+response and assert Review stays open, Checks stays closed, focus and scroll remain unchanged, guidance is not marked handled
+and no `/monitor/control` request occurs. Repeat for Inspector and browsing at desktop and narrow widths. Then manually open
+Checks and verify its normal coordination still works. Separately dismiss the guide, deliver an actual later failed-attempt
+status, and assert a visible failure label and explanation without repeating the introduction.
 
 ### Green evidence
 
@@ -222,7 +252,8 @@ and D6 remain unchanged. This UI-only scope does not require expensive Engine/na
 ## Documentation plan
 
 - [Viewer](../docs/architecture/viewer.md#live-snapshots) owns first-opening eligibility, handled preferences, focus and
-  displayed evidence. Update its existing session-dismissal statement; do not create a second onboarding document.
+  displayed evidence. Update its existing session-dismissal statement with automatic-versus-manual panel priority and
+  independent operational status; do not create a second onboarding document.
 - [Guide](../docs/guide.md#open-a-project) owns the short operator workflow and exact action name. It already explains Auto,
   Off and zero findings; edit those paragraphs rather than append a duplicate tutorial.
 - [Verification](../tests/README.md#browser-acceptance) lists the extended scenario. Existing routes remain sufficient.
@@ -238,6 +269,8 @@ the guidance restores the existing manual Checks route without changing saved re
 
 An existing Off-mode project gets a clear, non-blocking first guide and remains usable without starting deeper checks.
 Actual presentation/dismissal stays quiet across reload; later eligible attention is not lost to an earlier quiet render.
+Delayed guidance preserves active reading panels and focus without requiring a draft. Dismissing introductions does not hide
+later failure status or its explanation, and the recommended action makes no promise beyond applying Auto and requesting checks.
 An explicit existing action requests analysis, while coverage, findings and source-change scope remain truthful. Acceptance,
 stable documentation and privacy checks pass; D6 and unrelated work are untouched.
 
@@ -253,3 +286,17 @@ stable documentation and privacy checks pass; D6 and unrelated work are untouche
   evidence is under `workspace/tmp/first-opening-guidance/`. Future browser acceptance and persistence remain unverified.
 - Plan validation: five documentation/privacy checks passed; the file is ASCII and its local links/anchors resolve.
   The working tree contains only this new task; no staging or commit was performed.
+
+### 2026-11-19 - Active-panel interaction review
+
+- F1 is valid. The earlier gesture/draft rule did not explicitly protect reading an open panel. The code-level probe
+  confirms that existing manual coordination can close Review, Inspector and filters with no draft or interaction guard.
+- The lifecycle, invariants, implementation tasks and acceptance matrix now require automatic guidance to yield to those
+  panels and preserve focus/scroll. Deferred eligibility stays visible through Checks; manual opening remains unchanged.
+- The two non-blocking refinements are also valid: the action promise now explicitly excludes tool installation, project
+  builds and guaranteed completion, and handled introductions cannot suppress later operational failures. Acceptance covers both.
+- No reviewer claim required refutation, and no new operator decision was inferred from the reviewer's approval language.
+  This task remains REVIEW REQUIRED; only the plan changes. Production behavior and the separate D6 gate are untouched.
+- Validation: 25 existing Analysis/Review/Live JavaScript checks and five documentation/privacy checks passed. The revised
+  plan is ASCII and passes link/anchor and whitespace checks. These are baseline/plan checks; the new browser regression
+  and future implementation are still unverified. No staging or commit was performed.
