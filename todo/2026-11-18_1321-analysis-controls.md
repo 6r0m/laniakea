@@ -56,10 +56,16 @@ skip or stop them without learning extraction flags. Analysis, findings and map 
   - Reason: concurrent source editing prevents a stable final proof within the current walkthrough.
   - Date/source: explicit operator answer to the runtime-gate question, 2026-11-18.
 
+- **D6:** Resume the remaining task acceptance now, including the real Unreal checks.
+  - Effect: reopens D5's deferred native Stop/resume/adoption gate. Archival still requires successful acceptance;
+    existing user settings, pins and triage remain protected.
+  - Reason: not stated separately.
+  - Date/source: operator request to complete the remaining work, 2026-11-18.
+
 ### Operator gates
 
-No operator question remains. D4 authorizes implementation, D2 owns first-opening behavior, and D5 leaves the final
-real-project gate pending. Archival still requires that gate; implementation completion is not its acceptance.
+No operator question remains. D4 authorizes implementation, D2 owns first-opening behavior, and D6 reopens the final
+real-project gate deferred under D5. Archival still requires that gate; implementation completion is not its acceptance.
 
 ### Working assumptions
 
@@ -449,3 +455,18 @@ real acceptance evidence, and no unrelated or operator-staged work is altered.
 - D5 remains unchanged: final real-project native Stop/resume/adoption acceptance is pending. This task stays PARTIAL.
 - The normal viewer restarted through its owned lifecycle and answered HTTP 200. Protected layouts and Review stores
   remained byte-identical. Documentation/privacy and Python 3.9 grammar checks passed; nothing was staged or committed.
+
+### 2026-11-18 - Resumed real-project acceptance
+
+- D6 reopens the deferred gate. The three `test_engine_integration` checks passed after an initial attempt was refused
+  by external UBT contention. The rerun verified project-write boundaries, real export and dependency regeneration.
+- End-of-slice verification: 324 non-Engine Python checks passed with one optional legacy indexer skip; all 187 JavaScript
+  checks passed. Commands and private receipts are under `workspace/tmp/analysis-closeout/`.
+- The isolated real-project viewer started with recommended Auto intent, existing source boundaries and installed tools.
+  Trusted browser Stop cancelled active native work and retained the displayed/ready map; Run checks resumed acquisition.
+- Authored build-rule edits and linked-product updates superseded the resumed candidate. Monitoring retained the last good
+  map and did not publish that candidate. Final native completion, current-input publication and live adoption remain pending.
+- The operator asked how successful builds could trigger stable snapshot analysis while development continues. This is
+  a proposed scheduling/publication change, not approval to weaken freshness or claim receipt-bound source identity.
+  Paused the superseded attempt, stopped the isolated viewer through its owned lifecycle and confirmed unchanged protected
+  stores. Browser workers exited; the normal viewer remains available. This record stays PARTIAL.
