@@ -10,6 +10,8 @@ const fixture=()=>({status:'matching',detail:'Verified source.',location:{...ite
 
 test('source preview retains recorded coordinates and accepts only consecutive correctly highlighted lines',()=>{
   const data=fixture();assert.equal(validateSourcePreview(data,item),data);
+  const limited={...fixture(),start_line:2,truncated:true,lines:fixture().lines.slice(1,2)};
+  assert.equal(validateSourcePreview(limited,item),limited);
   for(const mutate of [data=>data.location.path='Source/Other.cpp',data=>data.location.column=3,
     data=>data.lines[0].number=2,data=>data.lines[1].matched=false,data=>data.lines[0].text=null,
     data=>data.start_line=4,data=>data.truncated=undefined]){

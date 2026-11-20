@@ -75,14 +75,26 @@ def read(root,location):
     lines=text.replace('\r\n','\n').replace('\r','\n').split('\n')
     if location['end_line']>len(lines):
         return unavailable('range','The recorded range is outside the matching source text.')
-    start=max(1,location['line']-CONTEXT_LINES)
-    stop=min(len(lines),location['end_line']+CONTEXT_LINES,start+MAX_LINES-1)
-    preview=[];used=0
-    for number in range(start,stop+1):
-        line=lines[number-1];used+=len(line.encode('utf-8'))
-        if used>MAX_TEXT:break
-        preview.append({'number':number,'text':line,'matched':location['line']<=number<=location['end_line']})
-    if not preview:return unavailable('text_limit','A source line exceeds the preview limit. Use the editor link.')
+    wanted_start=max(1,location['line']-CONTEXT_LINES)
+    wanted_stop=min(len(lines),location['end_line']+CONTEXT_LINES)
+    start=location['line'];stop=start-1;used=0
+    for number in range(start,min(location['end_line'],start+MAX_LINES-1)+1):
+        size=len(lines[number-1].encode('utf-8'))
+        if used+size>MAX_TEXT:break
+        used+=size;stop=number
+    if stop<start:
+        return unavailable('text_limit','The selected matching line exceeds the preview limit. Use the editor link.')
+    if stop==location['end_line']:
+        while start>wanted_start and stop-start+1<MAX_LINES:
+            size=len(lines[start-2].encode('utf-8'))
+            if used+size>MAX_TEXT:break
+            used+=size;start-=1
+        while stop<wanted_stop and stop-start+1<MAX_LINES:
+            size=len(lines[stop].encode('utf-8'))
+            if used+size>MAX_TEXT:break
+            used+=size;stop+=1
+    preview=[{'number':number,'text':lines[number-1],'matched':location['line']<=number<=location['end_line']}
+             for number in range(start,stop+1)]
     return {'status':'matching','detail':'Current source matches the recorded file hash.',
             'location':public,'start_line':start,'lines':preview,
-            'truncated':preview[-1]['number']<min(len(lines),location['end_line']+CONTEXT_LINES)}
+            'truncated':start>wanted_start or stop<wanted_stop}

@@ -61,6 +61,38 @@ class SourcePreviewReader(unittest.TestCase):
         with patch.object(source_preview,'MAX_TEXT',20):
             value=self.read(line=2,end_line=800,sha256=hashlib.sha256(raw).hexdigest())
             self.assertEqual(len(value['lines']),1);self.assertTrue(value['truncated'])
+            self.assertTrue(value['lines'][0]['matched'])
+
+    def test_matching_range_takes_priority_over_large_optional_context(self):
+        from laniakea import source_preview
+        selected='return selected;'
+        raw=('\n'.join(['x'*20000]*4+[selected,'// following context'])+'\n').encode()
+        self.file.write_bytes(raw);digest=hashlib.sha256(raw).hexdigest()
+        for budget in (source_preview.MAX_TEXT,len(selected.encode())):
+            with self.subTest(budget=budget),patch.object(source_preview,'MAX_TEXT',budget):
+                value=self.read(line=5,end_line=5,sha256=digest)
+                self.assertEqual(value['status'],'matching')
+                self.assertEqual([line['text'] for line in value['lines'] if line['matched']],[selected])
+                self.assertLessEqual(sum(len(line['text'].encode()) for line in value['lines']),budget)
+                self.assertTrue(value['truncated'])
+
+    def test_required_line_refusal_and_partial_match_do_not_become_context_only_success(self):
+        from laniakea import source_preview
+        selected='\u03bb'*10
+        raw=('// context\n'+selected+'\nreturn later;\n// after\n').encode()
+        self.file.write_bytes(raw);digest=hashlib.sha256(raw).hexdigest()
+        with patch.object(source_preview,'MAX_TEXT',len(selected.encode())-1):
+            value=self.read(line=2,end_line=3,sha256=digest)
+            self.assertEqual(value['status'],'unavailable');self.assertEqual(value['code'],'text_limit')
+            self.assertEqual(value['lines'],[])
+        with patch.object(source_preview,'MAX_TEXT',len(selected.encode())):
+            value=self.read(line=2,end_line=3,sha256=digest)
+            self.assertEqual(value['status'],'matching');self.assertTrue(value['truncated'])
+            self.assertEqual(value['lines'],[{'number':2,'text':selected,'matched':True}])
+        with patch.object(source_preview,'MAX_LINES',2):
+            value=self.read(line=2,end_line=3,sha256=digest)
+            self.assertEqual([line['number'] for line in value['lines']],[2,3])
+            self.assertTrue(all(line['matched'] for line in value['lines']));self.assertTrue(value['truncated'])
 
     def test_matching_text_with_unsupported_encoding_or_invalid_range_is_not_fabricated(self):
         for raw in (b'\xffinvalid',b'line\x00data\n'):

@@ -63,3 +63,8 @@ outside the clone. Do not change source-check settings, pins, policy, triage, st
 - Stable contracts live in the existing architecture structure/viewer/diagram documents, user guide and test routing.
   The preview remains current, hash-verified text only; external mounts without recorded physical bindings use the
   existing editor route. No historical source store or fabricated symbol ownership was added.
+- Review follow-up F1: large preceding context could exhaust the text budget before reaching the selected match.
+  Windows regressions reproduced context-only success, including a small text budget. The reader reserves the budget
+  for the matching prefix, adds context only after the full match fits and marks omitted leading context as truncated.
+  An oversized first matching line returns the existing explicit text-limit state. The 10 reader/server tests pass on
+  current Python and Python 3.11; source-preview validation checks also pass. Completed acceptance statuses stay unchanged.

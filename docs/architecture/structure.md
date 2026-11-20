@@ -71,7 +71,9 @@ kills an unrelated process based on its port or PID. Startup failure and cancell
 Source preview resolves a recorded finding occurrence through that pinned context; clients cannot supply source paths.
 The reader validates the recorded project root, resolved path and Windows opened handle before returning bounded text.
 Only a matching recorded file hash permits a highlighted preview. Changed, missing, unreadable, oversized and unsupported
-text remains explicit. External junctions without a pinned physical binding are refused. This on-demand read starts no
+text remains explicit. The matching range takes the line/text budget before optional context: a successful preview contains
+matching lines; an oversized first matching line produces a preview-limit state. Omitted context or match tails are marked
+as truncated. External junctions without a pinned physical binding are refused. This on-demand read starts no
 analysis and writes no source; the viewer owns its presentation and cancellation.
 
 ## Invariants
