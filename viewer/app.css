@@ -103,6 +103,8 @@ a:hover { text-decoration-thickness: 2px; }
 #position-status { color: var(--muted); font-size: 12px; }
 .scope-bar > * { flex-shrink:0; }
 #toggle-analysis,#toggle-review { flex-shrink:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#toggle-analysis { position:relative; }
+#checks-meter { position:absolute; left:5px; bottom:1px; width:calc(100% - 10px); height:3px; margin:0; }
 .control-compact { display:none; }
 #toggle-details { margin-left:auto; }
 #toggle-analysis[data-attention='true'] { color:var(--review-candidate); }
@@ -125,6 +127,8 @@ a:hover { text-decoration-thickness: 2px; }
 .view-options select { width:100%; }
 #analysis { flex-basis:340px; width:340px; border-right-width:1px; }
 .analysis-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.primary-action { background:var(--accent); color:var(--bg); border-color:var(--accent); font-weight:600; }
+.primary-action:hover { filter:brightness(1.08); }
 .analysis-check { padding:12px 0; border-top:1px solid var(--line); }
 .analysis-check h3 { margin:0; }
 .analysis-check-heading { display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
@@ -132,8 +136,18 @@ a:hover { text-decoration-thickness: 2px; }
 .analysis-check p { font-size:12px; margin:6px 0; }
 .analysis-check code { display:block; white-space:pre-wrap; overflow-wrap:anywhere; margin:8px 0; }
 .analysis-check [data-status='failed'],#analysis-error { color:var(--review-violation); }
+#analysis-error[data-waiting='true'] { color:var(--muted); }
 .analysis-check [data-status='unavailable'],.analysis-check [data-status='incomplete'] { color:var(--review-candidate); }
-.analysis-overview { border-top:0; }
+#analysis-current { border-top:0; padding-top:4px; }
+#analysis-current-title { font-size:17px; line-height:1.35; }
+#analysis-current[data-state='failed'] h3 { color:var(--review-violation); }
+#analysis-meter { display:block; width:100%; height:10px; margin:12px 0 6px; }
+progress { accent-color:var(--accent); }
+#analysis-progress { font-variant-numeric:tabular-nums; color:var(--muted); }
+#analysis-current .analysis-actions { margin-top:12px; }
+#analysis-settings > summary { font-weight:600; }
+#analysis-settings > .filter { margin-top:12px; }
+#analysis-auto-note { margin:4px 0 12px; font-size:12px; }
 #analysis-overview-checks { list-style:none; padding:0; margin:12px 0; }
 #analysis-overview-checks li { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:8px 0; }
 #analysis-overview-checks span { min-width:0; }
@@ -211,6 +225,49 @@ aside { flex: 0 0 296px; width: 296px; min-width: 0; overflow: auto; padding: 18
 #review-status { font-variant-numeric:tabular-nums; }
 #review-policy { overflow-wrap:anywhere; font-size:12px; }
 .review-details { margin:0; }
+.source-evidence-list { list-style:none; padding:0; }
+.source-evidence-range { display:flex; align-items:flex-start; gap:8px; padding:10px 0; border-bottom:1px solid var(--line); }
+.source-occurrence-name { flex:1; min-width:0; }
+.source-occurrence-name small { display:block; overflow-wrap:anywhere; color:var(--muted); margin-top:4px; }
+.source-open { display:flex; align-items:center; gap:6px; color:var(--accent); background:none; border:0; padding:0; text-align:left; }
+.source-open span { overflow-wrap:anywhere; min-width:0; }
+.source-actions svg,.source-open svg,.source-pane-heading svg { flex:none; fill:none; stroke:currentColor; stroke-width:1.7;
+  stroke-linecap:round; stroke-linejoin:round; }
+.source-actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:6px; font-size:12px; }
+.source-actions button,.source-actions a { display:inline-flex; align-items:center; justify-content:center; min-width:30px; min-height:30px; padding:5px; }
+.source-actions small:empty { display:none; }
+.source-actions small,.source-copy-fallback { flex-basis:100%; }
+.source-evidence-range > .source-actions { flex:0 0 70px; margin:0; }
+.source-code { max-width:100%; max-height:340px; overflow:auto; overscroll-behavior:contain;
+  padding:8px 0; border:1px solid var(--line); border-radius:4px; background:var(--bg); font-size:12px; line-height:1.6; }
+.source-line { display:flex; min-width:max-content; padding-right:12px; }
+.source-line.matched { background:color-mix(in srgb,var(--review-candidate) 16%,transparent); }
+.source-line-number { flex:none; min-width:4.5em; padding:0 10px; color:var(--muted); text-align:right;
+  font-variant-numeric:tabular-nums; user-select:none; }
+.source-line code { white-space:pre; }
+.source-copy-fallback { font-family:monospace; font-size:12px; }
+.source-comparison { position:absolute; inset:0; z-index:6; display:flex; flex-direction:column; gap:14px; padding:16px;
+  background:var(--bg); overflow:auto; overscroll-behavior:contain; }
+#view-controls[inert] { opacity:.55; }
+.comparison-header { display:flex; flex-wrap:wrap; align-items:center; gap:12px; flex:none; }
+.comparison-header > div { flex:1; min-width:0; }
+.comparison-header h2 { font-size:16px; margin:0 0 4px; overflow-wrap:anywhere; }
+.comparison-selection { margin:4px 0; font-weight:600; }
+.source-match-position { font-size:13px; }
+.source-match-navigation { display:flex; flex-wrap:wrap; gap:6px; }
+.source-match-navigation button { font-size:12px; padding:4px 8px; }
+.source-panes { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr)); grid-auto-rows:minmax(420px,1fr);
+  gap:16px; flex:1; min-height:0; overflow:auto; }
+.source-pane { display:flex; flex-direction:column; gap:8px; min-width:0; padding:12px; border:1px solid var(--line); border-radius:4px; }
+.source-pane-heading { display:flex; align-items:center; gap:6px; min-width:0; }
+.source-pane-heading h3 { font-size:13px; margin:0; overflow-wrap:anywhere; }
+.source-pane select { width:100%; min-width:0; }
+.source-range-pager { display:flex; gap:6px; }
+.source-range-pager button { font-size:12px; padding:4px 8px; }
+.source-pane-content { display:flex; flex-direction:column; flex:1; min-height:0; overflow:auto; overscroll-behavior:contain; }
+.source-pane-content p { margin:4px 0 8px; overflow-wrap:anywhere; font-size:12px; }
+.source-pane-content .source-path { color:var(--muted); }
+.source-pane-content .source-code { flex:1; min-height:160px; max-height:none; margin-bottom:0; }
 .finding-subjects { font-weight:600; }
 .review-details select { width:100%; margin:6px 0; }
 .review-summary { color:var(--warn-fg); }

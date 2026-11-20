@@ -288,6 +288,28 @@ class Handler(BaseHTTPRequestHandler):
             index,name = view
             if name == 'topology.json':
                 return self._file(index.root / name, index.root)
+            if name == 'source':
+                if self.headers.get('Origin') not in (None,f"http://{self.headers.get('Host')}") or \
+                        self.headers.get('Sec-Fetch-Site')=='cross-site':
+                    return self._send(403,b'forbidden source origin\n')
+                try:
+                    from . import source_preview
+                    query=parse_qs(urlsplit(self.path).query,keep_blank_values=True)
+                    if set(query)!={'report','finding','occurrence'} or any(len(v)!=1 for v in query.values()) or \
+                            not query['occurrence'][0].isdecimal() or len(query['occurrence'][0])>6:
+                        raise ValueError('expected one recorded report, finding and occurrence')
+                    occurrence=int(query['occurrence'][0])
+                    if occurrence>=100000:raise ValueError('invalid source occurrence')
+                    target=path.split('/')[2]
+                    data=self._review(target).page({'report':query['report'][0],'finding':query['finding'][0],
+                                                   'evidence':True,'cursor':occurrence,'limit':1})
+                    if len(data['items'])!=1:raise ValueError('unknown source occurrence')
+                    entry=next(e for e in self.index if e['id']==target)
+                    result=source_preview.read(entry.get('roots',{}).get('project'),data['items'][0])
+                    return self._send(200,json.dumps(result,separators=(',',':')).encode(),'application/json')
+                except Conflict as error:return self._send(409,str(error).encode())
+                except (ValueError,UnicodeError) as error:return self._send(400,str(error).encode())
+                except (OSError,LaniakeaError) as error:return self._send(500,str(error).encode())
             if name == 'review':
                 try:
                     query=parse_qs(urlsplit(self.path).query,keep_blank_values=True)
@@ -374,7 +396,7 @@ def make_server(workspace, port=0, *, scan=True, launch_target=None):
         views[entry['id']] = view
         base = f"/map/{entry['id']}/{view.root.name}"
         entry.update(map_url=base+'/topology.json',map_identity=view.root.name,
-                     references_url=base+'/references',review_url=base+'/review')
+                     references_url=base+'/references',review_url=base+'/review',source_url=base+'/source')
     try:
         server = _Server((HOST, port), partial(Handler, workspace=workspace, index=index))
     except OSError as error:

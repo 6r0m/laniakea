@@ -25,24 +25,35 @@ not automatically build your project or install tools. A saved run does not prov
 
 On first opening, **Checks** explains the displayed map's recorded coverage, optional checks that are Off and the next action.
 It waits while you read another panel or interact, and remembers presentation or dismissal for that project in this browser.
-**Explore current map** closes it without starting work. Open Checks anytime for current progress or setup details.
-**Skip for now** or **Stop checks** pauses owned
-background work and retains the previous map. These controls do not interrupt the earlier foreground build command.
-Choose **Run checks** to resume when inputs have settled. Later source edits or build changes can still supersede a long
+**Current checks** shows the active phase, progress and elapsed job time above the displayed results. C++ unit counts measure
+that phase only; duplication and validation use an indeterminate bar. The Checks control retains progress when the panel closes.
+**Explore current map** closes it without starting work. **Skip for now** or **Stop checks** pauses owned background work and
+retains the previous map. These controls do not interrupt the earlier foreground build command.
+Choose **Recheck enabled checks** to resume when inputs have settled. Later source edits or build changes can still supersede a long
 scan. **Retry** retries a failed attempt; unchanged failures otherwise remain recorded.
 Auto uses available prerequisites; On makes a check required; Off explicitly skips it. Choices apply only when a validated
 map publishes. Failed or cancelled attempts keep the previous saved settings. Existing projects retain their recorded
 choices; **Run recommended checks** explicitly applies Auto and requests checks using available prerequisites. It does not
 install tools, build the project or guarantee completion. Off checks have not verified their prerequisites.
+**Check settings** contains modes, setup details and **Recheck current settings**, which preserves Off choices.
+**Recheck enabled checks automatically** monitors enabled checks; it does not enable Off checks. The displayed-results action
+opens the existing Review findings. Recorded matches are candidates for inspection, not proof of a defect.
 
 Keep exploring the recorded map while editing. The change summary opens **Checks**, where **Changes since recorded analysis**
 shows comparable inputs and **Show paths** lists added, modified and removed files. It also explains unmonitored or unavailable
 source coverage; **Changes: limited scope** does not mean all C++ files were checked. **Build evidence** can mean a rewritten
 receipt, not edited code or a successful build. These are recheck
-hints, not architecture findings. Use the existing Run/Retry controls when ready; paging does not start checks or enable Off modes.
+hints, not architecture findings. Recheck or Retry when ready; paging does not start checks or enable Off modes.
 
 **Review** inspects findings in recorded evidence. **View** contains layout, filters, configuration marks, fitting and
 arrangement. **Inspector** opens the current selection. Zero findings with missing checks does not certify the architecture.
+
+For duplicated code, choose **Compare matches** in the selected finding to read two ranges together. A file row's eye icon
+previews just that range; the editor and copy icons open VS Code or copy its path. Comparison temporarily covers the map,
+keeping the finding in Inspector. The total counts code locations; the comparison names the one or two matches currently
+displayed. Use **Previous match** / **Next match** or each pane's selector to reach other locations. **Back to map** or Escape
+returns to the same view. Code is read-only; matching lines are highlighted only when the current file matches its recorded
+hash. Changed or unavailable files explain why code cannot be shown. A duplication candidate is not proof of a defect.
 
 Saved changes appear without fitting the camera or losing pins, filters or surviving focus. Updates wait during drags,
 position saves, Check edits and Review drafts. Other registered targets stay inactive until explicitly activated in Checks;

@@ -35,6 +35,7 @@ project needs no Laniakea installation or integration.
 | [Shards](../../laniakea/shards.py) | generated scope summaries and address index |
 | [Read index](../../laniakea/map_index.py) | disposable compact topology and exact-reference queries |
 | [Server](../../laniakea/server.py) | loopback delivery of pinned data and validated local writes |
+| [Source preview](../../laniakea/source_preview.py) | bounded current-text reads authorized by recorded source evidence |
 | [Viewer](viewer.md) | continuous projection, navigation, tracing and inspection |
 | [Layout store](../../laniakea/layouts.py) | validated positions independent of extracted runs |
 | [Source observations](../../laniakea/health.py) | immutable evidence validation and loading |
@@ -66,6 +67,12 @@ versioned contexts make newer snapshots available without changing old URLs. Eac
 Same-origin validation protects local writes. Session monitoring follows the [background-analysis contract](monitoring.md).
 The viewer lifetime has one workspace owner. A stop request verifies that instance, preserves saved state and never
 kills an unrelated process based on its port or PID. Startup failure and cancellation release ownership.
+
+Source preview resolves a recorded finding occurrence through that pinned context; clients cannot supply source paths.
+The reader validates the recorded project root, resolved path and Windows opened handle before returning bounded text.
+Only a matching recorded file hash permits a highlighted preview. Changed, missing, unreadable, oversized and unsupported
+text remains explicit. External junctions without a pinned physical binding are refused. This on-demand read starts no
+analysis and writes no source; the viewer owns its presentation and cancellation.
 
 ## Invariants
 

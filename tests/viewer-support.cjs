@@ -8,7 +8,7 @@ function viewer() {
   const context = vm.createContext({ console, Set, Map, URL, URLSearchParams, TextEncoder, AbortController, DOMException, setTimeout, clearTimeout,
     document: { body: {}, getElementById: id => {
       if (!elements.has(id)) elements.set(id, { value: '', textContent: '', hidden: true, setAttribute() {},
-        append(){},replaceChildren(){},classList:{add(){},remove(){}} });
+        append(){},replaceChildren(){},querySelectorAll(){return[];},classList:{add(){},remove(){},toggle(){}} });
       return elements.get(id);
     } }, location: { hash: '' }, history: { pushState() {}, replaceState() {} },
     localStorage: { setItem() {}, getItem() { return null; } }, innerWidth: 1280,
@@ -26,6 +26,7 @@ function viewer() {
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/positions.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/references.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/inspector.js'), 'utf8'), context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/source-preview.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/analysis.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/live.js'), 'utf8'), context);
   vm.runInContext(source.slice(0, source.lastIndexOf('start().catch')), context);

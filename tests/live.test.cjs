@@ -43,6 +43,12 @@ test('removed focus falls back through its recorded ancestors',()=>{
   assert.equal(run("liveScope(next,old,'app.core')"),'app');
 });
 
+test('reading source comparison defers adoption without changing the displayed map',()=>{
+  const {run}=fixture();const before=run('state.universe');
+  run('state.review.comparison={}');assert.match(run('liveBlockReason()'),/Comparing/);
+  assert.equal(run('state.universe'),before);run('state.review.comparison=null');assert.equal(run('liveBlockReason()'),'');
+});
+
 test('a navigation or position change during staging cannot commit the obsolete copy',async()=>{
   for(const change of ['state.navigation++','state.positionCache.revision++']){
     const {run,context}=fixture();let release;

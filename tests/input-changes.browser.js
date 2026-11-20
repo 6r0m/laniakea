@@ -25,6 +25,7 @@ async(page,{change,hold,inspect=async()=>{}})=>{
   check(await page.locator('#input-change-list li').count()===23,'Last page lost changed paths');
   check(await page.locator('#input-change-list a').count()===22,'Removed input acquired a source link');
   await page.locator('#input-change-previous').click();await page.waitForFunction(()=>state.analysis.pathPage?.cursor===50);
+  if(!await page.locator('#analysis-settings').evaluate(node=>node.open))await page.locator('#analysis-settings > summary').click();
   await page.locator('[name="check-native"]').selectOption('auto');
   await page.locator('#input-change-next').click();await page.waitForFunction(()=>state.analysis.pathPage?.cursor===100);
   check(await page.evaluate(()=>state.analysis.edited&&state.analysis.choices.native.value==='auto'),'Paging erased check choices');

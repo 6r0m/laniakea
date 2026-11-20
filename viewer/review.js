@@ -5,9 +5,11 @@
 function ReviewProjection(affected,map,view) {
   const visible=new Set(view.nodes.map(n=>n.id)),badges=new Map();
   const files=new Map();
-  for(const node of view.nodes)if(node.attrs?.source_file&&node.source?.root==='project'){
-    if(!files.has(node.source.path))files.set(node.source.path,[]);
-    files.get(node.source.path).push(node);
+  const recorded=map.contextFiles?.size?[...map.contextFiles.keys()].map(id=>map.nodes.get(id)):
+    map.viewNodes||[...map.nodes.values()];
+  for(const node of [...recorded,...view.nodes])if(node?.attrs?.source_file&&node.source?.root==='project'){
+    if(!files.has(node.source.path))files.set(node.source.path,new Map());
+    files.get(node.source.path).set(node.id,node);
   }
   const add=(id,subject,finding)=>{
     if(!badges.has(id))badges.set(id,{ids:new Set(),subjects:[],severity:'candidate',acknowledged:true});
@@ -19,13 +21,16 @@ function ReviewProjection(affected,map,view) {
   for(const [subject,findings] of Object.entries(affected||{})) {
     let id=subject;
     while(id&&!visible.has(id))id=map.nodes.get(id)?.parent;
-    if(!id)continue;
     for(const finding of findings) {
-      add(id,subject,finding);
-      for(const path of finding.source_paths||[])for(const file of files.get(path)||[]){
+      if(id)add(id,subject,finding);
+      for(const path of finding.source_paths||[])for(const file of files.get(path)?.values()||[]){
         let owner=file.attrs.source_owner;
         while(owner&&owner!==subject)owner=map.nodes.get(owner)?.parent;
-        if(owner===subject)add(file.id,subject,finding);
+        if(owner!==subject)continue;
+        // File evidence decorates its recorded presentation route, not every declaration in that file.
+        for(const parent of map.paths?.get(file.id)||[file.id]){
+          if(visible.has(parent)&&(parent===file.id||map.nodes.get(parent)?.attrs?.presentation_group))add(parent,subject,finding);
+        }
       }
     }
   }
@@ -63,6 +68,7 @@ class ArchitectureReview {
     $('review-recheck').onclick=()=>this.recheck();
   }
   reset(target) {
+    this.closeComparison();
     this.epoch++;for(const controller of this.requests)controller.abort();this.requests.clear();this.pages.clear();
     this.target=target;this.data=null;this.badges.clear();this.enabled=Boolean(target?.review_url);this.pendingFinding=null;
     this.loading=false;this.error=null;
@@ -70,6 +76,7 @@ class ArchitectureReview {
     this.panel(false);this.status();
   }
   cancel() {
+    this.closeComparison();
     this.enabled=false;this.epoch++;for(const controller of this.requests)controller.abort();this.requests.clear();
   }
   panel(open=$('review').hidden) {
@@ -102,13 +109,14 @@ class ArchitectureReview {
   toggle(enabled=!this.enabled) {
     this.enabled=enabled;this.error=null;this.loading=false;
     if(enabled)this.load();
-    else {this.epoch++;for(const c of this.requests)c.abort();this.requests.clear();
+    else {this.closeComparison();this.epoch++;for(const c of this.requests)c.abort();this.requests.clear();
       this.data=null;this.pages.clear();this.referenceIndex.clear();this.findingIndex.clear();this.project();readableLabels();
       this.refreshInspection();}
     this.status();
   }
-  async request(query={},body=null) {
+  async request(query={},body=null,{preview=false}={}) {
     const epoch=this.epoch,controller=new AbortController();this.requests.add(controller);
+    controller.sourcePreview=preview;
     try {
       const params=new URLSearchParams({...query,...(query.evidence?{}:{ack:String(this.ack)})});
       const response=await fetch(this.target.review_url+(body?'':'?'+params),{cache:'no-store',signal:controller.signal,
@@ -272,6 +280,12 @@ class ArchitectureReview {
     if(!slot||!state.selection||slot.dataset.reviewSlot!==(state.selection.id||'connection'))return;
     this.details(slot,state.selection);
   }
+  cancelPreviews(){
+    for(const controller of this.requests)if(controller.sourcePreview){controller.abort();this.requests.delete(controller);}
+  }
+  closeComparison(focus=false){
+    const comparison=this.comparison;this.comparison=null;comparison?.close(focus);this.cancelPreviews();
+  }
   inspection(node) {
     const unavailable=!this.target?.review_url?'unavailable':!this.enabled?'off':this.error?'failed':!this.data?'checking...':null;
     if(unavailable)return{count:null,status:unavailable,message:this.error||{
@@ -293,10 +307,13 @@ class ArchitectureReview {
   }
   readout(trace) {
     const records=[...this.findingsFor(trace).values()];if(!records.length)return null;
+    const node=trace.kind==='node'?state.universe.nodes.get(trace.source):null;
+    const context=node?.attrs?.source_file?' in this file':node?.attrs?.presentation_group?' inside this container':
+      trace.kind==='node'?' for this owner':' in these references';
     const violations=records.filter(f=>f.severity==='violation').length,candidates=records.length-violations;
     const summary=[violations&&`! ${violations} policy violation${violations===1?'':'s'}`,
       candidates&&`? ${candidates} review candidate${candidates===1?'':'s'}`].filter(Boolean).join(' / ')+
-      (trace.kind==='node'?' for this owner':' in these references')+
+      context+
       (records.some(f=>f.acknowledged)?` (${records.filter(f=>f.acknowledged).length} acknowledged)`:'');
     return {summary,titles:[...new Set(records.map(f=>f.title))].slice(0,2)};
   }
@@ -304,6 +321,8 @@ class ArchitectureReview {
     const status=this.inspection(node),inspector=state.inspector;
     const label=(count,status)=>inspector?.setLabel('architecture',count===null?`Review: ${status}`:`Review (${count})`);
     if(status.count===null||!status.count){
+      this.cancelPreviews();
+      this.closeComparison();
       label(status.count,status.status);panel.replaceChildren(el('p',status.message,{class:'muted',role:status.status==='failed'?'alert':'status'}));
       delete panel.dataset.reviewKey;delete panel.dataset.finding;return;
     }
@@ -311,6 +330,8 @@ class ArchitectureReview {
     const query={report:this.data.report,...(chosen?{finding:chosen}:{node:node.id})};
     const key=JSON.stringify([query,this.ack,this.data.revision]);
     if(panel.dataset.reviewKey===key)return;
+    this.cancelPreviews();
+    this.closeComparison();
     label(chosen&&!exact?.length?1:status.count);
     panel.dataset.reviewKey=key;panel.dataset.finding=chosen||'';panel.replaceChildren();
     const section=el('section',null,{class:'review-details','aria-label':'Review findings'});
@@ -353,7 +374,9 @@ class ArchitectureReview {
         `Architecture / ${finding.count} recorded relations / ${finding.triage}`),el('p',finding.guidance));
     if(finding.reopened)article.append(el('p',finding.reopened,{class:'muted'}));
     for(const limit of finding.limits)article.append(el('small',limit));
-    const evidence=el('details');evidence.append(el('summary','Exact evidence'));
+    const evidence=el(finding.evidence_type==='source'?'section':'details',null,
+      {class:finding.evidence_type==='source'?'source-evidence':''});
+    if(finding.evidence_type!=='source')evidence.append(el('summary','Exact evidence'));
     if(finding.evidence_type==='source')this.sourceEvidence(evidence,finding,report);
     else {
       evidence.append(
@@ -393,30 +416,48 @@ class ArchitectureReview {
     article.append(controls,status);parent.append(article);
   }
   sourceEvidence(panel,finding,report) {
-    const body=el('div');panel.append(body);
+    const compare=el('button','Compare matches',{type:'button',class:'primary-action'}),body=el('div'),
+      comparisonStatus=el('small',null,{role:'status'});
+    compare.disabled=true;panel.append(compare,comparisonStatus,body);
     const epoch=state.referenceEpoch,reviewEpoch=this.epoch;
-    let started=false;
+    const current=()=>epoch===state.referenceEpoch&&reviewEpoch===this.epoch&&panel.isConnected&&this.enabled;
+    const loadPage=(cursor,preview=false)=>this.request({finding:finding.id,evidence:true,report,cursor,limit:50},null,{preview});
+    let page=null;
+    const open=(selected,trigger,initial=page)=>{
+      if(!current()||!page)return;this.closeComparison();
+      const comparison=new SourceComparison({target:this.target,finding,report,initial,selected,trigger,
+        title:`${state.selection?.label||this.subjects(finding)} / duplicated code`,
+        requests:this.requests,current,loadPage:cursor=>loadPage(cursor,true),onClose:()=>{
+          if(this.comparison===comparison)this.comparison=null;this.cancelPreviews();
+        }});
+      this.comparison=comparison;comparison.mount();
+    };
+    compare.onclick=async()=>{
+      if(!page||!current())return;compare.disabled=true;comparisonStatus.textContent='';
+      try{
+        const initial=page.items.length<2&&page.total>1?{...await loadPage(0,true),cursor:0}:page;
+        if(current())open(initial.items.slice(0,2).map((_,i)=>initial.cursor+i),compare,initial);
+      }catch(error){if(current()&&error.name!=='AbortError')comparisonStatus.textContent='Could not open comparison. '+error.message;}
+      finally{if(current())compare.disabled=!page.items.length;}
+    };
     const load=async(cursor=0)=>{
+      if(page)this.closeComparison();compare.disabled=true;
       body.replaceChildren(el('p','Loading source ranges...',{role:'status'}));
       try{
-        const data=await this.request({finding:finding.id,evidence:true,report,cursor,limit:50});
-        if(epoch!==state.referenceEpoch||reviewEpoch!==this.epoch||!body.isConnected||!this.enabled)return;
-        body.replaceChildren(el('p',`${cursor+1}-${cursor+data.items.length} of ${data.total} snapshot ranges`));
+        const data=await loadPage(cursor);if(!current())return;
+        page={...data,cursor};compare.disabled=!data.items.length;
+        body.replaceChildren(el('p',`Locations ${data.items.length?cursor+1:0}-${cursor+data.items.length} of ${data.total}`));
         if(state.target.stale)body.append(el('p','Snapshot is stale. Current source locations may have moved.',{role:'status'}));
-        const list=el('ul');body.append(list);
-        for(const item of data.items){
-          const row=el('li'),link=sourceLink(item);
-          row.append(link||el('span',`${item.path}:${item.line}`),el('small',
-            `${label(item.owner)} / ${item.line}:${item.column}-${item.end_line}:${item.end_column}`));list.append(row);
-        }
+        const list=el('ul',null,{class:'source-evidence-list'});body.append(list);
+        for(const [index,item] of data.items.entries())list.append(sourceOccurrenceRow(item,{target:this.target,current,
+          preview:trigger=>open([cursor+index],trigger)}));
         for(const [title,next] of [['Previous',Math.max(0,cursor-50)],['Next',data.next_cursor]]){
           const button=el('button',title,{type:'button','aria-label':title+' source ranges'});
           button.disabled=title==='Previous'?!cursor:next===null;button.onclick=()=>load(next);body.append(button);
         }
-      }catch(error){if(epoch===state.referenceEpoch&&reviewEpoch===this.epoch&&body.isConnected&&error.name!=='AbortError')
-        body.replaceChildren(el('p',error.message,{role:'alert'}));}
+      }catch(error){if(current()&&error.name!=='AbortError')body.replaceChildren(el('p',error.message,{role:'alert'}));}
     };
-    panel.ontoggle=()=>{if(panel.open&&!started){started=true;load();}};
+    load();
   }
 }
 

@@ -138,3 +138,75 @@ test('source candidates in the same module retain distinct file context in the q
   assert.deepEqual(control.sourceFiles({...finding,id:'second'}),['Second.cpp']);
   assert.deepEqual(control.sourceFiles({...finding,evidence_type:undefined}),[]);
 });
+
+test('source evidence follows recorded nested containers without marking clean files or semantic declarations',()=>{
+  const {Universe}=require('../viewer/universe.js'),{ReviewProjection,ArchitectureReview}=require('../viewer/review.js');
+  const graph=JSON.parse(require('node:fs').readFileSync(require('node:path').join(__dirname,'../fixtures/source-surface.graph.json')));
+  const helper=graph.nodes.find(n=>n.id==='helper');
+  helper.attrs.source_partition.folders=['Tests','Nested'];
+  const second=structuredClone(helper);second.id='second';second.source.path='Source/Sample/Private/Tests/Nested/Second.cpp';
+  const clean=structuredClone(helper);clean.id='clean';clean.source.path='Source/Sample/Private/Clean/Other.cpp';
+  clean.attrs.source_partition.folders=['Clean'];
+  graph.nodes.push(second,clean);
+  const map=new Universe(graph),files=[...map.nodes.values()].filter(n=>n.attrs?.source_file);
+  const file=files.find(n=>n.source.path===helper.source.path),other=files.find(n=>n.source.path===second.source.path);
+  const cleanFile=files.find(n=>n.source.path===clean.source.path);
+  const route=map.paths.get(file.id).filter(id=>map.nodes.get(id).attrs?.presentation_group);
+  const unrelated=map.paths.get(cleanFile.id).find(id=>map.nodes.get(id).label==='Clean');
+  const shared={id:'clone',severity:'candidate',acknowledged:false,source_paths:[file.source.path,other.source.path]};
+  const before=JSON.stringify(graph),affected={module:[shared]};
+  for(let depth=1;depth<=route.length;depth++){
+    const visible=['module',unrelated,...route.slice(0,depth)],view={nodes:visible.map(id=>map.nodes.get(id))};
+    const badges=ReviewProjection(affected,map,view);
+    for(const id of ['module',...route.slice(0,depth)])assert.equal(badges.get(id)?.count,1,`Missing evidence trail at ${map.nodes.get(id).label}`);
+    assert.equal(badges.has(unrelated),false,'A clean sibling folder inherited unrelated evidence');
+    const control=Object.assign(Object.create(ArchitectureReview.prototype),{enabled:true,target:{review_url:'/review'},data:{},badges,ownerBadges:new Set(badges.keys())});
+    assert.deepEqual(control.inspection(map.nodes.get(route[depth-1])).exact,['clone']);
+  }
+  const view={nodes:['module',...route,other.id,cleanFile.id,'helper','class'].map(id=>map.nodes.get(id))};
+  const badges=ReviewProjection(affected,map,view);
+  assert.equal(badges.get(other.id)?.count,1);assert.equal(badges.get(route.at(-2))?.count,1,'Shared finding counted twice');
+  assert.equal(ReviewProjection(affected,map,{nodes:[file]}).get(file.id)?.count,1,'An off-screen module hid visible file evidence');
+  for(const id of [cleanFile.id,'helper','class'])assert.equal(badges.has(id),false,'File evidence invented declaration ownership');
+  const violation={...shared,id:'violation',severity:'violation',acknowledged:true};
+  const mixed=ReviewProjection({module:[shared,violation]},map,view).get(route.at(-2));
+  assert.equal(mixed.count,2);assert.equal(mixed.severity,'violation');assert.equal(mixed.acknowledged,false);
+  assert.equal(ReviewProjection({},map,view).size,0,'Removed/acknowledged evidence left a stale trail');
+  assert.equal(JSON.stringify(graph),before,'Review changed semantic ownership or references');
+});
+
+test('source trail supports catalog and contextual namespace files without assigning clones to the namespace',()=>{
+  const {Universe}=require('../viewer/universe.js'),{ReviewProjection,ArchitectureReview}=require('../viewer/review.js');
+  const graph=JSON.parse(require('node:fs').readFileSync(require('node:path').join(__dirname,'../fixtures/namespace-files.graph.json')));
+  const at=id=>graph.nodes.findIndex(n=>n.id===id);
+  graph.files=[{owner:at('module'),root:'project',path:'Source/Sample/Private/Helper.cpp',
+    declarations:[at('helper')],definitions:[at('helper')],partition:graph.nodes[at('helper')].attrs.source_partition}];
+  const map=new Universe(graph),path='Source/Sample/Private/Helper.cpp';
+  const files=[...map.contextFiles.keys()].map(id=>map.nodes.get(id)).filter(n=>n.source.path===path);
+  assert.ok(files.length>=2,'Fixture must contain catalog and contextual file representatives');
+  const finding={id:'clone',severity:'candidate',acknowledged:false,source_paths:[path]};
+  const affected={module:[finding]},before=JSON.stringify(graph);
+  for(const file of files){
+    const ids=['module','scope',...map.paths.get(file.id).filter(id=>map.nodes.get(id).attrs?.presentation_group)];
+    const view={nodes:[...new Set(ids)].map(id=>map.nodes.get(id))},badges=ReviewProjection(affected,map,view);
+    for(const id of ids.filter(id=>map.nodes.get(id).attrs?.presentation_group))assert.equal(badges.get(id)?.count,1);
+    assert.equal(badges.has('scope'),false,'A file match cannot prove namespace ownership');
+    const control=Object.assign(Object.create(ArchitectureReview.prototype),{enabled:true,target:{review_url:'/review'},data:{},badges,ownerBadges:new Set(badges.keys())});
+    assert.deepEqual(control.inspection(file).exact,['clone']);
+  }
+  assert.equal(map.nodes.get('helper').parent,'scope');assert.equal(JSON.stringify(graph),before);
+});
+
+test('source marker hover distinguishes container evidence from semantic ownership',()=>{
+  const {ArchitectureReview}=require('../viewer/review.js'),previous=global.state;
+  global.state={universe:{nodes:new Map([
+    ['folder',{attrs:{presentation_group:true}}],['file',{attrs:{presentation_group:true,source_file:true}}],['module',{}]])}};
+  try{
+    const finding={id:'clone',severity:'candidate',title:'Duplicated source tokens'};
+    const owner=Object.assign(Object.create(ArchitectureReview.prototype),{enabled:true,data:{},
+      badges:new Map(['folder','file','module'].map(id=>[id,{ids:new Set(['clone'])}])),findingIndex:new Map([['clone',finding]])});
+    assert.match(owner.readout({kind:'node',source:'folder'}).summary,/inside this container/);
+    assert.match(owner.readout({kind:'node',source:'file'}).summary,/in this file/);
+    assert.match(owner.readout({kind:'node',source:'module'}).summary,/for this owner/);
+  }finally{global.state=previous;}
+});

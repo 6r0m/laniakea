@@ -70,6 +70,7 @@ class Snapshots:
                 map_url=base+'/map/'+context.view.root.name+'/topology.json',map_identity=context.view.root.name,
                 references_url=base+'/map/'+context.view.root.name+'/references',
                 review_url=base+'/map/'+context.view.root.name+'/review',
+                source_url=base+'/map/'+context.view.root.name+'/source',
                 stale=False,changed=[],changed_count=0,freshness='checked' if prepared is not None else 'unknown')
             key=(target,run.name,context.view.root.name)
             # Re-admitting an immutable identity must not displace its active readers.

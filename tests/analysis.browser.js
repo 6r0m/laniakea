@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // A monitored Sample target, with controllable owned-work timing supplied by the harness.
-async (page,{hold=async()=>{},guidance=false,screenshot=async()=>{}}={})=>{
+async (page,{hold=async()=>{},guidance=false,activity=false,screenshot=async()=>{}}={})=>{
   const check=(value,message)=>{if(!value)throw Error(message);};
-  if(guidance){
+  const settings=async(p=page)=>{if(!await p.locator('#analysis-settings').evaluate(node=>node.open))
+    await p.locator('#analysis-settings > summary').click();};
+  if(guidance||activity){
     const browser=page.context().browser(),url=page.url(),errors=[];
     const settle=p=>p.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
     const camera=p=>p.evaluate(()=>{const cy=state.cy,pan=cy.pan(),zoom=worldZoom();
       return JSON.stringify([(cy.width()/2-pan.x)/zoom,(cy.height()/2-pan.y)/zoom,zoom,[...state.universe.expanded]]);});
-    for(const mode of ['hidden','graph']){
+    for(const mode of (activity?[]:['hidden','graph'])){
       const context=await browser.newContext({viewport:{width:1440,height:1000}}),p=await context.newPage();
       p.on('pageerror',e=>errors.push(e.message));let controls=0,release;
       const gate=new Promise(r=>release=r);
@@ -51,7 +53,7 @@ async (page,{hold=async()=>{},guidance=false,screenshot=async()=>{}}={})=>{
         check(controls===0,`${mode} started analysis without an explicit request`);
       }finally{release();await context.close();}
     }
-    for(const width of [1440,390])for(const panel of ['review','details','filters','view']){
+    for(const width of (activity?[]:[1440,390]))for(const panel of ['review','details','filters','view']){
       const context=await browser.newContext({viewport:{width,height:900}}),p=await context.newPage();
       p.on('pageerror',e=>errors.push(e.message));
       let release;const gate=new Promise(r=>release=r);let controls=0;
@@ -59,6 +61,7 @@ async (page,{hold=async()=>{},guidance=false,screenshot=async()=>{}}={})=>{
       await p.route('**/monitor/status?*',async route=>{await gate;await route.continue();});
       try{
         await p.goto(url);await p.waitForFunction(()=>typeof state!=='undefined'&&state.cy&&state.analysis);
+        await p.waitForFunction(()=>!liveBlockReason());
         if(panel==='review'){await p.locator('#toggle-review').click();await p.locator('#review-ack').focus();}
         if(panel==='details'){await p.locator('#inspect-project').click();await p.locator('.details-close').focus();}
         if(panel==='filters'){await p.locator('#view-summary').click();await p.locator('#toggle-filters').click();
@@ -66,12 +69,22 @@ async (page,{hold=async()=>{},guidance=false,screenshot=async()=>{}}={})=>{
         if(panel==='view'){await p.locator('#view-summary').click();await p.locator('#fit').focus();}
         const selector=panel==='view'?'#view-controls':'#'+panel;
         const reading=await p.evaluate(selector=>{window.readingFocus=document.activeElement;const node=document.querySelector(selector);
-          return {scroll:node.scrollTop,text:node.innerText};},selector),before=await camera(p);
+          return {scroll:node.scrollTop,text:node.innerText,generation:liveGeneration(state.target),focusId:document.activeElement.id,
+            inspectorClose:document.activeElement.matches('.details-close'),
+            filterIndex:selector==='#filters'?[...node.querySelectorAll('input')].indexOf(document.activeElement):-1};},selector),before=await camera(p);
         release();await p.waitForFunction(()=>state.live?.status);await settle(p);
         check(await p.locator('#analysis').isHidden(),`Automatic Checks replaced ${panel} at ${width}`);
         check(await p.locator(selector).isVisible(),`Reading ${panel} disappeared`);
-        check(await p.evaluate(({selector,reading})=>document.activeElement===window.readingFocus&&
-          document.querySelector(selector).scrollTop===reading.scroll,{selector,reading}),'Delayed guidance changed reading focus/scroll');
+        check(await p.evaluate(({selector,reading})=>{
+          const focused=document.activeElement,adopted=liveGeneration(state.target)!==reading.generation;
+          const equivalent=adopted&&!window.readingFocus.isConnected&&(reading.focusId?focused.id===reading.focusId:
+            reading.inspectorClose?focused.matches('.details-close'):reading.filterIndex>=0&&
+              document.querySelector(selector).querySelectorAll('input')[reading.filterIndex]===focused);
+          return (focused===window.readingFocus||equivalent)&&document.querySelector(selector).scrollTop===reading.scroll;
+        },{selector,reading}),
+          `Delayed guidance changed ${panel} focus/scroll at ${width}: `+JSON.stringify(await p.evaluate(selector=>({
+            focused:document.activeElement.id,prior:window.readingFocus?.id,connected:window.readingFocus?.isConnected,
+            scroll:document.querySelector(selector).scrollTop,run:state.target.run}),selector)));
         check(await camera(p)===before,'Delayed guidance changed the camera');
         check(await p.evaluate(()=>!state.analysis.guideHandled()),'Deferred guidance was marked handled');
         check(controls===0,'Opening or deferring guidance started analysis');
@@ -107,6 +120,35 @@ async (page,{hold=async()=>{},guidance=false,screenshot=async()=>{}}={})=>{
         'Recommended action overpromises');
       check(await p.locator('#analysis-recommended').isEnabled(),'Recommended checks are unavailable for an idle Off project');
       const before=await camera(p);
+      await p.evaluate(()=>{window.progressStatus=state.live.status;state.live.stop();
+        const s=structuredClone(progressStatus),t=s.targets.find(t=>t.id===state.target.id);
+        t.state='updating';t.active=true;t.progress={phase:'native',label:'Indexing C++ units',completed:2,total:8,seconds:30};
+        state.analysis.render(s);});
+      check(await p.locator('#analysis-meter').getAttribute('value')==='2'&&
+        await p.locator('#analysis-meter').getAttribute('max')==='8','Native progress lacks real unit counts');
+      check(/Off/.test(await p.locator('#analysis-overview-checks').innerText()),'Running progress replaced displayed evidence');
+      await screenshot(p,'native-progress');
+      await p.locator('#analysis-close').click();await settle(p);
+      const top=await p.locator('#graph').evaluate(node=>node.getBoundingClientRect().top);
+      await p.evaluate(()=>{const s=structuredClone(progressStatus),t=s.targets.find(t=>t.id===state.target.id);
+        t.state='updating';t.active=true;t.progress={phase:'duplication',label:'Checking duplicated code',seconds:35};state.analysis.render(s);});
+      check(await p.locator('#checks-meter').isVisible(),'Closing Checks hid all progress');
+      check(await p.locator('#checks-meter').getAttribute('value')===null,'CPD invented a percentage');
+      check(await p.locator('#graph').evaluate(node=>node.getBoundingClientRect().top)===top,'Progress resized the map');
+      await p.locator('#toggle-analysis').click();
+      await p.evaluate(()=>{const s=structuredClone(progressStatus),t=s.targets.find(t=>t.id===state.target.id);
+        t.state='pending';t.active=true;t.progress=null;t.previous_work={label:'Recheck queued; earlier checks are still running',seconds:72};
+        state.analysis.render(s);});
+      check(await p.locator('#analysis-current-title').innerText()==='Recheck queued','Earlier owned work looks idle');
+      check(await p.locator('#analysis-meter').getAttribute('value')===null&&await p.locator('#analysis-stop').isVisible(),
+        'Queued earlier work needs indeterminate progress and Stop');
+      check((await p.locator('#analysis-status').innerText()).includes('Earlier checks are still running'),
+        'Queued earlier work lacks an explanation');
+      await screenshot(p,'queued-progress');
+      await p.evaluate(()=>{const s=structuredClone(progressStatus),t=s.targets.find(t=>t.id===state.target.id);
+        t.state='updating';t.active=true;t.progress={phase:'publication',label:'Validating the new map',seconds:40};state.analysis.render(s);});
+      check(await p.locator('#analysis-meter').getAttribute('value')===null,'Publication claims overall completion');
+      await p.evaluate(()=>{state.analysis.render(progressStatus);state.live.start();delete window.progressStatus;});
       for(const colorScheme of ['light','dark'])for(const width of [1440,1080,390]){
         await p.emulateMedia({colorScheme});await p.setViewportSize({width,height:1000});await settle(p);
         check(await p.evaluate(()=>['toggle-analysis','toggle-review','view-controls','toggle-details'].every(id=>{
@@ -120,6 +162,7 @@ async (page,{hold=async()=>{},guidance=false,screenshot=async()=>{}}={})=>{
         await screenshot(p,`guidance-${colorScheme}-${width}`);
       }
       await p.setViewportSize({width:1440,height:1000});
+      await settings(p);
       await p.locator('[name="check-native"]').selectOption('on');
       check(await p.locator('#analysis-recommended').isDisabled(),'Recommended checks can overwrite a draft');
       await p.locator('#analysis-discard').click();
@@ -146,7 +189,7 @@ async (page,{hold=async()=>{},guidance=false,screenshot=async()=>{}}={})=>{
       check(await camera(p)===before,'Recommended/Stop changed exploration state');
     }finally{await hold(false);await context.close();}
     check(!errors.length,errors.join('; '));
-    return {firstOpening:true,hiddenVisibilityInput:true,graphKeyboardFocus:true,readingPanels:8,reload:true,focus:true,themes:true,widths:[390,1080,1440],
+    return {firstOpening:!activity,phaseProgress:true,closedPanelProgress:true,hiddenVisibilityInput:!activity,graphKeyboardFocus:!activity,readingPanels:activity?0:8,reload:!activity,focus:true,themes:true,widths:[390,1080,1440],
       noImplicitRequests:true,draftSafety:true,laterFailure:true,storageRefusal:true,recommendedAuto:true,stop:true,errors};
   }
   check(await page.locator('#toggle-analysis').count()===1,'Checks has no persistent primary control');
@@ -168,6 +211,7 @@ async (page,{hold=async()=>{},guidance=false,screenshot=async()=>{}}={})=>{
   await page.locator('#view-summary').click();await page.keyboard.press('Escape');
   check(await page.evaluate(()=>!$('view-controls').open&&document.activeElement===$('view-summary')),'View does not close by keyboard');
   await page.setViewportSize({width:1440,height:1000});await page.locator('#toggle-analysis').click();
+  await settings();
   await page.locator('[name="check-native"]').focus();await page.keyboard.press('Escape');
   check(await page.locator('#analysis').isHidden(),'Escape from a check selector does not close Analysis');
   await page.locator('#toggle-analysis').click();
@@ -187,6 +231,7 @@ async (page,{hold=async()=>{},guidance=false,screenshot=async()=>{}}={})=>{
   try{
     await other.goto(page.url());await other.waitForFunction(()=>state.analysis?.base&&state.live?.status);
     if(await other.locator('#analysis').isHidden())await other.locator('#toggle-analysis').click();
+    await settings(other);
     await other.locator('[name="check-native"]').selectOption('off');
     await other.locator('[name="check-duplication"]').selectOption('auto');
     await other.locator('#analysis-run').click();

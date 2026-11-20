@@ -38,6 +38,9 @@ or explicit Retry, while preserving the failed coverage.
 It also rejects unrelated/superseded negative-cache entries and injects optional progress-output failure during valid extraction.
 Permission fault injection covers native negative-cache reads, writes and cleanup, preserving primary outcomes and preferring
 published native success over a stale refusal. The scheduler exposes cleanup warnings without blocking publication.
+`test_source_preview.py` checks recorded-occurrence authorization, current-file hashes, Windows opened-handle boundaries,
+redirected links, bounded text and distinct refusal states. It supplies the disposable source-preview browser fixture.
+Its final one-item occurrence page verifies that Compare still obtains two recorded ranges without changing the list page.
 `test_monitor.py` checks coalescing, contention, supersession, activation, fairness and bounded automatic history.
 `test_monitor_inputs.py` checks profile-selected inputs, changed receipt/product sets, comparison scopes and unpublished staging.
 The Monitor suite checks generation-bound comparison paging, truthful limits and advisory failure isolation. The server
@@ -80,12 +83,14 @@ Source-file fixtures must use the normal pipeline/read index/server and real exa
 | [namespace-files.browser.js](namespace-files.browser.js) | [Namespace fixture](../fixtures/namespace-files.graph.json): file contexts, exact references, navigation and pins |
 | [review.browser.js](review.browser.js) | [Review fixture](test_review.py): direct explanation, exact evidence, triage, refused writes, late close and pins |
 | [inspector.browser.js](inspector.browser.js) | Review fixture: accessible tabs, separate findings/details, retained drafts/evidence/scroll, lazy references, late responses and narrow panels |
-| [health.browser.js](health.browser.js) | `test_health.browser_fixture`: source evidence paging, file badges, triage/reopen, late-close, narrow layout and pin preservation |
-| [analysis.browser.js](analysis.browser.js) | Mandatory foundation, selectable source checks, Apply/Stop and retained maps; `guidance` exercises first opening, deferred reading panels, dismissal/reload, storage refusal, later failures, responsive themes and keyboard focus |
+| [health.browser.js](health.browser.js) | `test_health.browser_fixture`: folded folder/file warning trail, wheel exploration, clean siblings, source paging, triage/reopen, late-close, narrow layout and pins |
+| [source-preview.browser.js](source-preview.browser.js) | `test_source_preview.browser_fixture`: direct one/two-pane comparison, exact occurrence paging, read-only hashes, editor/copy actions, cancellation, retained scene/draft, live deferral, themes and narrow containment |
+| [source-match-navigation.browser.js](source-match-navigation.browser.js) | `test_source_preview.browser_fixture(base, occurrences=4)`: explicit total/displayed match counts, reaching all four locations, navigation bounds and retained map |
+| [analysis.browser.js](analysis.browser.js) | Source-check actions, Apply/Stop, retained maps; `guidance` covers first opening and focus, `activity` covers phase/earlier-work progress, responsive themes, settings and displayed evidence |
 | [input-changes.browser.js](input-changes.browser.js) | Cached path paging, Off scopes, removed-file links, focus, drafts, late close/target responses, displayed baseline, adoption and legacy stale paths |
 | [check-coverage.browser.js](check-coverage.browser.js) | Module-only to synthetic native publication: displayed/ready coverage, failed-save deferral, adoption and pin preservation |
 | [monitor.browser.js](monitor.browser.js) | Two registered sample targets: launch/deep-link precedence, inactive browsing and same-origin session controls |
-| [live.browser.js](live.browser.js) | Namespace fixture and a harness publication callback: adoption, injected layout/partial-render recovery, camera, references, drag/save/draft deferral, Review isolation, independent tabs and removed focus |
+| [live.browser.js](live.browser.js) | Namespace fixture: adoption, layout/partial-render recovery, camera, references, drag/save/draft deferral, Review isolation, independent tabs, removed focus and surviving reading controls |
 
 Other functions use the served [sample](../sample/SampleProject/SampleProject.uproject), with synthetic overlays.
 Keep real-project screenshots outside the clone and other observations in the ignored workspace.

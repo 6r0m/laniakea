@@ -2,6 +2,12 @@
 // Acquisition controls project Monitor state; they do not execute checks or evaluate Review policy.
 'use strict';
 
+function checkElapsedTime(value){
+  if(!Number.isFinite(value)||value<0)return '';
+  const seconds=Math.round(value),minutes=Math.floor(seconds/60);
+  return `${minutes?`${minutes} min `:''}${seconds%60} s elapsed`;
+}
+
 function checksSummary(current,target,message='') {
   const rows=target?.checks||[];
   const outcomes=Object.values(target?.acquisition||{});
@@ -12,7 +18,7 @@ function checksSummary(current,target,message='') {
   const counts={completed:0,disabled:0,unavailable:0,incomplete:0,pending:0,failed:0};
   for(const row of rows)counts[Object.hasOwn(counts,row.status)?row.status:'incomplete']++;
   const missing=rows.some(r=>!['completed','disabled'].includes(r.status))||outcomes.some(r=>['incomplete','unavailable'].includes(r.status));
-  const phase=current?.state==='stopping'?'Checks: stopping':failed?'Checks: failed':busy?'Checks: running':null;
+  const phase=current?.state==='stopping'?'Checks: stopping':busy?'Checks: running':failed?'Checks: failed':null;
   const breakdown=[[done,'recorded'],[counts.disabled,'off'],[counts.unavailable,'unavailable'],
     [counts.incomplete,'incomplete'],[counts.pending,'queued']].filter(([count])=>count).map(([count,label])=>`${count} ${label}`);
   const label=phase||(rows.length?'Checks: '+breakdown.join(' / '):'Checks: unavailable');
@@ -55,8 +61,10 @@ class AnalysisControls {
     $('analysis-close').onclick=()=>this.panel(false);
     $('analysis-run').onclick=()=>this.run();
     $('analysis-stop').onclick=()=>this.control('pause');
-    $('analysis-recommended').onclick=()=>{for(const select of $('analysis-checks').querySelectorAll('select'))select.value='auto';
-      this.edited=true;this.run();};
+    $('analysis-recommended').onclick=()=>{if(this.recommended){
+      for(const select of $('analysis-checks').querySelectorAll('select'))select.value='auto';this.edited=true;}
+      this.run();};
+    $('analysis-findings').onclick=()=>state.review?.panel(true);
     $('analysis-explore').onclick=()=>{this.panel(false);$('graph').focus({preventScroll:true});};
     $('analysis-discard').onclick=()=>{this.edited=false;this.formKey=null;this.error='';this.render(this.status);};
     $('analysis-auto').onchange=()=>this.control($('analysis-auto').checked?'activate':'pause');
@@ -96,19 +104,76 @@ class AnalysisControls {
       if($('analysis').contains(document.activeElement))$('toggle-analysis').focus();}
     if(open&&this.pathsOpen)this.renderChanges(this.changeCurrent);
   }
-  renderOverview(summary){
+  renderOverview(){
     const rows=state.target.checks||[],root=$('analysis-overview-checks');
     this.hasGuide=rows.length>0;$('analysis-overview').hidden=!this.hasGuide;
     if(!this.hasGuide)return;
-    $('analysis-overview-title').textContent='Your recorded map is ready to explore';
-    $('analysis-overview-copy').textContent='Optional checks can add evidence. Recorded checks and findings do not certify architectural quality.';
+    $('analysis-overview-title').textContent='Displayed results';
+    $('analysis-overview-copy').textContent='Evidence for the map on screen. Missing checks limit which findings can be shown.';
     root.replaceChildren();
     const names={completed:'Recorded',disabled:'Off',unavailable:'Unavailable',incomplete:'Not recorded',pending:'Queued',failed:'Failed'};
     for(const row of rows){const item=el('li');
       item.append(el('span',row.label),el('strong',names[row.status]||'Not recorded',{'data-status':row.status}));root.append(item);}
-    $('analysis-recommendation').textContent=summary.busy?'Checks are running. You can explore now or use Skip/Stop below.':
-      'Recommended checks apply Auto using available tools and build context. They do not install tools, build the project or guarantee completion.'+
-      (summary.counts.disabled?' Off checks have not verified prerequisites.':'');
+    const review=state.review,counts=review?.enabled&&!review.loading&&!review.error&&review.data?.counts&&
+      liveGeneration(review.target)===liveGeneration(state.target)?review.data.counts:null;
+    $('analysis-findings').textContent=counts?`View ${counts.violation+counts.candidate} recorded findings`:'Open Review';
+    $('analysis-findings').disabled=!state.target.review_url;
+  }
+  renderCurrent(current,summary,awaiting,blocked,enabled){
+    const busy=summary.busy,stopping=current?.state==='stopping',progress=busy&&!this.saving?current?.progress:null;
+    const earlier=busy&&!this.saving&&!progress?current?.previous_work:null;
+    const choices=Object.values(this.choices||{}),optional=(state.target.checks||[]).filter(row=>row.optional);
+    this.recommended=choices.some(select=>select.value==='off')||(!choices.length&&summary.counts.disabled>0);
+    const off=optional.length&&optional.every(row=>row.status==='disabled');
+    const checkRows=current?.checks||state.target.checks||[];
+    const concern=['failed','unavailable','incomplete'].map(status=>checkRows.find(row=>row.status===status)).find(Boolean);
+    const waiting={'waiting for external build':'Waiting for project build','waiting for writer':'Waiting for another analysis',
+      'waiting for read index':'Preparing map access'}[current?.state];
+    const title=this.saving?'Sending check request':stopping?'Stopping checks':busy?
+      earlier?'Recheck queued':waiting||progress?.label||(current?.state==='pending'?'Checks queued':'Preparing checks'):
+      current?.error||this.error||concern?.status==='failed'?'Checks need attention':awaiting?'Results ready to display':
+      concern?.status==='unavailable'?'Checks need setup':
+      current?.state==='paused'?'Checks paused':!summary.total?'Check coverage unavailable':
+      off?'Source checks are off':summary.guidance?'Some checks need attention':'Recorded checks are ready';
+    $('analysis-current-title').textContent=title;
+    $('analysis-current').setAttribute('data-state',busy?'running':current?.error||this.error||concern?.status==='failed'?'failed':'idle');
+    $('analysis-error').setAttribute('role',waiting&&busy?'status':'alert');
+    $('analysis-error').setAttribute('data-waiting',String(Boolean(waiting&&busy)));
+    const running=Boolean(busy||stopping||this.saving);
+    const determinate=progress?.phase==='native'&&Number.isSafeInteger(progress.completed)&&
+      Number.isSafeInteger(progress.total)&&progress.total>0&&progress.total<=1000000&&progress.completed>=0&&progress.completed<=progress.total;
+    for(const id of ['analysis-meter','checks-meter']){const meter=$(id);meter.hidden=!running;
+      meter.setAttribute('aria-label',title);meter.setAttribute('max',String(determinate?progress.total:1));
+      if(determinate)meter.setAttribute('value',String(progress.completed));else meter.removeAttribute('value');}
+    $('analysis-progress').hidden=!running;
+    $('analysis-progress').textContent=progress?[determinate?`${progress.completed}/${progress.total} units`:'',
+      checkElapsedTime(progress.seconds),progress.detail].filter(Boolean).join(' / '):
+      this.saving?'Waiting for the request to be accepted.':earlier&&Number.isFinite(earlier.seconds)?
+        `Earlier work: ${checkElapsedTime(earlier.seconds)}`:running?'Waiting for phase progress.':'';
+    if(running){$('checks-label-wide').textContent='Checks: '+title;
+      $('checks-label-compact').textContent='Checks: '+(this.saving?'requesting':stopping?'stopping':earlier?'queued':progress?.phase||'running');
+      const button=$('toggle-analysis');button.title+='. '+title+'. '+$('analysis-progress').textContent;
+      button.setAttribute('aria-label','Checks. '+button.title);}
+    let explanation=!enabled?'Saved-only view. Open the viewer normally to enable background checks.':
+      stopping?'Stopping owned work. The previous map and saved settings remain available.':
+      current?.state==='paused'?'Checks paused for this session. Showing previous results.':
+      waiting?current.state==='waiting for external build'?'Another project build is running. Checks will retry automatically.':
+        'Checks are waiting for shared resources. The current map remains available.':
+      current?.error?'The attempt failed. Showing the previous map; saved settings were retained.':
+      earlier?'Earlier checks are still running. The current map remains available.':
+      busy?'Keep exploring the displayed map while checks run.':concern?`${concern.label}: ${concern.detail||'Inspect Check settings for details.'}`:'';
+    if(current?.requested)explanation+=' Check choices are pending; they are saved only with a validated update.';
+    if(blocked)explanation+=` Update waiting: ${blocked}.`;
+    $('analysis-status').hidden=!explanation;$('analysis-status').textContent=explanation;
+    $('analysis-recommendation').hidden=running;
+    $('analysis-recommendation').textContent=this.edited?'Apply or reload your choices in Check settings below.':
+      this.recommended?'Auto uses available local tools and build context. Checks do not install tools, build the project or guarantee completion. Off prerequisites are unverified.':
+      'Recheck using your current settings. This keeps Off checks Off.';
+    $('analysis-recommended').textContent=this.recommended?'Run recommended checks':'Recheck enabled checks';
+    $('analysis-recommended').hidden=Boolean(busy||stopping||current?.error&&current?.active);
+    $('analysis-recommended').disabled=!enabled||!summary.total||this.saving||this.edited||running;
+    $('analysis-auto-note').textContent='Off checks stay Off. Automatic rechecks use only the enabled checks.';
+    if(!$('analysis-recommended').hidden)$('analysis-recommended').classList.add('primary-action');
   }
   build(rows,current){
     const root=$('analysis-checks');root.replaceChildren();this.choices={};
@@ -156,18 +221,9 @@ class AnalysisControls {
     this.renderChanges(current);
     if(!this.edited&&!this.saving&&key!==this.formKey){this.build(rows,current);this.formKey=key;
       this.base={run:ready.run,revision:current?.revision||0};}
-    this.renderOverview(summary);
+    this.renderOverview();
     const busy=summary.busy,progress=current?.progress;
-    let explanation=!enabled?'Saved-only view. Open the viewer normally to enable background checks.':
-      current?.state==='stopping'?'Stopping owned work. The previous map and saved settings remain available.':
-      current?.state==='paused'?'Checks paused for this session. Showing previous results.':
-      current?.error?'The attempt failed. Showing the previous map; saved settings were retained.':
-      busy?'Checks run locally in the background. You can keep exploring the previous map.':
-      '';
-    if(current?.requested)explanation+=' Check choices are pending; they are saved only with a validated update.';
-    if(blocked)explanation+=` Update waiting: ${blocked}.`;
-    $('analysis-status').hidden=!explanation;
-    $('analysis-status').textContent=explanation;
+    this.renderCurrent(current,summary,awaiting,blocked,enabled);
     $('analysis-ready').hidden=!awaiting;
     const readyRows=ready.checks||[];
     $('analysis-ready').textContent=awaiting?(readyRows.length?
@@ -175,10 +231,6 @@ class AnalysisControls {
       'New results are ready. Not displayed yet.') :'';
     $('analysis-error').hidden=!this.error&&!current?.error&&!current?.degraded&&!message;
     $('analysis-error').textContent=[this.error,current?.error,current?.degraded&&`Monitoring degraded: ${current.degraded}`,message].filter(Boolean).join('. ');
-    $('analysis-progress').hidden=!progress||!busy;
-    $('analysis-progress').textContent=progress?[progress.label,
-      Number.isInteger(progress.completed)?`${progress.completed}/${progress.total} units`:'',
-      progress.seconds!==undefined?`${Math.round(progress.seconds)} s elapsed`:'',progress.detail].filter(Boolean).join(' / '):'';
     for(const row of rows){
       const cell=$('check-'+row.id+'-status'),detail=$('check-'+row.id+'-detail');if(!cell||!detail)continue;
       const labels={completed:'Recorded',disabled:'Off',unavailable:'Needs setup / prerequisite',failed:'Failed',
@@ -195,14 +247,14 @@ class AnalysisControls {
       cell.setAttribute('data-status',evidence.status);
     }
     for(const select of Object.values(this.choices||{}))select.disabled=this.saving;
-    $('analysis-run').textContent=this.edited?'Apply and run':'Run checks';
+    $('analysis-run').textContent=this.edited?'Apply and run':'Recheck current settings';
     $('analysis-run').disabled=!enabled||this.saving||current?.state==='stopping';
     $('analysis-stop').hidden=!current?.active||!busy;
-    $('analysis-stop').textContent=current?.state==='updating'?'Stop checks':'Skip for now';
+    $('analysis-stop').textContent=current?.state==='updating'||current?.previous_work?'Stop checks':'Skip for now';
     $('analysis-stop').disabled=this.saving||current?.state==='stopping';
     $('analysis-auto').checked=Boolean(current?.active);$('analysis-auto').disabled=!enabled||this.saving||this.edited;
-    $('analysis-discard').hidden=!this.edited;$('analysis-retry').hidden=!current?.error||!current?.active;
-    $('analysis-recommended').disabled=!enabled||this.saving||this.edited||busy||current?.state==='stopping';
+    $('analysis-discard').hidden=!this.edited;$('analysis-retry').hidden=!current?.error||!current?.active||Boolean(busy);
+    $('analysis-retry').disabled=this.saving;
     if(!$('analysis').hidden&&this.hasGuide)this.markHandled();
     if(current&&this.hasGuide&&(summary.guidance||summary.attention)&&!this.guideHandled()&&!this.guideBlocked())this.panel(true);
   }

@@ -35,6 +35,11 @@ totals stay indeterminate. Progress-output I/O failure logs once and disables th
 canonical analysis and its failures retain their normal outcome. Status exposes only progress belonging to the current target/job/generation. HTTP threads
 never scan sources, load tools or start analyzers directly. Saved-only startup cannot activate work through browser controls.
 
+When an owned job belongs to an earlier generation, its unit counts remain hidden. A separate bounded status explains that
+earlier work is still running before the queued recheck, with optional elapsed job time. This is not progress on current
+inputs or a result claim. The projection disappears on job close, pause, replacement or shutdown, and never leaks another
+target's work. It reads controller-owned state only and does not change scheduling, cancellation or publication.
+
 ## Scheduling and failure
 
 Activation applies only to registered saved targets. Browsing another target does not activate it. Watches are armed before

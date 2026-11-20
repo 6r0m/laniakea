@@ -26,7 +26,11 @@ def observations():
 
 def browser_fixture():
     graph=json.loads((Path(__file__).resolve().parent.parent/'fixtures/source-surface.graph.json').read_text())
-    data=observations();paths=['Source/Sample/Public/API.h','Source/Sample/Private/Producer.cpp']
+    data=observations();paths=['Source/Sample/Public/API.h','Source/Sample/Private/Tests/Producer.cpp']
+    method=next(n for n in graph['nodes'] if n['id']=='method')
+    method['source']['path']=paths[1]
+    method['attrs']['definition_location']['path']=paths[1]
+    graph['edges'][0]['attrs']['location']['path']=paths[1]
     data['scope']['modules']=['module']
     data['files']={p:{'sha256':'a'*64,'owner':'module'} for p in paths}
     data['groups'][0]['occurrences']=[{'path':paths[i%2],'line':1+i*40,'column':1,

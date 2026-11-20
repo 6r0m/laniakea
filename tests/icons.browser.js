@@ -21,6 +21,7 @@ async page=>{
     state.universe.reveal('field');state.universe.reveal('method');state.scopeShard={scope:'module',title:'Module',parents:[]};
     renderGraph();layout();flyToNode('class',false);state.universe.expanded.add('class');refreshMap();frameNode('class');
   });await settle();
+  await page.evaluate(()=>{state.cy.getElementById('class').data('reviewMark','candidate:1:false');readableLabels();});await settle();
   const initial=await page.evaluate(()=>({pins:JSON.stringify(state.positionCache.layouts),positions:JSON.stringify([...state.universe.positions]),
     ids:state.cy.elements().map(n=>n.id()).sort()}));
   for(const theme of ['dark','light']){
@@ -35,12 +36,14 @@ async page=>{
       return {painted,kind:node.data('iconKind'),
         opacity:node.style('background-image-opacity')[0],icon:parseFloat(node.style('background-width'))*zoom,
         expanded:expanded.hasClass('expanded'),titleVisible:expanded.style('background-image-opacity')[0],
+        titleTop:parseFloat(expanded.style('bounds-expansion')),titleY:parseFloat(expanded.style('background-offset-y')),
         offset:parseFloat(expanded.style('background-offset-x'))*zoom,
         ids:cy.elements().map(n=>n.id()).sort(),positions:JSON.stringify([...state.universe.positions])};
     });
     check(proof.painted&&proof.kind==='function'&&Number(proof.opacity)===1,'Callable icon did not decode or is hidden');
     check(Math.abs(proof.icon-26*.58)<.1,'Icon size changed with native renderer units');
     check(proof.expanded&&Number(proof.titleVisible)===1&&proof.offset<0,'Expanded title lost its type icon');
+    check(proof.titleTop>=Math.max(0,-proof.titleY),'Expanded title images are clipped by native texture bounds');
     check(JSON.stringify(proof.ids)===JSON.stringify(initial.ids)&&proof.positions===initial.positions,'Decoration changed graph or positions');
     await page.locator('#type-key summary').focus();await page.keyboard.press('Enter');
     check(await page.locator('#icon-key').isVisible(),'Icon key has no keyboard route');

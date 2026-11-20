@@ -68,6 +68,22 @@ async (page,{publish})=>{
   check(await page.evaluate(()=>state.referencePages.url.includes(state.target.run)&&state.positionCache.url.includes(state.target.run)),
     'New exact references or position writes use the old generation');
   await page.evaluate(id=>selectNode(id),before.id);
+  for(const width of [1440,390])for(const selector of ['#review-ack','.details-close']){
+    await page.setViewportSize({width,height:1000});
+    if(selector==='#review-ack'){
+      if(await page.locator('#review').isHidden())await page.locator('#toggle-review').click();
+    }else await page.evaluate(id=>selectNode(id),before.id);
+    await page.locator(selector).focus();
+    const pane=selector==='#review-ack'?'review':'details';
+    const scroll=await page.evaluate(pane=>$(pane).scrollTop,pane);
+    await page.waitForFunction(()=>!liveBlockReason());run=await publish();await poll();
+    check(await page.locator(selector).evaluate(node=>document.activeElement===node),
+      `Successful adoption lost ${selector} reading focus at ${width}`);
+    check(await page.evaluate(({pane,scroll})=>!$(pane).hidden&&$(pane).scrollTop===scroll,{pane,scroll}),
+      `Successful adoption changed ${pane} reading position`);
+    if(selector==='#review-ack')await page.locator('#review-close').click();
+  }
+  await page.setViewportSize({width:1440,height:1000});
   const oldRun=run;
   await page.waitForFunction(()=>!liveBlockReason());
   let release;
@@ -117,5 +133,6 @@ async (page,{publish})=>{
   await page.locator('#view-summary').focus();await page.keyboard.press('Escape');
   check(await page.evaluate(()=>!$('view-controls').open&&document.activeElement===$('view-summary')),'View controls do not close by keyboard');
   return {adoption:true,camera:true,deepScope:true,filters:true,immutableURLs:true,dragAndSaveDeferral:true,
-    drafts:true,closedInspector:true,removedFocus:true,narrowMap:true,reviewIsolation:true,multipleTabs:true,renderRollback:true};
+    drafts:true,closedInspector:true,removedFocus:true,narrowMap:true,reviewIsolation:true,multipleTabs:true,renderRollback:true,
+    successfulReadingFocus:true};
 }

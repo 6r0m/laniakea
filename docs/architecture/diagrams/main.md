@@ -20,12 +20,14 @@ flowchart LR
         MapIndex["disposable map read index"] -->|"reads canonical graph; writes validated view cache"| Workspace
         Server -->|"compact topology and exact-reference pages"| MapIndex
         Server -->|"on-demand reports and validated decisions"| Review["architecture review"]
+        Server -->|"recorded source occurrence and pinned project root"| SourcePreview["bounded source preview"]
         Review -->|"stream canonical references"| MapIndex
         Review -->|"local policy, disposable reports, durable triage"| Workspace
         Server["loopback server"] -->|"reads pinned runs; reads/writes user positions"| Workspace
         Viewer["viewer page"] -->|"HTTP on 127.0.0.1"| Server
     end
     Profile -->|"reads .uproject, .uplugin, build inputs"| Project[("analysed project")]
+    SourcePreview -->|"read-only, hash-verified current source"| Project
     Profile -->|"target query, rule export, guarded compiler-action export"| UBT[("engine: Unreal Build Tool")]
     Profile -->|"native C indexing API"| LLVM[("optional local LLVM tools")]
     UBT -->|"evaluates rules; refreshes its own caches"| Project

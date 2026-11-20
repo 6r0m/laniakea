@@ -149,6 +149,7 @@ function known(id) {
 
 // Show a target's scope. mode: 'push' adds a history entry, 'replace' rewrites the current one, 'none' follows history.
 async function show(id, file, mode) {
+  state.review?.closeComparison?.();
   const savedScene = mode === 'none' || !state.cy ? history.state && history.state.scene : null;
   const navigation = ++state.navigation;
   $('graph').setAttribute('aria-busy', 'true');
@@ -253,6 +254,7 @@ function togglePanel(name, open = $(name).hidden) {
 function openScope(file) { return show(state.target.id, file, 'push'); }
 
 async function up() {
+  state.review?.closeComparison?.();
   if (!state.shard) return;
   const universe = state.universe, scope = state.scopeShard.scope;
   const parents = state.shard.parents;
@@ -267,6 +269,10 @@ async function up() {
 }
 
 function onKey(event) {
+  if(state.review?.comparison){
+    if(event.key==='Escape'){event.preventDefault();state.review.closeComparison(true);}
+    return;
+  }
   const typing = event.target.closest && event.target.closest('input, select, textarea');
   if(event.key==='Escape'&&$('view-controls').open){$('view-controls').open=false;$('view-summary').focus();return;}
   if(event.key==='Escape'&&!$('analysis').hidden&&!$('details').contains(event.target)){
@@ -484,11 +490,14 @@ function elsewhere(query, index) {
   return DeclarationContext.search(query,index.nodes,state.manifest.levels||[],1).items[0]||null;
 }
 
-function sourceLink(location) {
-  const roots=state.target.roots||{};
+function sourcePath(location,roots=state.target.roots||{}) {
   const root = Object.hasOwn(roots,location.root) && roots[location.root];
   if (typeof root!=='string'||!root) return null;
-  const path = `${root.replace(/\\/g, '/').replace(/\/$/, '')}/${location.path}`;
+  return `${root.replace(/\\/g, '/').replace(/\/$/, '')}/${location.path}`;
+}
+
+function sourceLink(location) {
+  const path=sourcePath(location);if(!path)return null;
   return el('a', `${location.path}:${location.line || 1}`, { href: `vscode://file/${encodeURI(path)}:${location.line || 1}` });
 }
 
@@ -575,6 +584,8 @@ function renderDetails(item,{reopen=true}={}) {
   }
   state.detailsKey=key;
   state.referenceEpoch=(state.referenceEpoch||0)+1;
+  state.review?.cancelPreviews?.();
+  state.review?.closeComparison?.();
   state.referencePages?.cancel();
   for (const observer of state.referenceObservers || []) observer.disconnect();
   state.referenceObservers = [];
@@ -597,6 +608,7 @@ function renderDetails(item,{reopen=true}={}) {
     tabs:[{id:'architecture',label:'Review'},{id:'details',label:'Details'}],
     onClose:()=>{renderDetails(null);$('toggle-details').focus();},
     onSelect:name=>{
+      if(name!=='architecture')state.review?.closeComparison?.();
       if(name==='details'&&!detailsLoaded){detailsLoaded=true;
         renderSelectionDetails(state.inspector.pages.get('details'),item,projectContext,configurationInspection);}
     }});

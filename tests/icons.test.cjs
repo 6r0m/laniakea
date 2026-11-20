@@ -32,3 +32,19 @@ test('icons are reusable local vectors and unknown kinds cannot inject SVG',()=>
   }
   assert.equal(NodeIcons.image('<script>','" onload="bad'),NodeIcons.image('entity','#888888'));
 });
+
+test('expanded title images remain inside native drawing bounds above the container',()=>{
+  for(const mark of ['', 'candidate:3:false'])for(const zoom of [.25,1,2,5]){
+    let style;
+    const node={data:key=>key==='iconKind'?'folder':key==='reviewMark'?mark:undefined,
+      hasClass:kind=>kind==='expanded'||kind==='group',renderedPosition:()=>({x:200,y:200}),
+      outerHeight:()=>100,style:value=>{style=value;}};
+    const top=node.renderedPosition().y-node.outerHeight()*zoom/2;
+    const box={x1:150,x2:250,y1:top-24,y2:top-4,w:100,h:20};
+    NodeIcons.title(node,box,zoom,{fg:'#ffffff',bg:'#111111',candidate:'#ffaa00',violation:'#ff0000'});
+    const offset=Array.isArray(style['background-offset-y'])?style['background-offset-y'][0]:style['background-offset-y'];
+    assert.ok(offset<0,'Fixture must position the icon above its container');
+    assert.ok(style['bounds-expansion'][0]>=-offset,'Native texture bounds clip the expanded title icon');
+    assert.equal(style['bounds-expansion'][2],0,'Title decoration must not grow the bottom bounds');
+  }
+});

@@ -1,9 +1,9 @@
 # Automatic checks and clear exploration controls
 
-**Status:** PARTIAL - implementation verified; final real-project runtime gate pending
+**Status:** DONE - implementation and real-project runtime acceptance verified
 **Scope:** first-opening analysis, existing monitor controls, progress and viewer information hierarchy  
-**Stable owners:** [monitoring](../docs/architecture/monitoring.md), [viewer](../docs/architecture/viewer.md),
-[Review](../docs/architecture/review.md), [guide](../docs/guide.md)
+**Stable owners:** [monitoring](../../docs/architecture/monitoring.md), [viewer](../../docs/architecture/viewer.md),
+[Review](../../docs/architecture/review.md), [guide](../../docs/guide.md)
 
 ## Contents
 
@@ -92,26 +92,26 @@ real-project gate deferred under D5. Archival still requires that gate; implemen
 
 ### Facts
 
-1. [CLI](../laniakea/cli.py) ordinary build requests automatic CPD, while native indexing requires a flag. The saved request
-   records actual symbols/health settings. [Unreal monitor recipe](../laniakea/unreal/monitor.py) reuses that request, including
+1. [CLI](../../laniakea/cli.py) ordinary build requests automatic CPD, while native indexing requires a flag. The saved request
+   records actual symbols/health settings. [Unreal monitor recipe](../../laniakea/unreal/monitor.py) reuses that request, including
    off settings; restarting or clicking Retry does not enable omitted analysis.
 2. Live inspection found one evaluated cycle check, native evidence unavailable and duplication explicitly off. The actual
    recipe explained the shallow map. This is an installation-specific observation, not a claim about every target.
-3. [Monitor control](../laniakea/server.py) permits only activate/pause/retry; the browser has no check-selection operation.
-   [Status](../laniakea/monitor.py) reports scheduler state, not an operator-facing checklist or detailed source-check progress.
-4. [Acquisition schema](../schema/graph.v1.schema.json) is currently CPD-shaped, including required token fields. Native
-   acquisition cannot reuse it by fabricating token values. [Schema validation](../laniakea/schema.py) deliberately rejects
+3. [Monitor control](../../laniakea/server.py) permits only activate/pause/retry; the browser has no check-selection operation.
+   [Status](../../laniakea/monitor.py) reports scheduler state, not an operator-facing checklist or detailed source-check progress.
+4. [Acquisition schema](../../schema/graph.v1.schema.json) is currently CPD-shaped, including required token fields. Native
+   acquisition cannot reuse it by fabricating token values. [Schema validation](../../laniakea/schema.py) deliberately rejects
    unsupported keywords; schema evolution must remain executable by that validator.
-5. [Compiler jobs](../laniakea/unreal/compiler.py) already record completed-unit progress. Its full progress document contains
+5. [Compiler jobs](../../laniakea/unreal/compiler.py) already record completed-unit progress. Its full progress document contains
    job details and is not an appropriate raw status response. CPD has no proved trustworthy overall percentage.
 6. The live browser walkthrough covered the desktop toolbar, Live disclosure, Review availability, compact and narrow sizes.
    Primary and secondary tasks share one scrolling row. Compact widths hide reset/selection/Inspector controls; narrow widths
    also hide Review and Fit. The Live disclosure says freshness is good while source checking is disabled, with no enable action.
    Review explains that absence only after opening its policy disclosure.
-7. [InspectorTabs](../viewer/inspector.js), native buttons/disclosures and current panels already cover keyboard/focus behavior.
-   The actual dark/light colors and type scale are owned by [app.css](../viewer/app.css); no design dependency is necessary.
+7. [InspectorTabs](../../viewer/inspector.js), native buttons/disclosures and current panels already cover keyboard/focus behavior.
+   The actual dark/light colors and type scale are owned by [app.css](../../viewer/app.css); no design dependency is necessary.
 
-Private runtime evidence and responsive measurements: [browser observations](../workspace/tmp/analysis-controls-investigation/ui.json).
+Private runtime evidence and responsive measurements: [browser observations](../../workspace/tmp/analysis-controls-investigation/ui.json).
 Screenshots of the real project remain outside this clone in ignored scratch; none belongs in public fixtures or this plan.
 
 ### Judgment and limits
@@ -126,15 +126,15 @@ Screenshots of the real project remain outside this clone in ignored scratch; no
 
 | owner | responsibility retained or extended |
 |---|---|
-| [CLI](../laniakea/cli.py) | command options, initial registration/build intent, explicit required overrides and saved-only startup |
-| [Workspace](../laniakea/workspace.py) and [schema](../schema/graph.v1.schema.json) | validated run-bound request and one publication pointer |
-| [Monitor](../laniakea/monitor.py) | selected-target scheduling, requested session work, coalescing, pause/cancellation and cached status |
-| [Worker](../laniakea/monitor_worker.py) / [pipeline](../laniakea/pipeline.py) | source/tool work, isolated staging, validation and publication preparation |
-| [Profiles](../laniakea/profiles.py) / [Unreal](../laniakea/unreal/__init__.py) | available check descriptions, eligibility, tool/build requirements and actual extraction |
-| [Server](../laniakea/server.py) | bounded same-origin controls and small status responses; no compiler work in HTTP handlers |
-| [Live coordinator](../viewer/live.js) | one status poll, gesture-safe adoption and generation-bound readers |
-| [Review](../viewer/review.js) | findings, exact evidence and triage; it does not acquire source evidence |
-| [App](../viewer/app.js) / [markup](../viewer/index.html) / [styles](../viewer/app.css) | control grouping, Analysis presentation and existing panels |
+| [CLI](../../laniakea/cli.py) | command options, initial registration/build intent, explicit required overrides and saved-only startup |
+| [Workspace](../../laniakea/workspace.py) and [schema](../../schema/graph.v1.schema.json) | validated run-bound request and one publication pointer |
+| [Monitor](../../laniakea/monitor.py) | selected-target scheduling, requested session work, coalescing, pause/cancellation and cached status |
+| [Worker](../../laniakea/monitor_worker.py) / [pipeline](../../laniakea/pipeline.py) | source/tool work, isolated staging, validation and publication preparation |
+| [Profiles](../../laniakea/profiles.py) / [Unreal](../../laniakea/unreal/__init__.py) | available check descriptions, eligibility, tool/build requirements and actual extraction |
+| [Server](../../laniakea/server.py) | bounded same-origin controls and small status responses; no compiler work in HTTP handlers |
+| [Live coordinator](../../viewer/live.js) | one status poll, gesture-safe adoption and generation-bound readers |
+| [Review](../../viewer/review.js) | findings, exact evidence and triage; it does not acquire source evidence |
+| [App](../../viewer/app.js) / [markup](../../viewer/index.html) / [styles](../../viewer/app.css) | control grouping, Analysis presentation and existing panels |
 
 ## Problem and root cause
 
@@ -297,9 +297,9 @@ policy editor. Reuse existing close/Escape/focus behavior, and never reopen a di
 - [x] Expose bounded current-attempt progress/capability summaries without source work on HTTP threads or a new UI poll loop.
 - [x] Implement the Analysis presentation and regroup navigation, Checks, Review, View and selection actions. Explain setup,
   missing evidence and requested-versus-applied settings. Reuse existing native UI primitives and Inspector behavior.
-- [ ] Verify each delivery boundary independently: request/default behavior; worker/cancellation/publication; responsive UI
+- [x] Verify each delivery boundary independently: request/default behavior; worker/cancellation/publication; responsive UI
   and live adoption. Do not mark the whole feature ready on fixture/unit tests alone.
-- [ ] Update stable owners, run the verification matrix and complete the real first-opening/Skip/Stop/recovery walkthrough.
+- [x] Update stable owners, run the verification matrix and complete the real first-opening/Skip/Stop/recovery walkthrough.
 
 ## Test-first and verification plan
 
@@ -322,10 +322,10 @@ Existing opt-out preservation, inactive historical browsing, required-analysis r
 already green invariants. Reuse those guards; do not invent baseline failures for behavior that currently works. New request/
 UI contracts need failing acceptance evidence before implementation, and changed guards must reject a relevant known-bad case.
 
-Use existing [command](../tests/test_commands.py), [monitor](../tests/test_monitor.py),
-[worker/input](../tests/test_monitor_inputs.py), [server](../tests/test_server.py),
-[native/health](../tests/test_native_health.py), [owned-process](../tests/test_owned_process.py),
-[live](../tests/live.test.cjs) and [browser verification](../tests/README.md) owners. The table specifies new contracts;
+Use existing [command](../../tests/test_commands.py), [monitor](../../tests/test_monitor.py),
+[worker/input](../../tests/test_monitor_inputs.py), [server](../../tests/test_server.py),
+[native/health](../../tests/test_native_health.py), [owned-process](../../tests/test_owned_process.py),
+[live](../../tests/live.test.cjs) and [browser verification](../../tests/README.md) owners. The table specifies new contracts;
 its unimplemented cases are not claimed failing test executions yet.
 
 ### Green evidence
@@ -345,12 +345,12 @@ its unimplemented cases are not claimed failing test executions yet.
 
 ## Documentation plan
 
-- [Monitoring](../docs/architecture/monitoring.md): requested/default intent, active-target rules, progress, Stop/Skip and failed
-  attempt reuse. [Structure](../docs/architecture/structure.md): narrowly revise native-opt-in wording for D2's path.
-- [Viewer](../docs/architecture/viewer.md): Analysis/Review/View/selection hierarchy, honest status, responsive and focus behavior.
-- [Review](../docs/architecture/review.md): retain evaluation ownership and distinguish Refresh findings from acquiring evidence.
-- [Guide](../docs/guide.md): a short first-use and recovery workflow. CLI owns exact setup flags; do not copy a large flag list
-  or provider implementation details into each UI/document. [Verification](../tests/README.md) owns test routes.
+- [Monitoring](../../docs/architecture/monitoring.md): requested/default intent, active-target rules, progress, Stop/Skip and failed
+  attempt reuse. [Structure](../../docs/architecture/structure.md): narrowly revise native-opt-in wording for D2's path.
+- [Viewer](../../docs/architecture/viewer.md): Analysis/Review/View/selection hierarchy, honest status, responsive and focus behavior.
+- [Review](../../docs/architecture/review.md): retain evaluation ownership and distinguish Refresh findings from acquiring evidence.
+- [Guide](../../docs/guide.md): a short first-use and recovery workflow. CLI owns exact setup flags; do not copy a large flag list
+  or provider implementation details into each UI/document. [Verification](../../tests/README.md) owns test routes.
 - Existing architecture/documentation routers suffice unless a genuinely new stable owner is necessary. Keep todo/README
   lifecycle-only. No stable file, code comment or test may link to this transient task.
 
@@ -486,3 +486,25 @@ real acceptance evidence, and no unrelated or operator-staged work is altered.
 - Verification: `test_monitor`, `test_monitor_inputs`, `test_build_context`, `test_analysis_controls`, `test_documentation`
   and `test_privacy` passed: 55 checks, no skips. Changed documentation passed ASCII and diff checks. No runtime code,
   staged content, saved user state or running analysis was changed during this review.
+
+### 2026-11-19 - D6 real-project acceptance completed
+
+- The current operator renewed autonomous live acceptance with fresh UI and design agents. Recommended Auto checks ran
+  through the normal browser action, preserving existing scheduler, strict clone quality, source boundaries and publication.
+- Three real-Engine integration tests passed. Trusted Stop cancelled the active native job; all recorded owned descendants
+  exited and the last good map remained usable. Normal owned viewer restart and resumed acquisition succeeded.
+- Concurrent source/build changes superseded earlier candidates without publication. The existing successful-receipt policy
+  selected the newest valid target context. The replacement completed native indexing with no compiler errors and strict
+  duplication analysis, then validated and published through the existing pipeline. This proves the selected target only;
+  other targets and complete runtime/call-graph behavior are not claimed.
+- An already open browser adopted the completed native/health snapshot. Its camera stayed unchanged, actual progress
+  cleared to recorded coverage, source evidence opened, and runtime module/header/class navigation worked without errors.
+  Cold native time was about 16 minutes; total extraction about 18 minutes; the largest recorded worker was about 1.6 GiB.
+  Two final real overview wheel samples had p95 below 34 ms and maxima below 46 ms, with no observed long tasks.
+- Protected layouts, policy and triage were byte-identical. Other targets remained inactive. The operator-requested Auto
+  choices were applied through successful publication. No authored analysed-project source was changed by this work.
+- Current focused acceptance: 202 JavaScript checks, 21 Monitor and 28 server Python checks, 21 Monitor checks on Python
+  3.11, three real-Engine checks and documentation/privacy validation. Affected Analysis, coverage, input-change and Live
+  Chromium scenarios passed. Earlier broader implementation evidence above remains historical, not newly rerun evidence.
+- Private receipts and resource/browser observations are under `workspace/tmp/checks-experience/`. Stable contracts remain
+  with monitoring, viewer and guide owners. D6 is satisfied; this task is archived with its full earlier pending history.

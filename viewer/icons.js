@@ -78,7 +78,7 @@ const NodeIcons=(()=>{
       'background-offset-y':badge?[y,expanded?y:-node.height()/2]:y,
       'background-image-opacity':badge?[expanded?(title?.visible?1:0):visible?1:0,expanded?(title?.visible?1:0):1]:
         expanded?(title?.visible?1:0):visible?1:0,
-      'bounds-expansion':expanded?[0,(badge?40:22)/zoom,0,(badge?40:22)/zoom]:badge?10/zoom:0});
+      'bounds-expansion':expanded?[title?.visible?Math.max(0,-y)+2/zoom:0,(badge?40:22)/zoom,0,(badge?40:22)/zoom]:badge?10/zoom:0});
   }
   function update(cy,map,scope,level,zoom,palette){
     const owner=map.nodes.get(scope),detail=owner&&(owner.attrs?.source_sections||owner.attrs?.presentation_group||

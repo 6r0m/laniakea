@@ -29,7 +29,7 @@
   <div id="banner" role="status" hidden></div>
   <div id="error" role="alert" hidden></div>
   <div class="scope-bar">
-    <button id="toggle-analysis" type="button" aria-controls="analysis" aria-expanded="false" aria-live="polite"><span id="checks-label-wide" class="control-wide">Checks: waiting</span><span id="checks-label-compact" class="control-compact" aria-hidden="true">Checks: waiting</span></button>
+    <button id="toggle-analysis" type="button" aria-controls="analysis" aria-expanded="false" aria-live="polite"><span id="checks-label-wide" class="control-wide">Checks: waiting</span><span id="checks-label-compact" class="control-compact" aria-hidden="true">Checks: waiting</span><progress id="checks-meter" max="1" aria-hidden="true" hidden></progress></button>
     <button id="toggle-review" type="button" aria-expanded="false" aria-controls="review" aria-live="polite"><span id="review-label-wide" class="control-wide">Review: checking...</span><span id="review-label-compact" class="control-compact" aria-hidden="true">Review: checking...</span></button>
     <details id="view-controls"><summary id="view-summary">View</summary><div class="view-options">
       <button id="toggle-filters" type="button" aria-controls="filters" aria-expanded="false">Browse &amp; filters</button>
@@ -48,22 +48,33 @@
     <button id="input-change-status" type="button" title="Inspect input changes in Checks">Changes: not checked</button></div>
   <main>
     <aside id="analysis" aria-label="Analysis checks" hidden>
-      <div class="review-actions"><h2>Analysis</h2><button id="analysis-close" type="button" aria-label="Close analysis">Close</button></div>
+      <div class="review-actions"><h2>Checks</h2><button id="analysis-close" type="button" aria-label="Close checks">Close</button></div>
+      <section id="analysis-current" class="analysis-check" aria-labelledby="analysis-current-title">
+        <h3 id="analysis-current-title">Preparing checks</h3>
+        <progress id="analysis-meter" max="1" aria-label="Check progress" hidden></progress>
+        <p id="analysis-progress" role="status" hidden></p><p id="analysis-status" role="status" hidden></p>
+        <p id="analysis-ready" role="status" hidden></p><p id="analysis-error" role="alert" hidden></p>
+        <div class="analysis-actions">
+          <button id="analysis-recommended" type="button" class="primary-action">Run recommended checks</button>
+          <button id="analysis-stop" type="button" class="primary-action" hidden>Stop checks</button>
+          <button id="analysis-retry" type="button" class="primary-action" hidden>Retry</button>
+          <button id="analysis-explore" type="button">Explore current map</button>
+        </div>
+        <p id="analysis-recommendation" class="muted"></p>
+      </section>
       <section id="analysis-overview" class="analysis-overview analysis-check" aria-labelledby="analysis-overview-title" hidden>
         <h3 id="analysis-overview-title"></h3><p id="analysis-overview-copy" class="muted"></p>
         <ul id="analysis-overview-checks"></ul>
-        <p id="analysis-recommendation" class="muted"></p>
-        <div class="analysis-actions"><button id="analysis-recommended" type="button">Run recommended checks</button>
-          <button id="analysis-explore" type="button">Explore current map</button></div>
+        <button id="analysis-findings" type="button">Open Review</button>
       </section>
-      <p id="analysis-status" role="status"></p><p id="analysis-progress" role="status" hidden></p>
-      <p id="analysis-ready" role="status" hidden></p>
-      <p id="analysis-error" role="alert" hidden></p>
-      <div class="analysis-actions"><button id="analysis-stop" type="button" hidden>Stop checks</button>
-        <button id="analysis-run" type="button" disabled>Run checks</button>
-        <button id="analysis-retry" type="button" hidden>Retry</button>
-        <button id="analysis-discard" type="button" hidden>Reload settings</button></div>
-      <label class="filter"><input id="analysis-auto" name="analysis-auto" type="checkbox">Automatic checks on source changes</label>
+      <details id="analysis-settings" class="analysis-check">
+        <summary>Check settings</summary>
+        <label class="filter"><input id="analysis-auto" name="analysis-auto" type="checkbox">Recheck enabled checks automatically</label>
+        <p id="analysis-auto-note" class="muted">Off checks stay Off.</p>
+        <div id="analysis-checks"></div>
+        <div class="analysis-actions"><button id="analysis-run" type="button" disabled>Recheck current settings</button>
+          <button id="analysis-discard" type="button" hidden>Reload settings</button></div>
+      </details>
       <section id="analysis-changes" class="analysis-check" aria-labelledby="input-change-heading">
         <h3 id="input-change-heading">Changes since recorded analysis</h3>
         <p id="input-change-summary" role="status"></p><p id="input-change-detail" class="muted"></p>
@@ -77,9 +88,8 @@
           <div class="analysis-actions"><button id="input-change-previous" type="button">Previous paths</button>
             <button id="input-change-next" type="button">Next paths</button></div>
         </div>
-        <p class="muted">Input changes are advisory, not architecture findings. Use Run checks above to recheck; Off choices stay Off.</p>
+        <p class="muted">Input changes are advisory, not architecture findings. Recheck current settings keeps Off checks Off.</p>
       </section>
-      <div id="analysis-checks"></div>
     </aside>
     <aside id="filters" aria-label="Browse and filters" hidden></aside>
     <aside id="review" aria-label="Code and architecture review" hidden>
@@ -117,6 +127,7 @@
   <script src="scene.js"></script>
   <script src="positions.js"></script>
   <script src="references.js"></script>
+  <script src="source-preview.js"></script>
   <script src="review.js"></script>
   <script src="inspector.js"></script>
   <script src="analysis.js"></script>

@@ -221,6 +221,40 @@ class Scheduler(unittest.TestCase):
         self.dirty()
         self.assertIsNone(self.monitor.status()['targets'][0].get('progress'))
 
+    def test_earlier_owned_work_is_visible_without_borrowing_obsolete_progress(self):
+        from unittest.mock import patch
+        self.monitor.activate('sample');self.settle();self.dirty();self.hold=True;self.monitor.step()
+        task=self.monitor.current['task'];task.started=10
+        task.progress={'phase':'native','label':'Indexing C++','completed':2,'total':5,'seconds':12}
+        self.assertIsNone(self.monitor.status()['targets'][0].get('previous_work'))
+        self.dirty()
+        with patch('laniakea.monitor.time.monotonic',return_value=35):
+            row=self.monitor.status()['targets'][0]
+        self.assertIsNone(row['progress'])
+        self.assertEqual(row.get('previous_work'),{
+            'label':'Recheck queued; earlier checks are still running','seconds':25})
+        self.assertNotIn('completed',row['previous_work']);self.assertNotIn('total',row['previous_work'])
+        state=self.monitor.states['sample']
+        for field,owner in [('replace',state),('stopping',self.monitor)]:
+            if isinstance(owner,dict):owner[field]=True
+            else:setattr(owner,field,True)
+            self.assertIsNone(self.monitor.status()['targets'][0].get('previous_work'))
+            if isinstance(owner,dict):owner[field]=False
+            else:setattr(owner,field,False)
+        state['active']=False
+        self.assertIsNone(self.monitor.status()['targets'][0].get('previous_work'))
+        state['active']=True
+        self.monitor._close_current()
+        self.assertIsNone(self.monitor.status()['targets'][0].get('previous_work'))
+        other=self.workspace.register('other',self.workspace.load('sample'))
+        run,_=pipeline.extract(self.workspace,other,health_options={'mode':'off'})
+        entries=target_index(self.workspace,scan=False)
+        views={entry['id']:map_index.ensure(self.workspace,entry['id'],self.workspace.latest(entry['id'])) for entry in entries}
+        self.monitor.contexts=Snapshots(self.workspace,entries,views)
+        self.monitor.current={'target':'sample','generation':-1,'task':task}
+        self.assertIsNone(next(t for t in self.monitor.status()['targets'] if t['id']=='other').get('previous_work'))
+        self.monitor.current=None
+
     def test_requested_checks_apply_only_with_publication_and_survive_monitor_restart(self):
         self.monitor.activate('sample');self.settle()
         previous=self.workspace.request('sample')

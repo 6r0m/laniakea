@@ -6,6 +6,7 @@ function targetData(target,path) { return (target.data_url||`/data/${encodeURICo
 function liveGeneration(target) { return JSON.stringify([target?.id,target?.run,target?.map_identity]); }
 
 function liveBlockReason() {
+  if(state.review?.comparison)return 'Comparing recorded source evidence';
   if(state.drag||state.labelDrag||state.pointerDown||state.gestureActive||state.framing||state.wheelFrame||
     state.zoomFrame||state.viewportFrame)return 'Finish moving the map';
   if(unsavedPositionCaches.size)return 'Waiting for positions to save';
@@ -55,6 +56,12 @@ function adoptionCheckpoint() {
       // Review's fixed controls belong to its generation; retain the old handlers on detached nodes.
       $('review').replaceChildren(...[...$('review').childNodes].map(node=>node.cloneNode(true)));
       for(const id of ['review-items','review-pager','review-checks'])$(id).replaceChildren();
+    },
+    resumeReading(){
+      if(!focus||focus.isConnected||document.activeElement!==document.body)return;
+      const replacement=focus.id?$(focus.id):focus.matches?.('.details-close')?
+        $('details').querySelector('.details-close'):null;
+      if(replacement?.isConnected&&!replacement.closest('[hidden]'))replacement.focus({preventScroll:true});
     },
     restore(){
       for(const key of Object.keys(state))if(!(key in previous))delete state[key];
@@ -160,6 +167,7 @@ class LiveUpdates {
       if(!open)togglePanel('details',false);
       if(reviewOpen)state.review?.panel(true);
       rememberView();
+      checkpoint.resumeReading();
       this.message=scope===this.previousScope?'':'Previous focus was removed; showing its surviving parent';
     }catch(error){
       if(state.referencePages!==checkpoint.previous.referencePages)state.referencePages?.clear();

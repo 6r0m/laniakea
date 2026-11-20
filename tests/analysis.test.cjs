@@ -62,7 +62,10 @@ function guidanceFixture(){
     globalThis.status={targets:[{id:'sample',active:true,state:'fresh',ready:state.target}]};
     globalThis.control=Object.create(AnalysisControls.prototype);control.dismissed=new Set();control.choices={};
     control.build=()=>{};control.renderChanges=()=>{};state.analysis=control;
-    $('view-controls').open=false;$('analysis').contains=()=>false;`);
+    $('view-controls').open=false;$('analysis').contains=()=>false;
+    Object.assign($('analysis-overview-checks'),el('ul'));
+    for(const id of ['analysis-meter','checks-meter']){Object.assign($(id),el('progress'));
+      $(id).removeAttribute=function(name){delete this.attrs[name];};}`);
   return {...v,stored};
 }
 
@@ -152,4 +155,85 @@ test('an old complete map cannot disguise running or failed new work as complete
 test('a profile without a catalog never invents completed checks and generic acquisition errors remain visible',()=>{
   assert.equal(checksSummary(null,{}).label,'Checks: unavailable');
   assert.equal(checksSummary(null,{acquisition:{source:{status:'failed',code:'tool_invalid'}}}).label,'Checks: failed');
+  const {run}=guidanceFixture();run('state.target.checks=[];control.render(status)');
+  assert.equal(run("$('analysis-current-title').textContent"),'Check coverage unavailable');
+  assert.equal(run("$('analysis-recommended').disabled"),true);
+});
+
+test('current source work is prominent while displayed Off evidence stays unchanged',()=>{
+  const {run}=guidanceFixture();
+  run(`status.targets[0].state='updating';status.targets[0].progress={phase:'duplication',label:'Checking duplicated code',seconds:31};
+    control.render(status);`);
+  assert.equal(run("$('analysis-current-title').textContent"),'Checking duplicated code');
+  assert.equal(run("$('analysis-meter').hidden"),false);
+  assert.equal(run("$('analysis-meter').getAttribute('value')"),null,'CPD must not invent a percentage');
+  assert.match(run("$('analysis-progress').textContent"),/31 s elapsed/);
+  assert.match(run("$('checks-label-wide').textContent"),/duplicated code/);
+  assert.equal(run("$('analysis-overview-checks').children[1].children[1].textContent"),'Off');
+  run("status.targets[0].progress={phase:'native',label:'Indexing C++ units',completed:3,total:8,seconds:44};control.render(status)");
+  assert.equal(run("$('analysis-meter').getAttribute('value')"),'3');
+  assert.equal(run("$('analysis-meter').getAttribute('max')"),'8');
+  run('status.targets[0].progress.completed=9;control.render(status)');
+  assert.equal(run("$('analysis-meter').getAttribute('value')"),null,'Invalid counts need an indeterminate bar');
+});
+
+test('retrying an old failed snapshot shows running work rather than a failed attempt',()=>{
+  const value=checksSummary({active:true,state:'updating',progress:{phase:'native'}},{checks:[{status:'failed'}]});
+  assert.equal(value.label,'Checks: running');
+});
+
+test('findings navigation only counts the displayed generation and explains Off monitoring',()=>{
+  const {run}=guidanceFixture();
+  run(`state.target.map_identity='one';state.review.enabled=true;state.review.target=state.target;
+    state.review.data={counts:{violation:2,candidate:3}};control.render(status);`);
+  assert.equal(run("$('analysis-findings').textContent"),'View 5 recorded findings');
+  assert.match(run("$('analysis-auto-note').textContent"),/Off checks stay Off/);
+  run("state.review.target={...state.target,run:'another'};control.render(status)");
+  assert.equal(run("$('analysis-findings').textContent"),'Open Review');
+  assert.equal(run("$('analysis-findings').textContent.includes('5')"),false);
+});
+
+test('current missing prerequisites have a visible explanation without changing displayed evidence',()=>{
+  const {run}=guidanceFixture();
+  run(`status.targets[0].checks=[{id:'native',label:'C++ references',status:'unavailable',detail:'A successful project build receipt is required.'}];
+    control.render(status);`);
+  assert.equal(run("$('analysis-current-title').textContent"),'Checks need setup');
+  assert.match(run("$('analysis-status').textContent"),/successful project build receipt/);
+  assert.equal(run("$('analysis-overview-checks').children[1].children[1].textContent"),'Off');
+});
+
+test('queued recheck explains owned earlier work without borrowing its native counts',()=>{
+  const {run}=guidanceFixture();
+  run(`status.targets[0].state='pending';status.targets[0].progress=null;
+    status.targets[0].previous_work={label:'Recheck queued; earlier checks are still running',seconds:72};control.render(status);`);
+  assert.equal(run("$('analysis-current-title').textContent"),'Recheck queued');
+  assert.equal(run("$('analysis-meter').hidden"),false);
+  assert.equal(run("$('analysis-meter').getAttribute('value')"),null);
+  assert.match(run("$('analysis-status').textContent"),/Earlier checks are still running/);
+  assert.match(run("$('analysis-progress').textContent"),/Earlier work: 1 min 12 s elapsed/);
+  assert.equal(run("$('analysis-stop').hidden"),false);
+  assert.equal(run("$('analysis-stop').textContent"),'Stop checks');
+  run('status.targets[0].previous_work.seconds=1371;control.render(status)');
+  assert.match(run("$('analysis-progress').textContent"),/22 min 51 s elapsed/,
+    'Long-running checks should not require converting thousands of seconds');
+  run('delete status.targets[0].previous_work;control.render(status)');
+  assert.equal(run("$('analysis-current-title').textContent"),'Checks queued',
+    'A queued request does not prove source edits');
+});
+
+test('provider failure outranks missing setup and automatic build waiting is not terminal failure',()=>{
+  const {run}=guidanceFixture();
+  run(`status.targets[0].checks=[{id:'native',label:'C++',status:'unavailable',detail:'LLVM setup is missing'},
+    {id:'duplication',label:'Duplicated code',status:'failed',detail:'CPD process failed'}];control.render(status);`);
+  assert.equal(run("$('analysis-current-title').textContent"),'Checks need attention');
+  assert.match(run("$('analysis-status').textContent"),/CPD process failed/);
+  run(`status.targets[0].state='waiting for external build';status.targets[0].error='Another UnrealBuildTool is running';
+    control.render(status);`);
+  assert.equal(run("$('analysis-current-title').textContent"),'Waiting for project build');
+  assert.match(run("$('analysis-status').textContent"),/retry automatically/);
+  assert.doesNotMatch(run("$('analysis-status').textContent"),/attempt failed/);
+  assert.equal(run("$('analysis-retry').hidden"),true);
+  assert.equal(run("$('analysis-stop').hidden"),false);
+  run("status.targets[0].state='failed';control.saving=true;control.render(status)");
+  assert.equal(run("$('analysis-retry').disabled"),true,'Retry must not submit twice while a request is pending');
 });

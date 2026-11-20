@@ -233,6 +233,13 @@ class Monitor:
                 current=self.current if self.current and self.current['target']==entry['id'] else None
                 progress=getattr(current['task'],'progress',None) if current and state and \
                     current['generation']==state['generation'] else None
+                previous_work=None
+                if current and state and state['active'] and not self.stopping and not state['replace'] and \
+                        current['generation']!=state['generation']:
+                    previous_work={'label':'Recheck queued; earlier checks are still running'}
+                    started=getattr(current['task'],'started',None)
+                    if type(started) in (int,float) and math.isfinite(started):
+                        previous_work['seconds']=round(max(0,time.monotonic()-started),2)
                 watch_errors=[error for spec,error in getattr(self.watcher,'failures',{}).items() if state and
                               any((os.path.normcase(s['path']),s['recursive'])==spec for s in state['watches'])]
                 result.append({'id':entry['id'],'active':bool(state and state['active']),
@@ -243,7 +250,8 @@ class Monitor:
                     'ready':self.contexts.latest(entry['id']),
                     'requested':state['requested'] if state else None,'revision':state['revision'] if state else 0,
                     'checks':state['checks'] if state and state['checks'] else self.contexts.latest(entry['id']).get('checks',[]),
-                    'progress':progress,'comparison':self._comparison_summary(state,watch_errors[0] if watch_errors else None)})
+                    'progress':progress,'previous_work':previous_work,
+                    'comparison':self._comparison_summary(state,watch_errors[0] if watch_errors else None)})
             return {'stopping':self.stopping,'targets':result,'error':self.error}
 
     def _accept_comparison(self,state,result,baseline,generation):

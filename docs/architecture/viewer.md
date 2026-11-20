@@ -36,6 +36,7 @@ remain outside this component. Operator workflows live in the [user guide](../gu
 | [references.js](../../viewer/references.js) | reference-page retention and cancellation |
 | [inspector.js](../../viewer/inspector.js) | accessible inspection tabs |
 | [review.js](../../viewer/review.js) | finding presentation and triage controls |
+| [source-preview.js](../../viewer/source-preview.js) | selected-finding source comparison and external-editor actions |
 
 ## Continuous map
 
@@ -319,6 +320,7 @@ provides the complete vocabulary. Names, kinds and coverage remain available thr
 Local vector backgrounds decorate existing native nodes without additional elements, external assets or pointer targets.
 At readable detail they sit inside markers; expanded containers retain the same icon beside the title. Distant overview
 markers omit unreadable icons. Title collision bounds reserve icon space while text hit boxes retain native text bounds.
+Native drawing bounds also enclose title images above an expanded container so renderer textures cannot clip the glyph or warning.
 Icon geometry changes in the same renderer-unit batch as fonts and markers. A bounded kind/color image cache and weak
 native-node geometry caches release presentation data without retaining a previous graph or changing saved pins.
 Backgrounds occupy the native bottom layer so they cannot intercept stars during hover transitions. Canvas labels reserve
@@ -375,9 +377,31 @@ representatives deduplicate finding IDs; multiple participants in one cycle do n
 The accessible Review list retains off-view findings. Map filters do not change rule results or triage.
 
 Source observations add file/module badges through recorded source paths and owners, never fabricated dependency edges.
-Visible contextual files receive only their matching findings; module/ancestor badges keep the concern discoverable while
-those files are folded. The Review tab identifies duplication separately from architecture relations and loads matching
-source ranges in bounded pages when Exact evidence opens. Current-source links retain a snapshot/staleness warning.
+Recorded file representatives project their findings through existing presentation folders and regions, including folded
+and namespace-local file routes. Visible containers deduplicate matching findings; clean siblings remain unmarked, and an
+off-screen module does not suppress a visible file's evidence. File-level matches do not assign ownership to classes or
+callables. Container inspection uses its exact finding IDs, while hover distinguishes findings inside a container from
+findings in a file. The Review tab identifies duplication separately from architecture relations and loads matching
+source ranges in bounded pages for the selected finding. Reading range metadata does not read source bodies.
+Current-source links retain a snapshot/staleness warning.
+
+Source findings expose Compare matches and plain file/range rows. Preview, external-editor and copy actions are distinct;
+there are no nested source disclosures. Compare opens up to two numbered read-only panes over the existing map region;
+an individual Preview opens one. The header distinguishes total code locations from the currently displayed match ordinals.
+Each pane names its match number and provides Previous match / Next match controls across page boundaries.
+Occurrence selectors and bounded paging reveal further ranges on demand, including
+different ranges in the same file. Wide views compare side by side; narrow views stack contained, scrollable panes.
+The Inspector retains the finding and decision draft. Covered map controls are inert; covered narrow inspection is inert.
+Back to map or Escape disposes the comparison and returns focus to its invoking control. The graph stays mounted at the
+same size underneath: no layout, fit, refresh or duplicate camera state is needed to return. Explicit navigation closes
+comparison; live adoption waits while reading, while status polling and snapshot retention continue.
+
+Matching lines are highlighted only in current text verified against the recorded digest, not a guaranteed historical
+archive. Changed files show no source text or recorded highlight; limits and read failures remain visible. Clipboard
+refusal exposes a selectable path. The [source reader](structure.md) owns authorization and byte verification.
+Requests reuse Review cancellation and inspection generations. Closing or changing the selection, finding, tab or Review
+owner cancels the comparison without taking new focus. Late responses cannot restore it. At most two snippets are retained;
+reopening revalidates their files. No editor dependency or source write is added.
 
 Exact reference-group associations also mark existing projected connections and their revealed endpoints. Amber/red
 halos identify candidates/violations independently of direction colors. Fixed-size amber triangle and red stop-sign
@@ -452,6 +476,13 @@ filters and arrangement; the separate summary row keeps changing counts from res
 panel labels coverage from the displayed snapshot separately from newer results awaiting adoption. Attempt progress and
 requested-versus-applied settings do not replace displayed evidence; removing an adoption block updates coverage with the map. Only optional profile checks
 have mode selectors; the map foundation stays mandatory. Review evaluates existing evidence independently.
+Current checks leads with the owned attempt's phase, optional measured unit count and elapsed job time. Progress remains
+visible in the fixed-height toolbar control when the panel closes. Only validated native unit counts have a determinate
+denominator; preparation, duplication, publication and queued earlier work stay indeterminate. Unit completion never claims
+overall completion or an ETA, and terminal states clear the running bar. Recorded coverage remains separate from attempts.
+Check settings discloses modes and rechecking current choices; the contextual primary action enables recommended checks or
+rechecks enabled choices, with Stop/Retry for their applicable states. Findings navigation uses only the displayed generation's
+loaded Review counts. Missing/loading/error coverage never becomes a successful zero; unavailable check catalogs cannot start work.
 Analysis offers first-opening guidance when displayed check coverage is incomplete, including informational Off choices.
 Automatic opening waits for a visible tab and yields to Review, Inspector, filters, View controls, graph keyboard focus,
 focused controls, gestures and drafts. It does not
@@ -466,4 +497,6 @@ Review counts describe recorded findings, never an architecture score. Limited i
 Settings drafts defer live adoption; late control responses cannot overwrite another target's form. Recommended checks reuse
 the normal Auto request and cannot replace dirty/submitting choices or start redundant running work. Close/Escape restores the
 primary action's focus; Explore current map returns focus to the graph without fitting it or starting acquisition.
+Successful adoption restores a detached fixed control's visible equivalent, including the Inspector close control, without
+scrolling or replacing a newer user focus. The scene rollback path remains independent.
 Unavailable, failed, disabled and incomplete checks remain distinct from completed checks and zero findings.

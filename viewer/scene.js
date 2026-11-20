@@ -155,6 +155,7 @@ function toggleGroup(id) {
 }
 
 function flyToNode(id, inspect = true) {
+  state.review?.closeComparison?.();
   const map = state.universe;
   if (!map.nodes.has(id)) return;
   rememberView();

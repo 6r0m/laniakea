@@ -5,6 +5,7 @@ async(page,{publishNative})=>{
   await page.waitForFunction(()=>state.analysis?.base&&state.live&&!state.live.running);
   await page.evaluate(()=>state.live.stop());
   if(await page.locator('#analysis').isHidden())await page.locator('#toggle-analysis').click();
+  if(!await page.locator('#analysis-settings').evaluate(node=>node.open))await page.locator('#analysis-settings > summary').click();
   const old=await page.evaluate(()=>({run:state.target.run,pins:JSON.stringify(state.positionCache.layouts)}));
   check(!/Recorded/.test(await page.locator('#check-native-status').innerText()),'Fixture already has native coverage');
   await page.evaluate(()=>{state.positionCache.errors.add('synthetic/save');unsavedPositionCaches.add(state.positionCache);});
