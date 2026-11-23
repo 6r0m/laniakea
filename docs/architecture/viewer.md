@@ -180,16 +180,20 @@ The pinned renderer types `underlay-color` as a color, so underlays are solid; g
 node background, never to a fake finding or an extra layer. Theme changes replace the stylesheet on the existing
 renderer; they do not recreate the graph or change saved positions.
 
-Explicit navigation uses one cancellable camera flight in `scene.js`. The flight owns `state.flight` for its entire
-lifetime, including gaps between animation frames, so `live.js` cannot adopt a snapshot mid-flight. Frames check the
-originating renderer and generation; camera updates go through `setWorldViewport()` with intermediate culling, never
-`cy.animate()`. Wheel, drag, map-camera keyboard input, new navigation and renderer replacement cancel the flight
-before proceeding; passive pointer movement does not. A completed flight commits the exact destination and history
-once. An interrupted flight leaves the user's new camera action in place and never snaps back. Selection survives
-intermediate projection refreshes and is revalidated against the final projection; inspection that depends on the
-destination is applied when the flight reaches it. A graph resize shifts an active flight's start and target pan with
-the same centre delta used by `resizeMap()`. Reduced motion uses the existing immediate path. The existing hover and selection state owners in
-[Tracing and inspection](#tracing-and-inspection) remain unchanged.
+Camera-bearing explicit navigation (search results, reference Follow, Fit map and presentation-group breadcrumbs) uses
+one cancellable camera flight in `scene.js`. Ordinary scope breadcrumbs continue to open their scope directly. The
+flight owns `state.flight` for its entire lifetime, including gaps between animation frames, so `live.js` cannot adopt
+a snapshot mid-flight. Frames check the originating renderer and generation; camera updates go through
+`setWorldViewport()` with intermediate culling, never `cy.animate()`. Wheel, drag, map-camera keyboard input, new
+navigation and renderer replacement cancel the flight before proceeding; passive pointer movement does not. Clear
+selection, Escape-driven inspection clearing, graph arrow selection and Review-list selection also cancel a flight so
+the newer inspection intent wins. A frame or scheduling failure releases the flight, restores framing and surfaces the
+error; stale cleanup cannot release a newer flight. A completed flight commits the exact destination and history once.
+An interrupted flight leaves the user's new camera action in place and never snaps back. Selection survives intermediate
+projection refreshes and is revalidated against the final projection; inspection that depends on the destination is
+applied when the flight reaches it. A graph resize shifts an active flight's start and target pan with the same centre
+delta used by `resizeMap()`. Reduced motion uses the existing immediate path. The existing hover and selection state
+owners in [Tracing and inspection](#tracing-and-inspection) remain unchanged.
 
 ## Source organization
 

@@ -437,6 +437,9 @@ extraction. The following matrix names each case and the wrong behavior it captu
 | Clear-selection cleanup | A new underlay or transition could remain after deselection, Escape, or a gesture. | Browser acceptance check |
 | Explicit navigation motion | `flyToNode()`, `followReference()`, and intentional framing jump directly through `frameNode()`/`setWorldViewport()`; there is no interruptible transition or reduced-motion branch. | Browser acceptance + reviewer |
 | Motion cancellation | A naive tween could continue after wheel, drag, pointer, or newer navigation, or fail to settle at the exact destination. | New browser scenario |
+| Flight failure cleanup | An exception in a flight frame or scheduling call could leave `state.flight` and `state.framing` active, blocking Live adoption indefinitely. | New motion Node tests |
+| Stale flight cleanup | A stale callback or cleanup could release a newer flight. | New motion Node test |
+| Newer selection intent | Clear, Escape, arrow selection or Review-list selection during a flight could be overwritten by the obsolete destination. | New motion browser tests |
 | Motion live-adoption gap | A flight that sets `state.framing` only inside `setWorldViewport()` leaves inter-frame gaps where `liveBlockReason()` reports no blocker, allowing adoption between frames. | Node/browser lifecycle check |
 | Motion history and snap-back | Per-frame `scheduleViewport()` without flight-level framing writes history repeatedly; an interrupted flight can commit the obsolete destination or snap back. | Browser history/camera check |
 | Warning semantics | New lighting could obscure the amber/red SVG badges or wire symbols, or add finding nodes. | Existing `review.browser.js`, `health.browser.js`, `review.test.cjs` |
@@ -487,7 +490,8 @@ Browser acceptance uses the existing manually configured Playwright harness:
 - a new appearance acceptance scenario for computed selection/candidate/violation colors, hover/selection underlays,
   expanded-container underlay suppression, theme identity, clear-selection cleanup, and narrow containment;
 - a new motion acceptance scenario for exact final camera, culling during intermediate frames, interruption without
-  snap-back, one-shot history, reduced motion, and no queued follow-up flight.
+  snap-back, one-shot history, reduced motion, newer Clear/Escape/arrow/Review selection intent, and no queued follow-up
+  flight; Node motion tests inject frame/render failures and stale cleanup.
 
 Do not invent a browser launcher. If the harness is unavailable, mark those results UNVERIFIED rather than passing them
 by assertion.
@@ -637,12 +641,14 @@ todo complete because code compiles or a synthetic unit suite passes.
 - **Implementation:** Extracted the static stylesheet to `viewer/appearance.js`; added light/dark atmosphere and
   selection tokens, luminous hover/selection/review states, conservative HTML surface polish, and the single cancellable
   camera flight in `viewer/scene.js` with destination inspection, live-adoption blocking, renderer cancellation,
-  selection revalidation and reduced-motion handling. Updated the stable viewer document, guide, test README, and
-  browser pacing helpers. Added the local Playwright CLI scratch directories to `.gitignore` so browser snapshots
-  or logs cannot be staged.
+  selection revalidation, exception-safe flight release and reduced-motion handling. Clear, Escape, graph arrow and
+  Review-list selection cancel an active flight so newer selection intent wins. Updated the stable viewer document,
+  guide, test README, and browser pacing helpers. Added the local Playwright CLI scratch directories to `.gitignore`
+  as an accidental-disclosure safeguard; this reduces staging risk but cannot prevent an explicit force-add.
 - **Verification:**
-  - Node: 174 tests in the appearance/motion/icons/sections/viewer/universe/references/traces group, 13 review tests,
-    and 29 live/analysis tests passed (216 total).
+  - Node: 177 tests in the appearance/motion/icons/sections/viewer/universe/references/traces group, 13 review tests,
+    and 29 live/analysis tests passed (219 total). The motion group includes injected frame/render failures, stale
+    cleanup, and clear/Escape/arrow/Review cancellation.
   - Python: the full suite passed (352 tests, 38 skipped); the server suite passed 28 tests; documentation and privacy
     checks passed (3 + 2).
   - Browser on the disposable sample: `appearance.browser.js`, `motion.browser.js`, `icons.browser.js`,

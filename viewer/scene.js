@@ -85,37 +85,47 @@ function startNavigationFlight(target, options = {}) {
   state.framing = true;
 
   const tick = time => {
-    if (state.flight !== flight || flight.generation !== state.flightGeneration) return;
-    if (state.cy !== cy || cy.destroyed()) {
-      releaseNavigationFlight(flight, false);
-      return;
+    try {
+      if (state.flight !== flight || flight.generation !== state.flightGeneration) return;
+      if (state.cy !== cy || cy.destroyed()) {
+        releaseNavigationFlight(flight, false);
+        return;
+      }
+      if (flight.started === null) flight.started = time;
+      const progress = flight.duration ? Math.min(1, Math.max(0, (time - flight.started) / flight.duration)) : 1;
+      const eased = easeFlight(progress);
+      const level = Math.exp(Math.log(start.level) +
+        (Math.log(destination.level) - Math.log(start.level)) * eased);
+      const pan = {
+        x: start.pan.x + (destination.pan.x - start.pan.x) * eased,
+        y: start.pan.y + (destination.pan.y - start.pan.y) * eased,
+      };
+      setWorldViewport(level, pan, false);
+      if (progress < 1) {
+        scheduleViewport();
+        flight.frame = requestAnimationFrame(tick);
+        return;
+      }
+      setWorldViewport(destination.level, destination.pan, false);
+      if (state.viewportFrame != null && typeof cancelAnimationFrame === 'function') {
+        cancelAnimationFrame(state.viewportFrame);
+        state.viewportFrame = null;
+      }
+      refreshMap();
+      if (state.selection) renderDetails(state.selection,{reopen:false});
+      releaseNavigationFlight(flight, commit, true);
+      if (complete) complete();
+    } catch (error) {
+      releaseNavigationFlight(flight, false, false);
+      throw error;
     }
-    if (flight.started === null) flight.started = time;
-    const progress = flight.duration ? Math.min(1, Math.max(0, (time - flight.started) / flight.duration)) : 1;
-    const eased = easeFlight(progress);
-    const level = Math.exp(Math.log(start.level) +
-      (Math.log(destination.level) - Math.log(start.level)) * eased);
-    const pan = {
-      x: start.pan.x + (destination.pan.x - start.pan.x) * eased,
-      y: start.pan.y + (destination.pan.y - start.pan.y) * eased,
-    };
-    setWorldViewport(level, pan, false);
-    if (progress < 1) {
-      scheduleViewport();
-      flight.frame = requestAnimationFrame(tick);
-      return;
-    }
-    setWorldViewport(destination.level, destination.pan, false);
-    if (state.viewportFrame != null && typeof cancelAnimationFrame === 'function') {
-      cancelAnimationFrame(state.viewportFrame);
-      state.viewportFrame = null;
-    }
-    refreshMap();
-    if (state.selection) renderDetails(state.selection,{reopen:false});
-    releaseNavigationFlight(flight, commit, true);
-    if (complete) complete();
   };
-  flight.frame = requestAnimationFrame(tick);
+  try {
+    flight.frame = requestAnimationFrame(tick);
+  } catch (error) {
+    releaseNavigationFlight(flight, false, false);
+    throw error;
+  }
   return true;
 }
 

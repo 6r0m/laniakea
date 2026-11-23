@@ -92,8 +92,9 @@ namespaces, classes and callables. Other layout modes keep separate saved arrang
 | Fit map | Return to the overview without moving stars |
 | Reset layout | Confirm before clearing the current mode's saved positions |
 
-Explicit navigation such as search, breadcrumbs, Follow and Fit map eases to the destination and can be interrupted
-by wheel or drag; wheel and drag themselves remain immediate. With reduced motion enabled, navigation jumps directly.
+Search results, Follow, Fit map and presentation-group breadcrumbs ease to the destination and can be interrupted by
+wheel, drag, Clear selection, Escape or a newer selection; wheel and drag themselves remain immediate. Ordinary scope
+breadcrumbs open the target scope directly. With reduced motion enabled, navigation jumps directly.
 
 Hover colors are relative to the card's named focus: cyan outgoing, amber incoming, violet within/self. Wire focus
 can change near the opposite endpoint. Idle wire colors describe types listed in **Browse & filters**. Crossings are

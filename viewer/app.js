@@ -68,14 +68,20 @@ async function start() {
   $('layout').value = [...$('layout').options].some(option => option.value === saved) ? saved : 'auto';
   $('layout').onchange = () => { remember('layout', $('layout').value); layout(); };
   for (const name of ['filters', 'details']) {
-    $(`toggle-${name}`).onclick = () => name==='details'&&!$('details').hidden ? renderDetails(null) : togglePanel(name);
+    $(`toggle-${name}`).onclick = () => {
+      if(name==='details'&&!$('details').hidden){cancelNavigationFlight();renderDetails(null);}
+      else togglePanel(name);
+    };
   }
   $('fit').onclick = fitOverview;
-  $('inspect-project').onclick = () => renderDetails({...state.universe.nodes.get(state.universe.root),projectContext:true},{reopen:true});
+  $('inspect-project').onclick = () => {
+    cancelNavigationFlight();
+    renderDetails({...state.universe.nodes.get(state.universe.root),projectContext:true},{reopen:true});
+  };
   $('reset-layout').onclick = resetPositions;
   $('arrange-files').onclick = arrangeSourceFiles;
   $('toggle-configuration').onclick = () => { setConfiguration(!configurationVisible()); applyFilters(); };
-  $('clear').onclick = () => { unfocus(true); renderDetails(null); };
+  $('clear').onclick = () => { cancelNavigationFlight(); unfocus(true); renderDetails(null); };
   $('up').onclick = up;
   $('find').oninput = () => find().catch(reportError);
   document.addEventListener('pointerdown',event=>{if(!event.target.closest('.find-controls'))closeFindResults();});
@@ -285,7 +291,7 @@ function onKey(event) {
   if (typing || event.altKey || event.ctrlKey || event.metaKey) return;
   if (event.key === 'Backspace') { event.preventDefault(); up(); }
   if (event.key === '/') { event.preventDefault(); $('find').focus(); }
-  if (event.key === 'Escape') { $('type-key').open=false;unfocus(true); renderDetails(null); }
+  if (event.key === 'Escape') { cancelNavigationFlight(); $('type-key').open=false;unfocus(true); renderDetails(null); }
   if (event.target === $('graph') && state.cy && ['+', '=', '-'].includes(event.key)) {
     event.preventDefault();
     state.pointer = {x:state.cy.width()/2,y:state.cy.height()/2};
@@ -297,7 +303,7 @@ function onKey(event) {
     const index = nodes.findIndex(n => n.selected());
     const step = ['ArrowLeft', 'ArrowUp'].includes(event.key) ? -1 : 1;
     const next = nodes[((index < 0 && step < 0 ? 0 : index) + step + nodes.length) % nodes.length];
-    if (next) selectNode(next.id());
+    if (next) { cancelNavigationFlight(); selectNode(next.id()); }
   }
   if (event.key === 'Enter' && state.cy && (event.target === $('graph') || event.target === document.body)) {
     const selected = state.cy.nodes(':selected').first();
@@ -366,7 +372,7 @@ function renderFilters() {
   for (const node of state.shard.nodes.filter(n => state.shard.members.includes(n.id))) {
     const button = el('button', node.label, { type: 'button', title: `Trace ${node.label}`, 'data-node': node.id });
     button.append(el('small', nodeDescription(node)));
-    button.onclick = () => selectNode(node.id);
+    button.onclick = () => { cancelNavigationFlight(); selectNode(node.id); };
     members.append(button);
   }
   panel.append(members, el('h2', 'Connections'));
@@ -599,7 +605,7 @@ function renderDetails(item,{reopen=true}={}) {
   if (!item) {
     togglePanel('details', false);
     const close=el('button','\u00d7',{type:'button',class:'details-close','aria-label':'Close inspector',title:'Close inspector (Esc)'});
-    close.onclick=()=>{renderDetails(null);$('toggle-details').focus();};
+    close.onclick=()=>{cancelNavigationFlight();renderDetails(null);$('toggle-details').focus();};
     const header=el('div',null,{class:'inspector-header'});header.append(el('h2','Inspector'),close);
     panel.append(header,el('p', 'Hover to trace. Click a star or connection to inspect it.',{class:'inspector-page'}));
     return;
@@ -610,7 +616,7 @@ function renderDetails(item,{reopen=true}={}) {
   let detailsLoaded=false;
   state.inspector=new InspectorTabs(panel,el,{title,
     tabs:[{id:'architecture',label:'Review'},{id:'details',label:'Details'}],
-    onClose:()=>{renderDetails(null);$('toggle-details').focus();},
+    onClose:()=>{cancelNavigationFlight();renderDetails(null);$('toggle-details').focus();},
     onSelect:name=>{
       if(name!=='architecture')state.review?.closeComparison?.();
       if(name==='details'&&!detailsLoaded){detailsLoaded=true;
@@ -776,7 +782,7 @@ function renderOverlapDetails(panel,trace) {
         if(edge.length)preview(edge,null,pair);
       };
       button.onmouseenter=emphasize;button.onfocus=emphasize;
-      button.onclick=()=>inspectPair(pair.source,pair.target);
+      button.onclick=()=>{cancelNavigationFlight();inspectPair(pair.source,pair.target);};
       row.append(button,...traceSummary(pair).rows.map(([name,count,role])=>el('small',`${name}: ${count} refs`,{class:'trace-'+role})),
         el('small',traceTypes(pair.refs)));
       list.append(row);

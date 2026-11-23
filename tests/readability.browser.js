@@ -4,6 +4,7 @@ async page => {
   const check=(ok,message)=>{if(!ok)throw new Error(message);};
   const frames=async()=>{await page.waitForFunction(()=>!state.flight);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));};
   check(await page.evaluate(()=>state.target.id==='sample'),'Readability proof requires the synthetic sample');
+  await page.setViewportSize({width:1440,height:1000});
   const requests=[],errors=[];
   page.on('request',request=>requests.push({url:request.url(),method:request.method()}));
   page.on('pageerror',error=>errors.push(error.message));

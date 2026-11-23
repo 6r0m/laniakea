@@ -246,7 +246,8 @@ class ArchitectureReview {
         {type:'button','data-finding':finding.id,title:finding.title});
       button.onclick=()=>{this.pendingFinding=finding.id;state.detailsKey=null;
         const visible=[...this.badges].find(([,b])=>b.ids.has(finding.id));
-        if(visible)selectNode(visible[0]);else flyToNode(finding.subjects[0]);};
+        if(visible){if(typeof cancelNavigationFlight==='function')cancelNavigationFlight();selectNode(visible[0]);}
+        else flyToNode(finding.subjects[0]);};
       const caption=`${finding.severity==='violation'?'! Policy violation':'? Review candidate'} / ${finding.triage}`;
       row.append(button,el('small',finding.evidence_type==='source'?
         `Duplication / ${finding.token_count} tokens / ${finding.evidence_total} ranges`:finding.title));

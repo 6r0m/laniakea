@@ -83,3 +83,40 @@ test('a panel resize shifts the active flight with the map instead of cancelling
   assert.deepEqual(run('state.flight.target.pan'),{x:0,y:50});
   assert.deepEqual(run('state.flight.start.pan'),{x:-100,y:0});
 });
+
+test('a frame error releases the flight and restores the live-adoption gate',()=>{
+  const {run}=motionViewer();
+  run(`globalThis.setWorldViewport=()=>{throw Error('viewport failed');};
+    startNavigationFlight({level:2,pan:{x:10,y:20}});`);
+  const result=run(`globalThis.flightError='';
+    try{frameQueue.shift()(0);}catch(error){flightError=error.message;}
+    ({error:flightError,flight:state.flight,framing:state.framing,blocked:liveBlockReason()})`);
+  assert.equal(result.error,'viewport failed');
+  assert.equal(result.flight,null);
+  assert.equal(result.framing,false);
+  assert.equal(result.blocked,'');
+});
+
+test('a final render error releases the flight without leaving a stale blocker',()=>{
+  const {run}=motionViewer();
+  run(`globalThis.refreshMap=()=>{throw Error('render failed');};
+    startNavigationFlight({level:2,pan:{x:10,y:20}});`);
+  const result=run(`globalThis.flightError='';
+    try{frameQueue.shift()(0);frameQueue.shift()(1000);}catch(error){flightError=error.message;}
+    ({error:flightError,flight:state.flight,framing:state.framing,blocked:liveBlockReason()})`);
+  assert.equal(result.error,'render failed');
+  assert.equal(result.flight,null);
+  assert.equal(result.framing,false);
+  assert.equal(result.blocked,'');
+});
+
+test('stale cleanup cannot release a newer flight',()=>{
+  const {run}=motionViewer();
+  run(`startNavigationFlight({level:2,pan:{x:10,y:20}});globalThis.oldFlight=state.flight;
+    startNavigationFlight({level:3,pan:{x:30,y:40}});globalThis.newFlight=state.flight;`);
+  const result=run(`({released:releaseNavigationFlight(oldFlight,false,false),same:state.flight===newFlight,
+    framing:state.framing})`);
+  assert.equal(result.released,false);
+  assert.equal(result.same,true);
+  assert.equal(result.framing,true);
+});
