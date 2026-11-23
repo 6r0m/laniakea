@@ -1,6 +1,7 @@
 # Luminous viewer appearance and navigation polish
 
 **Status:** REVIEW REQUIRED  
+**Review status:** reviewer PATCH F1 addressed; reviewer re-check and operator GO pending (D4).  
 **Implementation gate:** reviewer review and operator GO are required before any implementation task (D4).  
 **Scope:** Viewer presentation: the static Cytoscape stylesheet, theme tokens, HTML surfaces, and required navigation motion.  
 **Stable documentation owner:** [docs/architecture/viewer.md](../docs/architecture/viewer.md)
@@ -114,6 +115,17 @@ facts, recorded findings, saved positions, scene state, or user decisions.
   `setWorldViewport()`, including `renderScale` threshold changes and positions; `viewer/map.js:212-225` owns viewport
   culling refresh. `viewer/live.js:8-14` blocks live adoption while `state.framing`, `wheelFrame`, `zoomFrame`, or
   `viewportFrame` is active.
+- `viewer/map.js:933-954` sets `state.framing = true` only for the synchronous `setWorldViewport()` call and restores the
+  previous value before returning. A multi-frame flight that relies only on that flag has inter-frame gaps where
+  `liveBlockReason()` reports no navigation blocker.
+- `viewer/map.js:212-220` `scheduleViewport()` calls `rememberView()`; `viewer/scene.js:38-39` `rememberView()` returns
+  while `state.framing` is true. A flight that keeps `state.framing` true for its whole lifetime can reuse
+  `scheduleViewport()` for intermediate culling without writing camera history on every frame.
+- `viewer/map.js:118-129` `renderGraph()` destroys and replaces the Cytoscape instance. An outstanding flight must be
+  cancelled and its blocker released before that replacement, or it can apply stale coordinates to the new renderer
+  and leave live adoption blocked forever.
+- `viewer/map.js:171` and `viewer/map.js:176` skip native zoom/pan handling while `state.framing` is true. The flight
+  must cancel and release that flag before an intentional wheel or drag gesture is allowed to proceed.
 - The vendored renderer is Cytoscape.js 3.34.4. Its style property definitions type `underlay-color` as a color, not a
   gradient. Node `background-fill` supports `solid`, `linear-gradient`, and `radial-gradient`; gradient stop colors must
   be space-separated. `transition-property`, `transition-duration`, `transition-delay`, and
@@ -132,6 +144,9 @@ facts, recorded findings, saved positions, scene state, or user decisions.
   and the endpoint is loopback. No page was attached to and no real-project viewer state was inspected.
 - Explicit navigation currently calls `frameNode()`, `refreshMap()`, and `setWorldViewport()` directly; there is no
   intentional transition helper and no reduced-motion branch. This is a capability gap for step D, not a graph defect.
+- The reviewer's F1 is correct at the code level: the existing `framing` flag is synchronous, `setWorldViewport(...,
+  false)` does not schedule culling, and `renderGraph()` replaces the renderer. The proposed flight lifecycle is a
+  necessary refinement, not a new subsystem.
 - Baseline verification before this todo: the documented lightweight Node suites passed (207 tests: 165 + 13 + 29), and
   `test_documentation.py` (3 tests) and `test_privacy.py` (2 tests) passed. No production file changed.
 
@@ -209,9 +224,11 @@ with evidence rather than silently deferring it or shipping a partial animation.
 
 The component that already owns the lifecycle and data for this outcome is the existing static stylesheet plus the
 existing theme-token block. The chosen design adds one code file and one script load, and removes the mixing of static
-appearance with camera geometry in `map.js`. It adds no service, process, port, protocol, callback, cache, state
-machine, dependency, or user preference. The simpler one-file alternative gives up a dedicated appearance owner; this
-design gives up one extra script load and one fixture line. No requested user-facing capability is knowingly dropped:
+appearance with camera geometry in `map.js`. It adds no service, process, port, protocol, external callback, cache,
+generalized state machine, dependency, or user preference. Motion does add one transient flight record, one
+requestAnimationFrame handle, and one generation/cancellation guard owned by `scene.js`; that is transient state, not a
+second navigation owner or a generalized animation framework. The simpler one-file alternative gives up a dedicated appearance owner; this design
+gives up one extra script load and one fixture line. No requested user-facing capability is knowingly dropped:
 navigation motion is required scope (D2). Gradient underlays are unsupported by the pinned renderer, and decorative
 animation is excluded by design. If D cannot be made safe, the task stops with a blocker rather than claiming a
 complete visual experience. The map remains a native Cytoscape scene; `appearance.js` is a code-ownership split, not a
@@ -260,6 +277,9 @@ second graphics layer.
     final camera matches the exact non-animated destination, and reduced-motion users navigate immediately.
 14. Motion preserves renderer-scale threshold crossings, intermediate viewport culling, semantic expansion/collapse,
     selection and panel resizing, browser history, saved pins, and the live-adoption gate.
+15. The flight record is released on completion, interruption, and renderer replacement. `liveBlockReason()` is never
+    blocked by a stale flight, `state.framing` is restored exactly once, and camera history is committed at most once
+    per completed flight.
 
 ## Implementation tasks
 
@@ -323,12 +343,55 @@ second graphics layer.
 
 ### D. Required navigation motion
 
-- [ ] Implement one small helper in `viewer/scene.js` for explicit navigation (`flyToNode`, `followReference`, and
-      intentional framing). It must step through `setWorldViewport()` rather than `cy.animate()`, cancel immediately on
-      wheel, drag, pointer, or newer navigation, and never queue work.
-- [ ] Before shipping, verify all of the following: renderer-scale threshold crossings, intermediate viewport culling and
-      newly revealed elements, semantic expansion/collapse, selection and panel resizing, live adoption blocking,
-      camera/history/pin restoration, exact final camera state, and reduced-motion behavior.
+#### D.1 Flight lifecycle contract
+
+Explicit navigation has one owned, cancellable flight at a time. The helper lives in `viewer/scene.js`; it may call
+`setWorldViewport()`, but it must not become a second camera owner or a generalized animation framework.
+
+- **Flight state.** Track one `state.flight` record containing at least the originating Cytoscape instance, a navigation
+  generation, the RAF handle, the target camera, and the previous `state.framing` value. `liveBlockReason()` must include
+  `state.flight` for the entire lifetime, including gaps between animation frames. Keep `state.framing` true for the
+  flight as well, so `rememberView()` and native zoom/pan handlers stay suppressed until release.
+- **Frame validity.** Every frame verifies `state.cy === flight.cy`, `!flight.cy.destroyed()`, and the current flight
+  generation (`state.flight.generation` or a dedicated serial; do not overload `state.navigation`, which tracks
+  target/adoption generations). A stale frame cancels and releases without applying camera coordinates to a replaced
+  scene.
+- **Camera and culling.** Camera updates go through `setWorldViewport(level, pan, false)`. For intermediate culling, call
+  the existing `scheduleViewport()` (its `rememberView()` call is suppressed by flight-level framing) or `refreshMap()`
+  only when the viewport cut expands. Do not call `semanticZoom()` or wheel-driven semantic expansion during the flight.
+  Do not run the full `frame()`/`frameNode()` path on every frame; reuse the existing camera calculation or add a
+  non-committing path rather than duplicating camera math.
+- **Cancellation.** New navigation (`flyToNode`, `followReference`, `frameNode`/`fitMap`, `toggleGroup`), intentional
+  wheel/zoom, drag or pan start, map-camera keyboard navigation (zoom, arrows, Backspace, Enter navigation), scene
+  replacement (`renderGraph()`), and explicit cancellation terminate the old flight and release its blocker before the
+  interrupting handler proceeds. Passive pointer movement or hover must not cancel, and typing in search, a panel, or a
+  decision draft is not camera navigation.
+- **Normal completion.** Apply the exact clamped destination, settle culling, release the flight and restore the prior
+  framing value, then commit camera history exactly once with `rememberView()`. Do not commit an intermediate frame.
+- **Interruption.** Never snap back to the obsolete destination and never commit it. The interrupting action's normal
+  history path owns the new camera. If no new action commits one, remember the interrupted camera once at cancellation.
+- **Reduced motion.** Cancel any active flight first, then use the existing immediate framing path without a transitional
+  flight.
+- **Renderer replacement.** Cancel the flight and release its blocker before `renderGraph()` destroys the Cytoscape
+  instance. A generation guard alone is insufficient if the stale `state.flight` leaves live adoption blocked forever.
+- **Failure.** A setup or frame error cancels the flight, restores the prior framing value, and releases the blocker.
+  A stuck `state.flight` must not be able to freeze live adoption.
+
+`viewer/live.js` and `viewer/map.js` remain consumers, not additional flight owners: `liveBlockReason()` observes the
+flight, and `renderGraph()` cancels it before replacing the renderer. The single helper in `viewer/scene.js` owns the
+lifecycle.
+
+Implementation tasks:
+
+- [ ] Implement the smallest helper that satisfies the lifecycle contract, using `setWorldViewport()` rather than
+      `cy.animate()`, and never queue work behind a newer flight.
+- [ ] Add `state.flight` to `liveBlockReason()` so live adoption is blocked throughout the flight, not only inside each
+      synchronous `setWorldViewport()` call.
+- [ ] Cancel the flight in `renderGraph()` before the renderer is destroyed, and in the intentional input/navigation
+      entry points before their handlers proceed; leave passive hover/pointer movement untouched.
+- [ ] Before shipping, verify: renderer-scale threshold crossings, intermediate viewport culling and newly revealed
+      elements, semantic expansion/collapse, selection and panel resizing, live adoption blocking including inter-frame
+      gaps, one-shot history, exact final camera state, interruption without snap-back, and reduced-motion behavior.
 - [ ] If any invariant cannot be preserved with a small local change, return BLOCKER with the concrete blocker and
       evidence. Do not silently defer D or ship a partial animation. A-C may be reported as partial evidence, but the
       requested scope is not complete without D.
@@ -366,6 +429,8 @@ extraction. The following matrix names each case and the wrong behavior it captu
 | Clear-selection cleanup | A new underlay or transition could remain after deselection, Escape, or a gesture. | Browser acceptance check |
 | Explicit navigation motion | `flyToNode()`, `followReference()`, and intentional framing jump directly through `frameNode()`/`setWorldViewport()`; there is no interruptible transition or reduced-motion branch. | Browser acceptance + reviewer |
 | Motion cancellation | A naive tween could continue after wheel, drag, pointer, or newer navigation, or fail to settle at the exact destination. | New browser scenario |
+| Motion live-adoption gap | A flight that sets `state.framing` only inside `setWorldViewport()` leaves inter-frame gaps where `liveBlockReason()` reports no blocker, allowing adoption between frames. | Node/browser lifecycle check |
+| Motion history and snap-back | Per-frame `scheduleViewport()` without flight-level framing writes history repeatedly; an interrupted flight can commit the obsolete destination or snap back. | Browser history/camera check |
 | Warning semantics | New lighting could obscure the amber/red SVG badges or wire symbols, or add finding nodes. | Existing `review.browser.js`, `health.browser.js`, `review.test.cjs` |
 | Graph facts and pins | Visual work could add graph elements or move saved positions. | Existing `viewer.browser.js`, `icons.browser.js`, Node suites |
 
@@ -404,12 +469,17 @@ Browser acceptance uses the existing manually configured Playwright harness:
 
 - `icons.browser.js` for themes, graph stability, glyph geometry, and pointer hits;
 - `traces.browser.js` for direction colors, overlap, and theme contrast;
-- `viewer.browser.js` for selection, clearing, navigation, saved positions, and narrow viewports;
+- `viewer.browser.js` for selection, clearing, navigation interruption, one-shot history, saved positions, and narrow
+  viewports;
 - `readability.browser.js` for labels and semantic zoom;
-- `source-surface.browser.js`, `namespace-files.browser.js`, `review.browser.js`, `inspector.browser.js`,
-  `health.browser.js`, and `live.browser.js` for the affected presentation and adoption paths;
+- `source-surface.browser.js`, `namespace-files.browser.js`, `review.browser.js`, `inspector.browser.js`, and
+  `health.browser.js` for the affected presentation paths;
+- `live.browser.js` for live adoption blocked throughout a flight, including inter-frame gaps, and for renderer
+  replacement or cancellation releasing the blocker;
 - a new appearance acceptance scenario for computed selection/candidate/violation colors, hover/selection underlays,
-  expanded-container underlay suppression, theme identity, clear-selection cleanup, and narrow containment.
+  expanded-container underlay suppression, theme identity, clear-selection cleanup, and narrow containment;
+- a new motion acceptance scenario for exact final camera, culling during intermediate frames, interruption without
+  snap-back, one-shot history, reduced motion, and no queued follow-up flight.
 
 Do not invent a browser launcher. If the harness is unavailable, mark those results UNVERIFIED rather than passing them
 by assertion.
@@ -434,6 +504,8 @@ real-project acceptance claim.
 - The HTML surface polish is coherent, not a broader redesign, and does not change panel behavior or keyboard access.
 - D is required scope: motion explains navigation, is immediately interruptible, never queues, and reduced-motion
   users get no transitional movement.
+- A flight is invisible to live adoption for its whole lifetime, including inter-frame gaps; interrupting it never
+  moves the camera back to the obsolete destination.
 
 ## Documentation plan
 
@@ -444,8 +516,9 @@ real-project acceptance claim.
   interaction rather than all rendering.
 - **Content to add:** the appearance ownership split, the static atmosphere and solid-underlay constraint, selection
   versus candidate/violation semantics, expanded-container underlay suppression, theme-change behavior without graph
-  recreation, and reduced-motion/no-idle-animation rules. Add the navigation-motion contract: interruptibility, no
-  queued motion, exact final camera, renderer-scale/culling/semantic-navigation preservation, and reduced-motion
+  recreation, and reduced-motion/no-idle-animation rules. Add the navigation-motion contract: single-flight ownership,
+  full-lifetime live-adoption blocking, interruptibility, no queued motion, exact final camera, one-shot history,
+  cancellation on renderer replacement, renderer-scale/culling/semantic-navigation preservation, and reduced-motion
   behavior. Keep it to durable contracts and invariants.
 - **Duplication avoided:** link to the existing "Tracing and inspection", "Viewport and memory lifetime", and "Review
   presentation" sections instead of restating trace colors, label collision, or review badge behavior. Do not repeat
@@ -476,10 +549,11 @@ Return PASS only when all of the following are supported by direct evidence:
 - Expanded containers receive no large circular underlay; selected expanded containers keep underlay opacity zero.
 - No graph elements, reference edges, finding elements, positions, pins, layout modes, scene state, or analysis/
   publication behavior changed. Theme changes do not recreate the graph.
-- Explicit navigation motion is implemented and verified: interruptible by wheel, drag, pointer, or newer navigation;
-  never queued; exact final camera; renderer-scale thresholds, viewport culling, semantic expansion/collapse, selection
-  and panel resizing, history, pins, live-adoption blocking, and reduced-motion behavior all pass. If D cannot be made
-  safe, the task returns BLOCKER; a partial A-C result is not PASS.
+- Explicit navigation motion is implemented and verified: one flight at a time; interruptible by wheel, drag, pointer,
+  or newer navigation; never queued; exact final camera; intermediate culling; semantic expansion/collapse; selection
+  and panel resizing; one-shot history; saved pins; live adoption blocked for the whole flight including inter-frame
+  gaps; cancellation on renderer replacement; and reduced-motion behavior. If D cannot be made safe, the task returns
+  BLOCKER; a partial A-C result is not PASS.
 - The existing Node suites, documentation/privacy checks, and affected browser acceptance pass. All required browser and
   drive-browser scenarios were executed; any scenario that could not be executed is explicitly UNVERIFIED, and the task
   does not claim PASS for that scope.
@@ -529,3 +603,22 @@ todo complete because code compiles or a synthetic unit suite passes.
   drive-browser configuration loads with a configured agent profile and a loopback endpoint; no page was attached to.
   No real-project, performance, or implementation work was performed.
 - **Authority:** D2, D3, D4 added; Q1 closed by D2; Q2 closed by D3; A1 resolved by D2; A5 and A6 active.
+
+### 2026-11-23 - reviewer PATCH F1: motion lifecycle
+
+- **Trigger:** Reviewer accepted the direction but required an explicit cross-frame motion lifecycle contract before
+  operator GO.
+- **Root cause:** The todo named the camera invariants but did not assign a flight-level owner. The existing
+  `state.framing` flag is synchronous, `setWorldViewport(..., false)` does not schedule culling, and `renderGraph()`
+  replaces the Cytoscape instance. The KISS paragraph also overclaimed that motion adds no transient state.
+- **Fix:** Added D.1 with single-flight ownership, full-lifetime `state.flight` visibility to `liveBlockReason()`,
+  frame generation/scene checks, culling through `scheduleViewport()`, cancellation before interrupting input or
+  renderer replacement, one-shot history, interruption without snap-back, and reduced-motion behavior. Corrected the
+  KISS wording to allow one transient flight record, RAF handle, and generation guard. Added lifecycle rows and browser
+  checks to the verification matrix. No production code changed.
+- **Verification:** The F1 evidence was rechecked against `viewer/map.js`, `viewer/live.js`, and `viewer/scene.js`; the
+  synchronous framing window, missing intermediate culling, and renderer replacement are real. Documentation and
+  privacy checks were re-run (3 + 2 tests pass). No browser, real-project, performance, or implementation work was
+  performed. The reviewer's underlay conclusion matches the pinned-bundle probe; the 60-degree hue check remains a
+  labeled proxy, so no change was needed there.
+- **Authority:** No new operator decision. Reviewer feedback is input, not authority; D4 still gates implementation.
