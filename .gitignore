@@ -10,3 +10,7 @@ tmp/
 /sample/*/Intermediate/
 /sample/*/Saved/
 /sample/*/DerivedDataCache/
+
+# playwright
+.playwright-cli/
+.playwright/

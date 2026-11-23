@@ -6,7 +6,7 @@ async page=>{
   const errors=[],writes=[];
   page.on('pageerror',e=>errors.push(e.message));
   page.on('request',r=>{if(r.method()==='POST'&&r.url().includes('/layout/'))writes.push(r.url());});
-  const settle=async()=>{await page.waitForFunction(()=>!state.gestureActive&&!state.viewportFrame);
+  const settle=async()=>{await page.waitForFunction(()=>!state.gestureActive&&!state.viewportFrame&&!state.flight);
     await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));};
   await page.evaluate(()=>{
     const node=(id,parent,level,attrs={})=>({id,parent,label:id,level,attrs,status:'in-target',boundary:false});

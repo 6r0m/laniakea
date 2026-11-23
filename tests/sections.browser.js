@@ -2,8 +2,8 @@
 // Profile hints added to the disposable sample exercise the real paging and position endpoints.
 async page=>{
   const check=(ok,message)=>{if(!ok)throw Error(message);};
-  const frames=()=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
-  const settle=async()=>{await page.waitForFunction(()=>!state.gestureActive&&!state.viewportFrame&&
+  const frames=async()=>{await page.waitForFunction(()=>!state.flight);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));};
+  const settle=async()=>{await page.waitForFunction(()=>!state.gestureActive&&!state.viewportFrame&&!state.flight&&
     state.mapSize.width===$('graph').getBoundingClientRect().width);await frames();};
   const setup=await page.evaluate(()=>({target:state.target,layouts:structuredClone(state.positionCache.layouts),mode:$('layout').value}));
   check(setup.target.id==='sample','Source region mutation requires the disposable sample');

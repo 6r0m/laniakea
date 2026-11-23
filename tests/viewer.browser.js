@@ -5,7 +5,7 @@ async (page) => {
   const view=async p=>{if(!await p.locator('#view-controls').evaluate(n=>n.open))await p.locator('#view-summary').click();};
   const layout=async(p,mode)=>{await view(p);await p.selectOption('#layout',mode);await p.locator('#view-summary').click();};
   const check = (ok, message) => { if (!ok) throw new Error(message); };
-  const frames = () => page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
+  const frames=async()=>{await page.waitForFunction(()=>!state.flight);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));};
   const point = id => page.evaluate(id => {
     const n = state.cy.getElementById(id), p = n.renderedPosition(), b = $('graph').getBoundingClientRect();
     if (!n.length) throw new Error(`Missing visible star ${id}`);
@@ -124,7 +124,7 @@ async (page) => {
     await projectDetails.click();await view(page);await page.getByRole('button',{name:'Clear selection',exact:true}).click();
     check(await page.locator('#details').isHidden(),'Clear must close Project details');
     await page.evaluate(()=>flyToNode('plugin:SampleCore'));
-    await page.waitForFunction(()=>!state.gestureActive);
+    await page.waitForFunction(()=>!state.gestureActive&&!state.flight);
     const coreHover=await point('plugin:SampleCore');await page.mouse.move(coreHover.x,coreHover.y);await frames();
     check(await page.locator('#hover-card').innerText().then(text=>/Incoming references recorded.*Of which: project configuration.*1/s.test(text)&&
       /explicitly listed, not necessarily compiled/.test(text)&&!text.includes('Used by')),
@@ -174,6 +174,7 @@ async (page) => {
       node.attrs={...node.attrs,synthetic_notes:Array.from({length:120},(_,i)=>`Sample metadata item ${i}`)};
       flyToNode(node.id);
     });
+    await page.waitForFunction(()=>!state.flight&&state.selection?.id==='module:SampleProject');
     try {
       const metadata=page.locator('#details .node-metadata'),summary=metadata.locator('summary');
       check(await summary.innerText()==='Metadata'&&await metadata.evaluate(node=>!node.open),'Bulk node metadata must start collapsed');

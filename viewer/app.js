@@ -135,7 +135,10 @@ async function start() {
   document.addEventListener('visibilitychange',()=>state.live.tick());
   window.addEventListener('pagehide',()=>state.live.stop());
   window.addEventListener('pageshow',()=>{if(state.live.stopped)state.live.start();});
-  $('graph').addEventListener('pointerdown',()=>{state.pointerDown=true;});
+  $('graph').addEventListener('pointerdown',()=>{
+    if(typeof cancelNavigationFlight==='function')cancelNavigationFlight({remember:true});
+    state.pointerDown=true;
+  });
   window.addEventListener('pointerup',()=>{state.pointerDown=false;});
   window.addEventListener('pointercancel',()=>{state.pointerDown=false;});
   window.addEventListener('blur',()=>{state.pointerDown=false;});
@@ -149,6 +152,7 @@ function known(id) {
 
 // Show a target's scope. mode: 'push' adds a history entry, 'replace' rewrites the current one, 'none' follows history.
 async function show(id, file, mode) {
+  if(typeof cancelNavigationFlight==='function')cancelNavigationFlight();
   state.review?.closeComparison?.();
   const savedScene = mode === 'none' || !state.cy ? history.state && history.state.scene : null;
   const navigation = ++state.navigation;

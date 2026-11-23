@@ -45,77 +45,8 @@ function mapNode(node, members, drill) {
       node.boundary && 'boundary', node.status].filter(Boolean).join(' ') };
 }
 
-function style() {
-  return [
-    { selector: 'node', style: { label: 'data(caption)', color: css('--fg'), 'font-family': 'Segoe UI, sans-serif',
-      'font-size': 13, 'text-valign': 'bottom', 'text-margin-y': 7, 'text-wrap': 'wrap',
-      'text-overflow-wrap': 'anywhere', 'text-max-width': 140,
-      'text-events': 'yes', 'text-background-color': css('--bg'), 'text-background-opacity': 0.9,
-      'text-background-padding': 3, 'background-color': css('--context'), width: 12, height: 12,
-      'border-width': 1, 'border-color': css('--context'), 'overlay-padding': 9 } },
-    { selector: 'node.member', style: { 'background-color': css('--accent'), 'border-color': css('--accent'),
-      width: 16, height: 16, 'underlay-color': css('--accent'), 'underlay-opacity': 0.08, 'underlay-padding': 6 } },
-    { selector: 'node.group', style: { 'background-opacity': 0.04, 'border-width': 2, 'border-opacity': 1 } },
-    // Rounded diamonds keep native hit-testing reliable at axis-aligned centers.
-    { selector: 'node.boundary', style: { shape: 'round-diamond', 'background-color': css('--external'),
-      'border-color': css('--external') } },
-    { selector: 'node.not-in-target', style: { 'background-opacity': 0.15, 'border-style': 'dashed' } },
-    { selector: 'node.not-analysed', style: { 'border-style': 'dotted' } },
-    { selector: 'node.configured', style: { 'outline-color':css('--configuration'),
-      'outline-width':2,'outline-offset':4,'outline-opacity':0.85 } },
-    { selector: 'node.focus, node.match', style: {'z-index':10} },
-    { selector: 'node.hovered, node:selected', style: {'z-index':20} },
-    { selector: 'node.expanded', style: { shape: 'roundrectangle', 'background-opacity': 0.025,
-      'border-opacity': 0.35, 'border-width': 1, 'underlay-opacity': 0, padding: 28,
-      'text-valign': 'top', 'text-halign': 'center', 'text-margin-y': -8, 'font-weight': 600,
-      width:'data(spanX)',height:'data(spanY)','z-index':'data(layer)','z-compound-depth':'bottom' } },
-    { selector: 'edge', style: { width: 1, 'line-color': 'data(color)', 'target-arrow-color': 'data(color)',
-      'target-arrow-shape': 'triangle', 'curve-style': 'bezier', 'arrow-scale': 0.7, opacity: 0.3,
-      'source-endpoint':'inside-to-node','target-endpoint':'inside-to-node' } },
-    { selector: 'edge.derived', style: { 'curve-style':'straight','target-arrow-shape':'none','line-style':'solid', opacity: 0.15, width: 'mapData(weight, 1, 100, 1, 3)',
-      label: '', color: css('--muted'), 'font-size': 11, 'text-background-color': css('--bg'),
-      'text-background-opacity': 0.9, 'text-background-padding': 2 } },
-    { selector: 'edge.derived.hovered, edge.derived:selected', style: { label: 'data(count)','target-arrow-shape':'triangle' } },
-    {selector:'edge.review-candidate',style:{opacity:0.65}},
-    {selector:'edge.review-violation',style:{opacity:0.9}},
-    // Direct owner references meet the named top boundary of an expanded container.
-    {selector:'edge.source-expanded',style:{'source-endpoint':'0% -50%'}},
-    {selector:'edge.target-expanded',style:{'target-endpoint':'0% -50%'}},
-    { selector:'edge.loop',style:{'curve-style':'bezier','source-endpoint':'outside-to-node','target-endpoint':'outside-to-node',
-      'control-point-step-size':'data(loopDistance)'} },
-    { selector:'edge.arranging',style:{display:'none'} },
-    { selector: '.faded', style: { opacity: 0.3 } },
-    { selector: 'edge:selected', style: { opacity: 1,width:3,'line-color':css('--selection'),'target-arrow-color':css('--selection'), 'underlay-color': css('--selection'),
-      'underlay-opacity': 0.15, 'underlay-padding': 3 } },
-    {selector:'edge.review-candidate',style:{'underlay-color':css('--review-candidate'),'underlay-opacity':0.28}},
-    {selector:'edge.review-violation',style:{'underlay-color':css('--review-violation'),'underlay-opacity':0.38}},
-    { selector: 'edge.focus', style: { width: 2.5, opacity: 1, 'z-index': 5,'target-arrow-shape':'triangle' } },
-    ...['outgoing','incoming','within'].map(role=>({selector:'edge.trace-'+role,style:{
-      'line-color':css('--trace-'+role),'target-arrow-color':css('--trace-'+role),
-      'target-arrow-shape':'triangle',opacity:1,width:2.5,label:''}})),
-    {selector:'edge.trace-both, edge.trace-reciprocal',style:{'line-color':css('--context')}},
-    {selector:'edge.trace-other',style:{'line-color':css('--context'),'target-arrow-color':css('--context'),opacity:0.45,width:1.5}},
-    {selector:'node.trace-anchor',style:{'border-color':css('--fg'),'underlay-color':css('--fg'),
-      'underlay-opacity':0.16,'font-weight':600}},
-    {selector:'edge.pair-inspected',style:{label:''}},
-    {selector:'edge.review-candidate, edge.review-violation',style:{label:'data(reviewSymbol)',
-      'text-background-color':css('--panel'),'text-background-opacity':1,'text-border-width':1,
-      'text-border-opacity':1,'text-background-shape':'roundrectangle','text-margin-y':0,'font-weight':700}},
-    {selector:'edge.review-candidate',style:{color:css('--review-candidate'),'text-border-color':css('--review-candidate')}},
-    {selector:'edge.review-violation',style:{color:css('--review-violation'),'text-border-color':css('--review-violation')}},
-    {selector:'edge.review-candidate.hovered, edge.review-violation.hovered',style:{label:'data(reviewText)',
-      'color':css('--fg'),'text-background-color':css('--panel'),'text-background-opacity':1}},
-    { selector: 'node.source-region', style: {shape:'roundrectangle','background-opacity':0.08} },
-    { selector: 'node.implementation', style: {'border-color':css('--context'),'background-color':css('--context')} },
-    { selector: 'node.restricted-member', style: {'border-color':css('--muted'),'background-color':css('--context')} },
-    { selector: 'node.organizational', style: {'background-opacity':0.015,'border-opacity':0.18,'font-weight':400} },
-    { selector: 'node.overlapping-context', style: {'text-background-opacity':1,'border-width':2,
-      'border-color':css('--context'),'underlay-color':css('--bg'),'underlay-opacity':1,'underlay-padding':8} },
-    { selector: 'node:selected', style: { 'border-color': css('--selection'), 'border-width': 3 } },
-  ];
-}
-
 function renderGraph() {
+  stopNavigationFlight();
   renderIconKey();
   clearTimeout(state.inspectTimer);
   clearTimeout(state.gestureTimer);state.gestureActive=false;
@@ -287,7 +218,9 @@ function refreshMap() {
   readableLabels();
   updateScopeSummary();
   renderFilters();
-  if (state.selection) renderDetails(state.selection,{reopen:false});
+  // An intermediate flight frame may project the inspected target out of view; keep the
+  // selection until the flight settles, then revalidate it against the final projection.
+  if (state.selection && !state.flight) renderDetails(state.selection,{reopen:false});
   rememberView();
 }
 
@@ -630,6 +563,7 @@ function unfocus(clearReadout = false) {
 }
 
 function applyFilters() {
+  stopNavigationFlight();
   if (state.cy) { unfocus(); refreshMap(); }
 }
 
@@ -957,41 +891,78 @@ function setWorldViewport(level, pan, gesture = false) {
   if (gesture && !framing && state.pointer && level !== before) semanticZoom(Math.sign(level-before));
 }
 
-function frame(bounds, padding = 75, maxZoom = 1.2) {
-  const cy = state.cy;
-  const zoom = Math.max(cy.minZoom(), Math.min(maxZoom, cy.maxZoom(),
-    Math.max(10, cy.width() - 2 * padding) / Math.max(Number.EPSILON, bounds.x2 - bounds.x1),
-    Math.max(10, cy.height() - 2 * padding) / Math.max(Number.EPSILON, bounds.y2 - bounds.y1)));
-  setWorldViewport(zoom,{x:cy.width()/2-(bounds.x1+bounds.x2)*zoom/2,
-    y:cy.height()/2-(bounds.y1+bounds.y2)*zoom/2});
-  rememberView();
+function stopNavigationFlight() {
+  if (typeof cancelNavigationFlight === 'function') cancelNavigationFlight();
 }
 
-function fitMap() {
-  if (!state.cy) return;
+function cameraForBounds(bounds, padding = 75, maxZoom = 1.2) {
+  const cy = state.cy;
+  if(!cy) return null;
+  const level = Math.max(cy.minZoom(), Math.min(maxZoom, cy.maxZoom(),
+    Math.max(10, cy.width() - 2 * padding) / Math.max(Number.EPSILON, bounds.x2 - bounds.x1),
+    Math.max(10, cy.height() - 2 * padding) / Math.max(Number.EPSILON, bounds.y2 - bounds.y1)));
+  return {level,pan:{x:cy.width()/2-(bounds.x1+bounds.x2)*level/2,
+    y:cy.height()/2-(bounds.y1+bounds.y2)*level/2}};
+}
+
+function frame(bounds, padding = 75, maxZoom = 1.2) {
+  stopNavigationFlight();
+  const camera=cameraForBounds(bounds,padding,maxZoom);
+  if(!camera) return null;
+  setWorldViewport(camera.level,camera.pan);
+  rememberView();
+  return camera;
+}
+
+function overviewBounds() {
+  if (!state.cy) return null;
   const map=state.universe,top=[...map.childIds(map.root),...map.childIds(null).filter(id=>id!==map.root)];
   if(!top.length || map.directReferences.get(map.root).some(e=>!state.hidden.has(e.type)&&
     !map.isConfiguration(e)))top.push(map.root);
   const points=top.filter(id=>state.boundary||!map.nodes.get(id).boundary).map(id=>map.positions.get(id));
   if(!points.length)points.push(map.positions.get(map.root));
-  frame({x1:Math.min(...points.map(p=>p.x)),y1:Math.min(...points.map(p=>p.y)),
-    x2:Math.max(...points.map(p=>p.x)),y2:Math.max(...points.map(p=>p.y))});
+  return {x1:Math.min(...points.map(p=>p.x)),y1:Math.min(...points.map(p=>p.y)),
+    x2:Math.max(...points.map(p=>p.x)),y2:Math.max(...points.map(p=>p.y))};
+}
+
+function overviewCamera() {
+  const bounds=overviewBounds();
+  return bounds&&cameraForBounds(bounds);
+}
+
+function fitMap() {
+  if (!state.cy) return;
+  const bounds=overviewBounds();
+  if(bounds) frame(bounds);
   refreshMap();
 }
 
-function frameNode(id) {
-  if (id === state.universe.root) { fitMap(); return; }
+function nodeFrameArgs(id) {
   const map = state.universe, p = map.positions.get(id), r = map.isGroup(id) ? map.radii.get(id) :
     (map.radii.get(map.viewParents.get(id)) || 80) * 0.5;
   const sourceSurface=Boolean(map.nodes.get(id).attrs?.source_sections||map.nodes.get(id).attrs?.source_file);
   const screenRadius=Math.max(sourceSurface?300:160,
     50*Math.ceil(Math.sqrt(map.childIds(id).length)));
-  frame(map.isGroup(id)?map.bounds.get(id):{x1:p.x-r,y1:p.y-r,x2:p.x+r,y2:p.y+r},sourceSurface?40:75,screenRadius/r);
+  return {bounds:map.isGroup(id)?map.bounds.get(id):{x1:p.x-r,y1:p.y-r,x2:p.x+r,y2:p.y+r},
+    padding:sourceSurface?40:75,maxZoom:screenRadius/r};
+}
+
+function nodeFrameCamera(id) {
+  if (id === state.universe.root) return overviewCamera();
+  const {bounds,padding,maxZoom}=nodeFrameArgs(id);
+  return cameraForBounds(bounds,padding,maxZoom);
+}
+
+function frameNode(id) {
+  if (id === state.universe.root) { fitMap(); return; }
+  const args=nodeFrameArgs(id);
+  frame(args.bounds,args.padding,args.maxZoom);
   if(state.cy)refreshMap();
 }
 
 function layout({fit=true}={}) {
   if (!state.cy) return;
+  stopNavigationFlight();
   const map = state.universe, mode = $('layout').value;
   const top = [...map.childIds(map.root), ...map.childIds(null).filter(id => id !== map.root)];
   const fake = top.map(id => ({id:()=>id,hasClass:()=>!map.nodes.get(id).boundary}));

@@ -21,6 +21,7 @@ function viewer() {
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/traces.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/context.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/icons.js'), 'utf8'), context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/appearance.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/map.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/scene.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../viewer/positions.js'), 'utf8'), context);

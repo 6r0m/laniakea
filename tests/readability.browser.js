@@ -2,7 +2,7 @@
 // Evaluate on the served synthetic sample; only this tab's in-memory graph changes.
 async page => {
   const check=(ok,message)=>{if(!ok)throw new Error(message);};
-  const frames=()=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  const frames=async()=>{await page.waitForFunction(()=>!state.flight);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));};
   check(await page.evaluate(()=>state.target.id==='sample'),'Readability proof requires the synthetic sample');
   const requests=[],errors=[];
   page.on('request',request=>requests.push({url:request.url(),method:request.method()}));
@@ -85,7 +85,8 @@ async page => {
   check(await page.locator('#inspector-page-details > code').innerText()==='int Get()','Signature is not primary inspection content');
   check(/public.*static/.test(await page.locator('#details').innerText()),'Access and static method context missing');
   await page.locator('#view-summary').click();await page.locator('#clear').click();
-  await page.waitForFunction(()=>!state.gestureActive&&!state.viewportFrame&&state.mapSize.width===$('graph').getBoundingClientRect().width);
+  await page.waitForFunction(()=>!state.gestureActive&&!state.viewportFrame&&!state.flight&&state.mapSize.width===$('graph').getBoundingClientRect().width,
+    null,{polling:100});
   await frames();
   const point=await page.evaluate(()=>{const p=state.cy.getElementById('get').renderedPosition(),b=$('graph').getBoundingClientRect();
     return{x:b.x+p.x,y:b.y+p.y};});
@@ -100,6 +101,7 @@ async page => {
   const chosen=await page.evaluate(()=>state.findCandidates[state.findChoice].id);
   await page.locator('#find').press('Enter');await page.waitForFunction(id=>state.selection?.id===id,chosen);
   await page.evaluate(()=>flyToNode('data'));
+  await page.waitForFunction(()=>!state.flight&&state.selection?.id==='data');
   check(/struct/.test(await page.locator('#details').innerText())&&
     /2 observed fields \/ 0 observed callables/.test(await page.locator('#details').innerText())&&
     /not individual stars/.test(await page.locator('#details').innerText()),'Data-only type looks empty or has the wrong kind');

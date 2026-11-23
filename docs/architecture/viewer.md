@@ -8,6 +8,7 @@ remain outside this component. Operator workflows live in the [user guide](../gu
 - [Composition](#composition)
 - [Continuous map](#continuous-map)
 - [Tracing and inspection](#tracing-and-inspection)
+- [Visual appearance and motion](#visual-appearance-and-motion)
 - [Source organization](#source-organization)
 - [Declaration context and search](#declaration-context-and-search)
 - [External boundaries](#external-boundaries)
@@ -29,9 +30,11 @@ remain outside this component. Operator workflows live in the [user guide](../gu
 | [sections.js](../../viewer/sections.js) | source organization without changing semantic ownership |
 | [traces.js](../../viewer/traces.js) | shared directional calculations |
 | [context.js](../../viewer/context.js) | declaration context and qualified lookup |
-| [map.js](../../viewer/map.js) | canvas rendering and pointer interaction |
+| [map.js](../../viewer/map.js) | canvas geometry, projection and pointer interaction |
+| [appearance.js](../../viewer/appearance.js) | static Cytoscape appearance and luminous states |
+| [app.css](../../viewer/app.css) | theme tokens, map atmosphere and HTML surface styling |
 | [icons.js](../../viewer/icons.js) | type glyphs on existing renderer nodes |
-| [scene.js](../../viewer/scene.js) | camera and hierarchy navigation |
+| [scene.js](../../viewer/scene.js) | camera, hierarchy navigation and cancellable flights |
 | [positions.js](../../viewer/positions.js) | ordered loading and saving of released pins |
 | [references.js](../../viewer/references.js) | reference-page retention and cancellation |
 | [inspector.js](../../viewer/inspector.js) | accessible inspection tabs |
@@ -161,6 +164,32 @@ when Details first opens. The panel's close button uses the same inspection canc
 the toolbar's Inspector control. At narrow widths, the inspector, findings queue and filters are mutually exclusive;
 opening the queue hides inspection without discarding it. Explicit reinspection reopens the retained dock; background
 projection refresh does not.
+
+## Visual appearance and motion
+
+`app.css` owns the light/dark theme tokens, the static map atmosphere and HTML surface styling. `appearance.js` owns
+the single static Cytoscape stylesheet; `map.js` keeps geometry-sensitive label and marker styles, projection and
+pointer interaction. The atmosphere is a static CSS gradient on the map surface, not a renderer element or pointer
+target. It introduces no graph facts, decorative nodes or idle animation.
+
+Luminous emphasis is limited to existing elements: ordinary nodes stay quiet, the actual hovered node receives a local
+underlay, and selection uses the dedicated selection role plus a stronger border/underlay. Review candidates and
+violations keep their amber/red badges and wire symbols; the ordinary member glow is not a finding. Expanded
+containers keep underlay opacity zero and use their fill, border and title badge instead of a large circular halo.
+The pinned renderer types `underlay-color` as a color, so underlays are solid; gradient atmosphere belongs to CSS or a
+node background, never to a fake finding or an extra layer. Theme changes replace the stylesheet on the existing
+renderer; they do not recreate the graph or change saved positions.
+
+Explicit navigation uses one cancellable camera flight in `scene.js`. The flight owns `state.flight` for its entire
+lifetime, including gaps between animation frames, so `live.js` cannot adopt a snapshot mid-flight. Frames check the
+originating renderer and generation; camera updates go through `setWorldViewport()` with intermediate culling, never
+`cy.animate()`. Wheel, drag, map-camera keyboard input, new navigation and renderer replacement cancel the flight
+before proceeding; passive pointer movement does not. A completed flight commits the exact destination and history
+once. An interrupted flight leaves the user's new camera action in place and never snaps back. Selection survives
+intermediate projection refreshes and is revalidated against the final projection; inspection that depends on the
+destination is applied when the flight reaches it. A graph resize shifts an active flight's start and target pan with
+the same centre delta used by `resizeMap()`. Reduced motion uses the existing immediate path. The existing hover and selection state owners in
+[Tracing and inspection](#tracing-and-inspection) remain unchanged.
 
 ## Source organization
 

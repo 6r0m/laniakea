@@ -2,7 +2,7 @@
 // Evaluate on the served synthetic sample; replaces only this tab's in-memory scene.
 async page => {
   const check=(ok,message)=>{if(!ok)throw new Error(message);};
-  const frames=()=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  const frames=async()=>{await page.waitForFunction(()=>!state.flight);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));};
   await page.waitForFunction(()=>state.cy&&state.positionCache);
   check(await page.evaluate(()=>state.target.id==='sample'),'Trace mutation proof requires the synthetic sample');
   const requests=[],errors=[];
@@ -166,10 +166,12 @@ async page => {
     const contrasts=[];
     for(const theme of ['light','dark']) {
       await page.emulateMedia({colorScheme:theme});await frames();
-      const colors=await page.evaluate(()=>['--bg','--trace-outgoing','--trace-incoming','--trace-within'].map(css));
+      const colors=await page.evaluate(()=>['--map-atmosphere-core','--map-atmosphere-edge',
+        '--trace-outgoing','--trace-incoming','--trace-within'].map(css));
       const lum=hex=>{const rgb=hex.trim().slice(1).match(/../g).map(n=>parseInt(n,16)/255)
         .map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;};
-      const bg=lum(colors[0]),values=colors.slice(1).map(c=>(Math.max(bg,lum(c))+.05)/(Math.min(bg,lum(c))+.05));
+      const backgrounds=colors.slice(0,2).map(lum),values=colors.slice(2).flatMap(c=>backgrounds.map(bg=>
+        (Math.max(bg,lum(c))+.05)/(Math.min(bg,lum(c))+.05)));
       check(values.every(v=>v>=4.5),'Trace palette has insufficient theme contrast');contrasts.push({theme,values});
     }
     await page.setViewportSize({width:390,height:844});await frames();

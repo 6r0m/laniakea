@@ -6,7 +6,7 @@ async (page,{hold=async()=>{},guidance=false,activity=false,screenshot=async()=>
     await p.locator('#analysis-settings > summary').click();};
   if(guidance||activity){
     const browser=page.context().browser(),url=page.url(),errors=[];
-    const settle=p=>p.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
+    const settle=async p=>{await p.waitForFunction(()=>!state.flight);await p.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));};
     const camera=p=>p.evaluate(()=>{const cy=state.cy,pan=cy.pan(),zoom=worldZoom();
       return JSON.stringify([(cy.width()/2-pan.x)/zoom,(cy.height()/2-pan.y)/zoom,zoom,[...state.universe.expanded]]);});
     for(const mode of (activity?[]:['hidden','graph'])){

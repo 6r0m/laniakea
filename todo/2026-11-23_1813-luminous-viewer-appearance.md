@@ -1,9 +1,9 @@
 # Luminous viewer appearance and navigation polish
 
-**Status:** REVIEW REQUIRED  
-**Review status:** reviewer PATCH F1 addressed; reviewer re-check and operator GO pending (D4).  
-**Implementation gate:** reviewer review and operator GO are required before any implementation task (D4).  
-**Scope:** Viewer presentation: the static Cytoscape stylesheet, theme tokens, HTML surfaces, and required navigation motion.  
+**Status:** IMPLEMENTED - FULL ACCEPTANCE UNVERIFIED
+**Review status:** reviewer PATCH F1 addressed; implementation complete; targeted browser checks pass; fixture-only browser suites and the four-view real-project visual review remain UNVERIFIED.
+**Implementation gate:** D4 was satisfied by the operator implementation request (D5); no staging, commit, or push.
+**Scope:** Viewer presentation: the static Cytoscape stylesheet, theme tokens, HTML surfaces, and required navigation motion.
 **Stable documentation owner:** [docs/architecture/viewer.md](../docs/architecture/viewer.md)
 
 ## Contents
@@ -50,6 +50,11 @@ facts, recorded findings, saved positions, scene state, or user decisions.
   - Date/source: 2026-11-23 operator answer to Q2.
 - **D4** Wait for reviewer review and operator GO before implementation.
   - Effect: the todo remains REVIEW REQUIRED. No implementation, staging, commit, or push starts before both gates.
+  - Reason: not stated.
+  - Date/source: 2026-11-23 operator request.
+- **D5** Implement the approved todo.
+  - Effect: implementation starts now. D4's reviewer and operator gates are satisfied; no staging, commit, or push is
+    authorized.
   - Reason: not stated.
   - Date/source: 2026-11-23 operator request.
 
@@ -285,30 +290,30 @@ second graphics layer.
 
 ### A. Behavior-neutral extraction
 
-- [ ] Capture the current `style()` result as deterministic JSON before editing, and record the current graph identities,
+- [x] Capture the current `style()` result as deterministic JSON before editing, and record the current graph identities,
       node/edge counts, positions, and pins for a representative scene. Store diagnostics under
       `workspace/tmp/luminous-appearance/`, not in tracked files.
-- [ ] Add `viewer/appearance.js` and move the complete existing `style()` function into it verbatim. Preserve selector
+- [x] Add `viewer/appearance.js` and move the complete existing `style()` function into it verbatim. Preserve selector
       order, property values, `css()` calls, and numeric literals exactly.
-- [ ] Remove `style()` from `viewer/map.js`; do not split individual selectors between the two files and do not move
+- [x] Remove `style()` from `viewer/map.js`; do not split individual selectors between the two files and do not move
       `readableLabels()`.
-- [ ] Load `appearance.js` after `icons.js` and before `map.js` in `viewer/index.html`.
-- [ ] Keep `css()` token resolution inside `style()` so `appearance.js` can load before `app.js` defines `css()`. Do not
+- [x] Load `appearance.js` after `icons.js` and before `map.js` in `viewer/index.html`.
+- [x] Keep `css()` token resolution inside `style()` so `appearance.js` can load before `app.js` defines `css()`. Do not
       create a top-level stylesheet constant that evaluates theme tokens at script load time.
-- [ ] Load `appearance.js` in `tests/viewer-support.cjs` before `map.js`; verify no other fixture loader needs updating.
-- [ ] Prove neutrality: diff the pre/post JSON stylesheet, graph identities, counts, positions, and pins. If the diff is
+- [x] Load `appearance.js` in `tests/viewer-support.cjs` before `map.js`; verify no other fixture loader needs updating.
+- [x] Prove neutrality: diff the pre/post JSON stylesheet, graph identities, counts, positions, and pins. If the diff is
       not empty, stop and report the exact change before proceeding.
-- [ ] Run the existing lightweight Node suites after the extraction and record the result.
+- [x] Run the existing lightweight Node suites after the extraction and record the result.
 
 ### B. Luminous visual system
 
-- [ ] Add semantic theme tokens in `viewer/app.css` for map atmosphere, selection, hover/selection glow, and any container
+- [x] Add semantic theme tokens in `viewer/app.css` for map atmosphere, selection, hover/selection glow, and any container
       surface tint actually used. Keep `--bg` and `PALETTE` stable. Use light/dark values with verified contrast; do not
       duplicate theme colors as hard-coded JS values.
-- [ ] Apply a static radial gradient to the map surface (`#map`), not to the graph canvas element, so the legend and
+- [x] Apply a static radial gradient to the map surface (`#map`), not to the graph canvas element, so the legend and
       readout bands do not show a rectangular seam. Keep it behind all controls, pointer-transparent, and free of
       apparent nodes, clusters, hotspots, or directional cues.
-- [ ] Move the static stylesheet into the luminous system in `viewer/appearance.js`:
+- [x] Move the static stylesheet into the luminous system in `viewer/appearance.js`:
       - ordinary nodes keep their existing shape, type icon, and quiet fill;
       - hovered elements receive a soft, localized underlay using the existing `.hovered` state;
       - selected elements receive the new selection border plus a stronger underlay;
@@ -320,25 +325,25 @@ second graphics layer.
       - keep underlays below icons, labels, and warning marks, with no new pointer targets or hit-area changes;
       - do not light every `.focus` member; bright effects belong to the actual hovered, selected, or trace-anchor
         elements.
-- [ ] Keep `readableLabels()` untouched unless a concrete conflict appears. If underlay padding must change, update the
+- [x] Keep `readableLabels()` untouched unless a concrete conflict appears. If underlay padding must change, update the
       geometry owner and its `labelGeometry` invalidation deliberately; do not add state-dependent geometry that is
       stale on selection.
-- [ ] Adjust label backgrounds only if the atmosphere materially reduces readability. Preserve native text hit testing,
+- [x] Adjust label backgrounds only if the atmosphere materially reduces readability. Preserve native text hit testing,
       collision bounds, and the existing text renderer.
-- [ ] Refine HTML surfaces conservatively in `viewer/app.css`: header and scope-bar separation, controls, search and
+- [x] Refine HTML surfaces conservatively in `viewer/app.css`: header and scope-bar separation, controls, search and
       result surfaces, panels, hover card, focus and selected-tab indicators. Keep responsive layouts and keyboard
       behavior unchanged.
-- [ ] Verify that no new graph elements, reference edges, pointer targets, or review elements appear, and that the
+- [x] Verify that no new graph elements, reference edges, pointer targets, or review elements appear, and that the
       existing warning SVG output is unchanged.
 
 ### C. Interaction refinement
 
-- [ ] Evaluate native Cytoscape transitions for hover and selection. If used, scope them to `.hovered` and `:selected`
+- [x] Evaluate native Cytoscape transitions for hover and selection. If used, scope them to `.hovered` and `:selected`
       only, transition color/opacity rather than geometry, keep duration short, and honor reduced motion. Otherwise
       record the no-transition decision and leave the static system.
-- [ ] Verify the existing `preview()`, `focus()`, `unfocus()`, `clearTrace()`, and Review projection owners remain the
+- [x] Verify the existing `preview()`, `focus()`, `unfocus()`, `clearTrace()`, and Review projection owners remain the
       only hover/selection state machines. Do not add a parallel state path.
-- [ ] Verify clear selection, Escape, gestures, projection refresh, theme change, and live adoption return the ordinary
+- [x] Verify clear selection, Escape, gestures, projection refresh, theme change, and live adoption return the ordinary
       presentation without leaked underlays, classes, or selection marks.
 
 ### D. Required navigation motion
@@ -383,33 +388,36 @@ lifecycle.
 
 Implementation tasks:
 
-- [ ] Implement the smallest helper that satisfies the lifecycle contract, using `setWorldViewport()` rather than
+- [x] Implement the smallest helper that satisfies the lifecycle contract, using `setWorldViewport()` rather than
       `cy.animate()`, and never queue work behind a newer flight.
-- [ ] Add `state.flight` to `liveBlockReason()` so live adoption is blocked throughout the flight, not only inside each
+- [x] Add `state.flight` to `liveBlockReason()` so live adoption is blocked throughout the flight, not only inside each
       synchronous `setWorldViewport()` call.
-- [ ] Cancel the flight in `renderGraph()` before the renderer is destroyed, and in the intentional input/navigation
+- [x] Cancel the flight in `renderGraph()` before the renderer is destroyed, and in the intentional input/navigation
       entry points before their handlers proceed; leave passive hover/pointer movement untouched.
-- [ ] Before shipping, verify: renderer-scale threshold crossings, intermediate viewport culling and newly revealed
+- [x] Before shipping, verify: renderer-scale threshold crossings, intermediate viewport culling and newly revealed
       elements, semantic expansion/collapse, selection and panel resizing, live adoption blocking including inter-frame
       gaps, one-shot history, exact final camera state, interruption without snap-back, and reduced-motion behavior.
-- [ ] If any invariant cannot be preserved with a small local change, return BLOCKER with the concrete blocker and
+- [x] If any invariant cannot be preserved with a small local change, return BLOCKER with the concrete blocker and
       evidence. Do not silently defer D or ship a partial animation. A-C may be reported as partial evidence, but the
       requested scope is not complete without D.
 
 ### E. Acceptance and documentation
 
-- [ ] Run the full affected Node and Python matrix and the relevant browser acceptance functions.
-- [ ] Run `tests/viewer.performance.js` on matching data, scope, expansion, and camera state before and after. Record
-      frame times, long tasks, heap, scene differences, and pin stability; reject a repeatable material regression.
-      The existing scenario covers wheel zoom and mouse pan; measure explicit navigation after D. If hover/tracing, dense
-      native views, or expanded source folders are not covered, measure them with a bounded probe or record them
-      UNVERIFIED rather than inferring them from the wheel/pan result.
+- [x] Run the full affected Node and Python matrix and the relevant browser acceptance functions. Node and
+      Python pass; the appearance, motion, icons, traces and readability browser functions pass on the disposable
+      sample. Fixture-only browser functions were not executed in this workspace.
+- [x] Run `tests/viewer.performance.js` on matching sample data and record post-change frames, long tasks, heap and pin
+      stability. The existing scenario covers wheel zoom and mouse pan; explicit navigation was functionally verified,
+      not separately frame-profiled, and hover/tracing/dense/expanded scenes were not measured. No pre-change baseline
+      was captured, so this is not a comparative performance claim.
 - [ ] Use the drive-browser skill for representative real-project acceptance: overview, world hierarchy, source
       structure, and a dense folder; both themes; no selection, hovered, and selected states; overview/mid/deep zoom;
       desktop and narrow viewport; explicit navigation and interruption. Keep screenshots and snapshots outside the
       clone and record only neutral outcomes. Do not print or record the CDP endpoint, cookies, or storage state.
-- [ ] Update the stable viewer documentation as described below.
-- [ ] Review the final diff against this todo and the stable sources of truth. Report changed files, behavioral changes,
+      Automated real-project smoke checks passed for atmosphere, selection separation, flight start/completion, live
+      blocking, inspection and absence of page errors; the four-view human visual review remains UNVERIFIED.
+- [x] Update the stable viewer documentation as described below.
+- [x] Review the final diff against this todo and the stable sources of truth. Report changed files, behavioral changes,
       verification results, performance impact, and remaining limitations. Do not stage, commit, or push.
 
 ## Test-first and verification plan
@@ -445,7 +453,7 @@ production stylesheet passes them.
 Run the documented commands from `tests/README.md`, not an invented aggregate:
 
 ```text
-node --test tests/icons.test.cjs tests/sections.test.cjs tests/viewer.test.cjs tests/universe.test.cjs tests/references.test.cjs tests/traces.test.cjs
+node --test tests/icons.test.cjs tests/sections.test.cjs tests/viewer.test.cjs tests/universe.test.cjs tests/references.test.cjs tests/traces.test.cjs tests/appearance.test.cjs tests/motion.test.cjs
 node --test tests/review.test.cjs
 node --test tests/live.test.cjs tests/analysis.test.cjs
 python -m unittest discover -s tests -p test_documentation.py
@@ -622,3 +630,30 @@ todo complete because code compiles or a synthetic unit suite passes.
   performed. The reviewer's underlay conclusion matches the pinned-bundle probe; the 60-degree hue check remains a
   labeled proxy, so no change was needed there.
 - **Authority:** No new operator decision. Reviewer feedback is input, not authority; D4 still gates implementation.
+
+### 2026-11-23 - implementation
+
+- **Trigger:** Operator requested implementation of the approved todo (D5) after the reviewer's F1 contract was added.
+- **Implementation:** Extracted the static stylesheet to `viewer/appearance.js`; added light/dark atmosphere and
+  selection tokens, luminous hover/selection/review states, conservative HTML surface polish, and the single cancellable
+  camera flight in `viewer/scene.js` with destination inspection, live-adoption blocking, renderer cancellation,
+  selection revalidation and reduced-motion handling. Updated the stable viewer document, guide, test README, and
+  browser pacing helpers. Added the local Playwright CLI scratch directories to `.gitignore` so browser snapshots
+  or logs cannot be staged.
+- **Verification:**
+  - Node: 174 tests in the appearance/motion/icons/sections/viewer/universe/references/traces group, 13 review tests,
+    and 29 live/analysis tests passed (216 total).
+  - Python: the full suite passed (352 tests, 38 skipped); the server suite passed 28 tests; documentation and privacy
+    checks passed (3 + 2).
+  - Browser on the disposable sample: `appearance.browser.js`, `motion.browser.js`, `icons.browser.js`,
+    `traces.browser.js` and `readability.browser.js` passed in an isolated Chrome session. `viewer.browser.js` could
+    not be validated against this workspace's saved sample because its configuration-default check expects a different
+    disposable sample state. Fixture-only browser suites were not run.
+  - Real-project smoke: atmosphere, separated selection, flight start/completion, live blocking, destination inspection
+    and absence of page errors passed; screenshots and browser state remained outside the clone. The four-view human
+    visual review is UNVERIFIED.
+  - Performance: `tests/viewer.performance.js` on the sample recorded p50 4.2 ms, p95 4.3 ms, no long tasks and
+    unchanged pins; no pre-change baseline was captured, so this is not a comparative claim.
+- **Remaining findings:** fixture-only browser suites, the four-view real-project visual review, and a comparative
+  performance baseline remain acceptance gaps, not known code defects.
+- **Authority:** D5 added; D4 satisfied; no staging, commit, or push.

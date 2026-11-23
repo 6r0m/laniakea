@@ -5,7 +5,7 @@ async page=>{
   page.on('pageerror',e=>errors.push(e.message));
   page.on('request',r=>{if(r.method()==='POST'&&r.url().includes('/layout/')){
     writes.push(r.url());saveBodies.push(r.postDataJSON());}});
-  const settle=async()=>{await page.waitForFunction(()=>!state.viewportFrame&&!state.gestureActive&&!state.zoomFrame&&!state.wheelFrame);
+  const settle=async()=>{await page.waitForFunction(()=>!state.viewportFrame&&!state.gestureActive&&!state.zoomFrame&&!state.wheelFrame&&!state.flight);
     await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));};
   check(await page.evaluate(()=>state.target.id==='sample'&&state.universe.nodes.has('build')),'Requires namespace fixture');
   const initial=await page.evaluate(()=>JSON.stringify(state.positionCache.layouts));

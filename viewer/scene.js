@@ -2,11 +2,129 @@
 // Scene navigation changes detail and camera position without replacing the surrounding universe.
 'use strict';
 
+// One cancellable camera flight owns explicit navigation; wheel and drag stay immediate.
+function prefersReducedMotion() {
+  return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function easeFlight(value) {
+  return value * value * (3 - 2 * value);
+}
+
+function cancelPendingFlightFrames() {
+  for (const key of ['wheelFrame', 'zoomFrame', 'viewportFrame']) {
+    if (state[key] != null && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(state[key]);
+    state[key] = null;
+  }
+  state.wheelDelta = 0;
+}
+
+function releaseNavigationFlight(flight, remember = false, completed = false) {
+  if (!flight || state.flight !== flight) return false;
+  if (flight.frame != null && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(flight.frame);
+  flight.frame = null;
+  if (state.viewportFrame != null && typeof cancelAnimationFrame === 'function') {
+    cancelAnimationFrame(state.viewportFrame);
+    state.viewportFrame = null;
+  }
+  state.flight = null;
+  state.framing = flight.previousFraming;
+  if (!completed) state.pendingReference = null;
+  if (remember && state.cy && state.universe) rememberView();
+  return true;
+}
+
+function cancelNavigationFlight(options = {}) {
+  return releaseNavigationFlight(state.flight, Boolean(options.remember));
+}
+
+function startNavigationFlight(target, options = {}) {
+  const complete = typeof options.complete === 'function' ? options.complete : null;
+  if (!state.cy || !target || !Number.isFinite(target.level) ||
+      !target.pan || !Number.isFinite(target.pan.x) || !Number.isFinite(target.pan.y)) return false;
+  cancelNavigationFlight();
+  cancelPendingFlightFrames();
+  const cy = state.cy;
+  const destination = {
+    level: Math.max(cy.minZoom(), Math.min(cy.maxZoom(), target.level)),
+    pan: { x: target.pan.x, y: target.pan.y },
+  };
+  const start = { level: worldZoom(), pan: { ...cy.pan() } };
+  const commit = options.commit !== false;
+
+  if (prefersReducedMotion() || typeof requestAnimationFrame !== 'function') {
+    const previous = state.framing;
+    state.framing = true;
+    try {
+      setWorldViewport(destination.level, destination.pan, false);
+      refreshMap();
+    } finally {
+      state.framing = previous;
+    }
+    if (commit) rememberView();
+    if (complete) complete();
+    return false;
+  }
+
+  const distance = Math.hypot(destination.pan.x - start.pan.x, destination.pan.y - start.pan.y);
+  const zoomDistance = Math.abs(Math.log(Math.max(destination.level, Number.EPSILON) /
+    Math.max(start.level, Number.EPSILON)));
+  const duration = Math.max(180, Math.min(300, 180 + distance / 80 + zoomDistance * 40));
+  const flight = {
+    cy,
+    generation: (state.flightGeneration || 0) + 1,
+    frame: null,
+    previousFraming: state.framing,
+    start,
+    target: destination,
+    started: null,
+    duration,
+  };
+  state.flightGeneration = flight.generation;
+  state.flight = flight;
+  state.framing = true;
+
+  const tick = time => {
+    if (state.flight !== flight || flight.generation !== state.flightGeneration) return;
+    if (state.cy !== cy || cy.destroyed()) {
+      releaseNavigationFlight(flight, false);
+      return;
+    }
+    if (flight.started === null) flight.started = time;
+    const progress = flight.duration ? Math.min(1, Math.max(0, (time - flight.started) / flight.duration)) : 1;
+    const eased = easeFlight(progress);
+    const level = Math.exp(Math.log(start.level) +
+      (Math.log(destination.level) - Math.log(start.level)) * eased);
+    const pan = {
+      x: start.pan.x + (destination.pan.x - start.pan.x) * eased,
+      y: start.pan.y + (destination.pan.y - start.pan.y) * eased,
+    };
+    setWorldViewport(level, pan, false);
+    if (progress < 1) {
+      scheduleViewport();
+      flight.frame = requestAnimationFrame(tick);
+      return;
+    }
+    setWorldViewport(destination.level, destination.pan, false);
+    if (state.viewportFrame != null && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(state.viewportFrame);
+      state.viewportFrame = null;
+    }
+    refreshMap();
+    if (state.selection) renderDetails(state.selection,{reopen:false});
+    releaseNavigationFlight(flight, commit, true);
+    if (complete) complete();
+  };
+  flight.frame = requestAnimationFrame(tick);
+  return true;
+}
+
 function zoomWithWheel(event) {
   if (!state.cy || state.drag) return;
   // Leave browser zoom available through Ctrl+wheel. Ordinary wheel input belongs to this canvas only.
   event.stopImmediatePropagation();
   if (event.ctrlKey || event.metaKey) return;
+  cancelNavigationFlight();
   event.preventDefault();
   const bounds = $('graph').getBoundingClientRect();
   state.pointer = {x:event.clientX-bounds.left,y:event.clientY-bounds.top};
@@ -24,6 +142,7 @@ function zoomWithWheel(event) {
 
 function zoomAt(level, point) {
   if (state.drag) return;
+  cancelNavigationFlight();
   level = Math.max(state.cy.minZoom(),Math.min(state.cy.maxZoom(),level));
   const ratio = level/worldZoom(), pan = state.cy.pan();
   setWorldViewport(level,{x:point.x+(pan.x-point.x)*ratio,y:point.y+(pan.y-point.y)*ratio},true);
@@ -31,8 +150,10 @@ function zoomAt(level, point) {
 
 function fitOverview() {
   if (!state.cy) return;
+  cancelNavigationFlight();
   setSceneScope(state.universe.root);
-  fitMap();
+  const camera=overviewCamera();
+  if(camera) startNavigationFlight(camera);
 }
 
 function rememberView() {
@@ -45,6 +166,7 @@ function rememberView() {
 }
 
 function restoreView(scene) {
+  cancelNavigationFlight();
   const map = state.universe;
   if (!scene || scene.target !== state.target.id || scene.run !== state.target.run ||
       !Array.isArray(scene.expanded) || !scene.pan || !Number.isFinite(scene.pan.x) ||
@@ -102,6 +224,7 @@ function enterWheelScope(id, from=id) {
 }
 
 function semanticZoom(direction) {
+  cancelNavigationFlight();
   if (state.zoomFrame) cancelAnimationFrame(state.zoomFrame);
   state.zoomFrame = requestAnimationFrame(() => {
     state.zoomFrame = null;
@@ -135,12 +258,15 @@ function semanticZoom(direction) {
 }
 
 function toggleGroup(id) {
+  cancelNavigationFlight();
   const map = state.universe;
   if(map.regions.has(id)){selectNode(id);return;}
   const target=map.navigationTarget(id);
   if(target){
     map.reveal(target);if(map.isGroup(target))map.expanded.add(target);
-    setSceneScope(target);unfocus();refreshMap();frameNode(target);rememberView();return;
+    setSceneScope(target);unfocus();refreshMap();
+    const camera=nodeFrameCamera(target);if(camera)startNavigationFlight(camera);
+    return;
   }
   if (!map.isGroup(id)) { selectNode(id); return; }
   rememberView();
@@ -150,11 +276,13 @@ function toggleGroup(id) {
     refreshMap();
   } else {
     map.reveal(id); map.expanded.add(id);
-    setSceneScope(id); refreshMap(); frameNode(id);
+    setSceneScope(id); refreshMap();
+    const camera=nodeFrameCamera(id);if(camera)startNavigationFlight(camera);
   }
 }
 
 function flyToNode(id, inspect = true) {
+  cancelNavigationFlight();
   state.review?.closeComparison?.();
   const map = state.universe;
   if (!map.nodes.has(id)) return;
@@ -164,13 +292,19 @@ function flyToNode(id, inspect = true) {
   state.selection=null;
   map.reveal(id);
   setSceneScope(id);
-  refreshMap(); frameNode(id);
-  if (inspect && id===map.root) renderDetails({...map.nodes.get(id),projectContext:true});
-  else if (inspect) selectNode(id);
-  else renderDetails(null);
+  refreshMap();
+  const inspectTarget=()=>{
+    if (inspect && id===map.root) renderDetails({...map.nodes.get(id),projectContext:true});
+    else if (inspect) selectNode(id);
+    else renderDetails(null);
+  };
+  const camera=nodeFrameCamera(id);
+  if(camera)startNavigationFlight(camera,{complete:inspectTarget});
+  else inspectTarget();
 }
 
 function followReference(edge) {
+  cancelNavigationFlight();
   const map = state.universe;
   rememberView();
   const entry = scopeFor(edge.target);
@@ -181,10 +315,18 @@ function followReference(edge) {
   if (map.nodes.get(edge.source).boundary || map.nodes.get(edge.target).boundary) state.boundary = true;
   map.reveal(edge.source); map.reveal(edge.target);
   setSceneScope(edge.target);
-  refreshMap(); frameNode(edge.target);
-  renderDetails(configuration?{...edge,refs:[edge],configurationInspection:true}:
-    edge.internal_to_owner?map.nodes.get(edge.source):{...edge,refs:[edge]});
-  state.pendingReference=null;
+  refreshMap();
+  const inspectReference=()=>{
+    try{
+      renderDetails(configuration?{...edge,refs:[edge],configurationInspection:true}:
+        edge.internal_to_owner?map.nodes.get(edge.source):{...edge,refs:[edge]});
+    }finally{
+      state.pendingReference=null;
+    }
+  };
+  const camera=nodeFrameCamera(edge.target);
+  if(camera)startNavigationFlight(camera,{complete:inspectReference});
+  else inspectReference();
 }
 
 function resizeMap() {
@@ -192,7 +334,16 @@ function resizeMap() {
   const cy = state.cy, before = state.mapSize, pan = {...cy.pan()};
   cy.resize();
   const size = {width:cy.width(),height:cy.height()};
-  if (before) cy.pan({x:pan.x+(size.width-before.width)/2,y:pan.y+(size.height-before.height)/2});
+  if (before) {
+    const dx=(size.width-before.width)/2, dy=(size.height-before.height)/2;
+    cy.pan({x:pan.x+dx,y:pan.y+dy});
+    if (state.flight) {
+      state.flight.start.pan.x += dx;
+      state.flight.start.pan.y += dy;
+      state.flight.target.pan.x += dx;
+      state.flight.target.pan.y += dy;
+    }
+  }
   state.mapSize = size;
   readableLabels();
 }
