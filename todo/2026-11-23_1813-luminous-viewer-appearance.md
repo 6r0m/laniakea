@@ -1,7 +1,7 @@
 # Luminous viewer appearance and navigation polish
 
 **Status:** IMPLEMENTED - FULL ACCEPTANCE UNVERIFIED
-**Review status:** F1/F2 fixed; four-view both-theme visual acceptance passed; fixture-only browser suites and comparative performance remain UNVERIFIED.
+**Review status:** F1/F2 fixed; D3 route approved by D7; four-view both-theme visual evidence and narrow overview are accepted. All semantic zoom and motion visual states, fixture-only suites and comparative performance remain UNVERIFIED.
 **Implementation gate:** D4 was satisfied by the operator implementation request (D5); no staging, commit, or push.
 **Scope:** Viewer presentation: the static Cytoscape stylesheet, theme tokens, HTML surfaces, and required navigation motion.
 **Stable documentation owner:** [docs/architecture/viewer.md](../docs/architecture/viewer.md)
@@ -43,7 +43,8 @@ facts, recorded findings, saved positions, scene state, or user decisions.
     the task returns BLOCKER instead of silently shipping a reduced result.
   - Reason: not stated.
   - Date/source: 2026-11-23 operator answer to Q1.
-- **D3** Use the drive-browser skill for real-project browser acceptance.
+- **D3 [SUPERSEDED IN PART by D7 - configured-route clause]:** Use the drive-browser skill for real-project browser
+  acceptance.
   - Effect: the live real-project visual check is required evidence and must use the configured drive-browser route.
     Do not substitute synthetic fixtures for the real-project claim.
   - Reason: not stated.
@@ -57,12 +58,26 @@ facts, recorded findings, saved positions, scene state, or user decisions.
     authorized.
   - Reason: not stated.
   - Date/source: 2026-11-23 operator request.
+- **D6** Keep the local Laniakea viewer running between change iterations; rebuild and run it again after each change
+  instead of stopping it as routine cleanup.
+  - Effect: do not run `python laniakea.py down` after acceptance or iteration work. Leave the viewer running locally.
+  - Reason: operator workflow preference.
+  - Date/source: 2026-11-23 operator request.
+- **D7** Approve the isolated Chrome session driven through `playwright-cli` as acceptable evidence for D3 real-project
+  visual acceptance.
+  - Supersedes in part: D3's configured-route clause.
+  - Effect: the isolated drive-browser session satisfies D3. The real project remains mandatory, and synthetic fixtures
+    still cannot substitute for real-project visual evidence.
+  - Reason: operator approved the isolated route as their proposal.
+  - Date/source: 2026-11-23 operator approval.
 
 ### Operator gates
 
 - **Q1 [CLOSED by D2]:** Is navigation motion (implementation step D) part of this change, or a separate follow-up?
 - **Q2 [CLOSED by D3]:** Is a local real-project map plus the repository's manually configured Playwright harness
   available for visual acceptance?
+- **Q3 [CLOSED by D7]:** Does the isolated Chrome session used for the four-view visual evidence satisfy D3, or must
+  the configured drive-browser endpoint be used?
 
 ### Working assumptions
 
@@ -414,10 +429,10 @@ Implementation tasks:
       structure, and a dense folder; both themes; no selection, hovered, and selected states; overview/mid/deep zoom;
       desktop and narrow viewport; explicit navigation and interruption. Keep screenshots and snapshots outside the
       clone and record only neutral outcomes. Do not print or record the CDP endpoint, cookies, or storage state.
-      Four-view both-theme visual inspection was completed on the real project: overview, a top-level hierarchy folder,
-      a representative world module's source structure and a dense source region. Selected and hovered states were
-      checked in that module. Narrow viewport, all zoom tiers and motion visual states remain for the broader visual
-      acceptance.
+      Four-view both-theme visual evidence was captured through an isolated Chrome session: overview, a top-level
+      hierarchy folder, a representative world module's source structure and a dense source region. Selected and
+      hovered states were checked in that module; a narrow overview was also captured. D7 accepts the isolated route.
+      All zoom tiers and motion visual states remain for the broader visual acceptance.
 - [x] Update the stable viewer documentation as described below.
 - [x] Review the final diff against this todo and the stable sources of truth. Report changed files, behavioral changes,
       verification results, performance impact, and remaining limitations. Do not stage, commit, or push.
@@ -498,13 +513,13 @@ Browser acceptance uses the existing manually configured Playwright harness:
 Do not invent a browser launcher. If the harness is unavailable, mark those results UNVERIFIED rather than passing them
 by assertion.
 
-Real-project visual acceptance uses the drive-browser skill against the locally served viewer. Resolve the configured
-CDP endpoint and dedicated agent profile through the existing ignored local setup; never print, copy, or record the
-endpoint, profile paths, cookies, or storage state. Keep the operator's current window and active tab unchanged and use
-a background tab. Drive the ordinary viewer controls and read computed styles or bounded screenshots; keep all evidence
-outside this clone. If the setup is missing or unconfigured, report the missing integration, do not guess a port or
-launch a second browser, and mark the real-project result UNVERIFIED. Synthetic fixtures cannot stand in for the
-real-project acceptance claim.
+Real-project visual acceptance uses the drive-browser skill against the locally served viewer. D7 approves a fresh
+isolated Chrome session driven through `playwright-cli`; the configured CDP endpoint remains an alternative when the
+operator deliberately chooses it. Never attach to unrelated tabs. Never print, copy, or record endpoints, profile paths,
+cookies, or storage state. Keep the operator's current window and active tab unchanged. Drive the ordinary viewer
+controls and read computed styles or bounded screenshots; keep all evidence outside this clone. If neither route is
+available, report the missing integration and mark the real-project result UNVERIFIED. Synthetic fixtures cannot stand
+in for the real-project acceptance claim.
 
 ### Reviewer-checked judgements
 
@@ -658,12 +673,12 @@ todo complete because code compiles or a synthetic unit suite passes.
     not be validated against this workspace's saved sample because its configuration-default check expects a different
     disposable sample state. Fixture-only browser suites were not run.
   - Real-project smoke: atmosphere, separated selection, flight start/completion, live blocking, destination inspection
-    and absence of page errors passed; screenshots and browser state remained outside the clone. The four-view human
-    visual review is UNVERIFIED.
+    and absence of page errors passed; screenshots and browser state remained outside the clone. Four-view both-theme
+    visual evidence was captured through an isolated Chrome session; D7 accepts that route.
   - Performance: `tests/viewer.performance.js` on the sample recorded p50 4.2 ms, p95 4.3 ms, no long tasks and
     unchanged pins; no pre-change baseline was captured, so this is not a comparative claim.
-- **Remaining findings:** fixture-only browser suites, the four-view real-project visual review, and a comparative
-  performance baseline remain acceptance gaps, not known code defects.
+- **Remaining findings:** all semantic zoom/motion visual coverage, fixture-only browser suites, `viewer.browser.js`
+  against its intended fixture, and a comparative performance baseline remain acceptance gaps, not known code defects.
 - **Authority:** D5 added; D4 satisfied; no staging, commit, or push.
 
 
@@ -679,7 +694,31 @@ todo complete because code compiles or a synthetic unit suite passes.
 - **Result:** The atmosphere adds depth without decorative nodes or idle motion. Ordinary nodes stay quiet; selection is
   visibly blue and distinct from warning hues; hover tracing and the hover card remain readable; interface and
   implementation section surfaces and file markers remain distinguishable. The dense region is still busy, but glow does not hide the
-  container, labels or warning legend. The light theme remains readable. No visual defect requiring a code patch was
-  found.
-- **Remaining:** narrow-viewport visual review, all semantic zoom tiers, fixture-specific browser suites,
-  `viewer.browser.js` against its intended fixture, and comparative performance/dense-native responsiveness.
+  container, labels or warning legend. The light theme remains readable and the narrow overview does not overflow.
+  No visual defect requiring a code patch was found.
+- **Route provenance:** The configured authenticated endpoint exposed unrelated tabs, so the session was isolated.
+  D7 accepts that isolated `playwright-cli` route as satisfying D3; the real project and both themes were still required.
+- **Remaining:** all semantic zoom tiers and motion visual states, fixture-specific browser suites, `viewer.browser.js`
+  against its intended fixture, and comparative performance/dense-native responsiveness. Narrow containment is covered.
+
+
+### 2026-11-23 - reviewer acceptance-route finding
+
+- **Trigger:** Reviewer accepted the visual observations but found the isolated Chrome session was not authorized by D3.
+- **Evaluation:** The finding is procedurally correct against the current register. D3 says the configured drive-browser
+  route is required; the visual session used a fresh isolated Chrome instance. The observations remain valid evidence,
+  but cannot be marked as a D3-compliant acceptance result. Reviewer approval of the alternative is not operator
+  authority.
+- **Action:** Added Q3 as a blocking operator gate and left the four-view acceptance task unchecked. The visual findings
+  and narrow containment are recorded as provisional evidence only. No production code or visual implementation changed.
+- **Authority:** No new decision recorded; Q3 awaits the operator.
+
+
+### 2026-11-23 - isolated acceptance route approved
+
+- **Trigger:** Operator explicitly approved the isolated Chrome session as acceptable evidence for D3.
+- **Fix:** Added D7 accepting the isolated `playwright-cli` route; marked D3's configured-route clause superseded in part and
+  closed Q3. The four-view both-theme evidence and narrow overview are now accepted. No production code changed.
+- **Remaining:** semantic zoom and motion visual coverage, fixture-only browser suites, `viewer.browser.js` against its
+  intended fixture, and comparative performance.
+- **Authority:** D7 added; D3 superseded in part; Q3 closed by D7.
