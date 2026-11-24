@@ -1,7 +1,7 @@
 # Luminous viewer appearance and navigation polish
 
 **Status:** IMPLEMENTED - FULL ACCEPTANCE UNVERIFIED
-**Review status:** reviewer PATCH F1 addressed; implementation complete; targeted browser checks pass; fixture-only browser suites and the four-view real-project visual review remain UNVERIFIED.
+**Review status:** F1/F2 fixed; four-view both-theme visual acceptance passed; fixture-only browser suites and comparative performance remain UNVERIFIED.
 **Implementation gate:** D4 was satisfied by the operator implementation request (D5); no staging, commit, or push.
 **Scope:** Viewer presentation: the static Cytoscape stylesheet, theme tokens, HTML surfaces, and required navigation motion.
 **Stable documentation owner:** [docs/architecture/viewer.md](../docs/architecture/viewer.md)
@@ -414,8 +414,10 @@ Implementation tasks:
       structure, and a dense folder; both themes; no selection, hovered, and selected states; overview/mid/deep zoom;
       desktop and narrow viewport; explicit navigation and interruption. Keep screenshots and snapshots outside the
       clone and record only neutral outcomes. Do not print or record the CDP endpoint, cookies, or storage state.
-      Automated real-project smoke checks passed for atmosphere, selection separation, flight start/completion, live
-      blocking, inspection and absence of page errors; the four-view human visual review remains UNVERIFIED.
+      Four-view both-theme visual inspection was completed on the real project: overview, a top-level hierarchy folder,
+      a representative world module's source structure and a dense source region. Selected and hovered states were
+      checked in that module. Narrow viewport, all zoom tiers and motion visual states remain for the broader visual
+      acceptance.
 - [x] Update the stable viewer documentation as described below.
 - [x] Review the final diff against this todo and the stable sources of truth. Report changed files, behavioral changes,
       verification results, performance impact, and remaining limitations. Do not stage, commit, or push.
@@ -663,3 +665,21 @@ todo complete because code compiles or a synthetic unit suite passes.
 - **Remaining findings:** fixture-only browser suites, the four-view real-project visual review, and a comparative
   performance baseline remain acceptance gaps, not known code defects.
 - **Authority:** D5 added; D4 satisfied; no staging, commit, or push.
+
+
+### 2026-11-23 - visual acceptance
+
+- **Trigger:** Operator requested visual acceptance using the drive-browser skill.
+- **Method:** A fresh isolated Chrome session via `playwright-cli` at 1440x1000 against the locally served real project.
+  The configured authenticated endpoint was not used because it exposed unrelated tabs; no operator tab was touched.
+  Screenshots were written outside the clone.
+- **Views reviewed:** Full project overview; a top-level hierarchy folder; a representative world module's source
+  structure; a dense private-implementation source region. Both light and dark themes were captured. The world module
+  also covered a selected file and a hovered source group.
+- **Result:** The atmosphere adds depth without decorative nodes or idle motion. Ordinary nodes stay quiet; selection is
+  visibly blue and distinct from warning hues; hover tracing and the hover card remain readable; interface and
+  implementation section surfaces and file markers remain distinguishable. The dense region is still busy, but glow does not hide the
+  container, labels or warning legend. The light theme remains readable. No visual defect requiring a code patch was
+  found.
+- **Remaining:** narrow-viewport visual review, all semantic zoom tiers, fixture-specific browser suites,
+  `viewer.browser.js` against its intended fixture, and comparative performance/dense-native responsiveness.
