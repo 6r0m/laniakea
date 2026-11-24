@@ -153,6 +153,8 @@ class LiveUpdates {
       setSceneScope(scope);
       if(!sameGeometry){layout({fit:false});setWorldViewport(zoom,pan);}
       refreshMap();
+      // Adoption preserves the displayed camera even when a projection refresh adjusts the viewport.
+      setWorldViewport(zoom,pan);
       renderDetails(null);
       renderBanner();renderCoverage();renderCrumbs();
       if(selection){

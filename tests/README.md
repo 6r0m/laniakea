@@ -80,7 +80,7 @@ Source-file fixtures must use the normal pipeline/read index/server and real exa
 | [endpoints.browser.js](endpoints.browser.js) | Boundary-anchored references across expanded layers and trusted wire interaction |
 | [icons.browser.js](icons.browser.js) | Type glyphs, themes, pointer hits, title geometry and the keyboard-accessible key |
 | [appearance.browser.js](appearance.browser.js) | Theme atmosphere, selection/warning semantics, luminous underlays, graph identity and clear-selection cleanup |
-| [motion.browser.js](motion.browser.js) | Explicit navigation flight: exact destination, inter-frame live blocking, interruption and reduced motion |
+| [motion.browser.js](motion.browser.js) | Explicit navigation flight: exact destination, non-empty intermediate projection, inter-frame live blocking, interruption and reduced motion |
 | [source-surface.browser.js](source-surface.browser.js) | [Source-surface fixture](../fixtures/source-surface.graph.json): files, symbol identity, gradual/reversible zoom and local arrangement |
 | [namespace-files.browser.js](namespace-files.browser.js) | [Namespace fixture](../fixtures/namespace-files.graph.json): file contexts, exact references, navigation and pins |
 | [review.browser.js](review.browser.js) | [Review fixture](test_review.py): direct explanation, exact evidence, triage, refused writes, late close and pins |

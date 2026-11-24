@@ -4,13 +4,15 @@ async (page,{publish})=>{
   const check=(v,message)=>{if(!v)throw Error(message);};
   await page.waitForFunction(()=>state.live&&!state.live.running);
   await page.evaluate(()=>{clearTimeout(state.live.timer);state.live.stopped=true;});
-  const poll=()=>page.evaluate(async()=>{state.live.stopped=false;await state.live.tick();clearTimeout(state.live.timer);state.live.stopped=true;});
+  const poll=async()=>{await page.waitForFunction(()=>!state.live.running);
+    await page.evaluate(async()=>{state.live.stopped=false;await state.live.tick();clearTimeout(state.live.timer);state.live.stopped=true;});
+    await page.waitForFunction(()=>!state.live.running);};
   const before=await page.evaluate(()=>{
     const map=state.universe,id=[...map.nodes.values()].find(n=>n.level==='function').id;
     flyToNode(id);state.hidden.add('type_ref');
     return {id,run:state.target.run};
   });
-  await page.waitForFunction(()=>!state.framing&&!state.gestureActive);
+  await page.waitForFunction(()=>!state.framing&&!state.gestureActive&&!state.flight);
   let view;
   await page.evaluate(id=>selectNode(id),before.id);
   await page.waitForFunction(()=>!state.referencePages.pending.size&&!liveBlockReason());
@@ -113,6 +115,8 @@ async (page,{publish})=>{
   }finally{await second.close();await page.bringToFront();}
   await page.evaluate(()=>renderDetails(null));run=await publish();await poll();
   check(await page.evaluate(()=>$('details').hidden),'Adoption reopened closed Inspector');
+  await page.waitForFunction(()=>!state.framing&&!state.gestureActive&&!state.flight&&
+    state.wheelFrame==null&&state.zoomFrame==null&&state.viewportFrame==null);
   await page.evaluate(()=>{const input=el('input',null,{name:'review-reason',value:''});input.value='draft';$('details').append(input);});
   run=await publish();await poll();check(await page.evaluate(run=>state.target.run!==run,run),'Adoption discarded a decision draft');
   check(await page.locator('#toggle-analysis').getAttribute('title').then(text=>/decision draft/.test(text)),
@@ -120,8 +124,11 @@ async (page,{publish})=>{
   await page.evaluate(()=>$('details').querySelector('[name="review-reason"]').remove());
   await page.waitForFunction(()=>!liveBlockReason());await poll();
   check(await page.evaluate(run=>state.target.run===run,run),'Adoption did not resume after the draft cleared');
-  await page.evaluate(id=>flyToNode(id),before.id);await page.waitForFunction(()=>!state.framing&&!state.gestureActive);
-  run=await publish('remove');await poll();
+  await page.evaluate(id=>flyToNode(id),before.id);await page.waitForFunction(()=>!liveBlockReason());
+  run=await publish('remove');
+  for(let attempt=0;attempt<20&&!await page.evaluate(run=>state.target.run===run,run);attempt++){
+    await poll();await page.waitForTimeout(50);}
+  await page.waitForFunction(run=>state.target.run===run,run);
   check(await page.evaluate(({run,id})=>state.target.run===run&&state.scopeShard.scope!==id&&
     state.universe.nodes.has(state.scopeShard.scope),{run,id:before.id}),'Removed focus did not fall back');
   await page.setViewportSize({width:390,height:844});

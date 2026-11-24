@@ -126,12 +126,14 @@ async (page) => {
     await page.evaluate(()=>flyToNode('plugin:SampleCore'));
     await page.waitForFunction(()=>!state.gestureActive&&!state.flight);
     const coreHover=await point('plugin:SampleCore');await page.mouse.move(coreHover.x,coreHover.y);await frames();
+    await page.waitForFunction(()=>Boolean(state.trace),{timeout:3000});
     check(await page.locator('#hover-card').innerText().then(text=>/Incoming references recorded.*Of which: project configuration.*1/s.test(text)&&
       /explicitly listed, not necessarily compiled/.test(text)&&!text.includes('Used by')),
       'Hover must disclose the numerical configuration subset without implying usage');
     check(await page.locator('#map-tooltip').innerText().then(text=>/Incoming references recorded.*Of which: project configuration: 1/.test(text)),
       'Accessible readout lost the numerical subset');
     await page.getByRole('button',{name:'SampleProject (project) -> SampleCore (plugin)',exact:true}).click();
+    await page.waitForFunction(()=>!state.flight&&state.selection?.configurationInspection);
     check(await page.evaluate(()=>!configurationVisible()&&state.selection?.configurationInspection&&
       state.selection.source===state.universe.root&&!state.cy.getElementById(state.universe.root).length),
       'Following configuration must preserve the exact record without restoring root wires');
@@ -309,6 +311,7 @@ async (page) => {
     check(await page.evaluate(()=>state.selection?.id==='module:SampleGameplay'&&
       state.cy.getElementById('module:SampleGameplay').selected()),'Filtering lost the inspected module marker');
     await page.getByRole('button',{name:'SampleGameplay (module) -> SampleCore (module)',exact:true}).click();
+    await page.waitForFunction(()=>!state.flight&&state.selection?.source&&state.selection?.target);
     check(await page.evaluate(()=>state.cy.getElementById('module:SampleCore').length===1&&
       state.cy.getElementById('module:SampleGameplay').length===1),'Following a reference lost an endpoint');
     check(await accounted(),'Exact reference navigation changed the known reference set');

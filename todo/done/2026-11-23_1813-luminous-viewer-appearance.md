@@ -1,10 +1,10 @@
 # Luminous viewer appearance and navigation polish
 
-**Status:** IMPLEMENTED - FULL ACCEPTANCE UNVERIFIED
-**Review status:** F1/F2 fixed; D3 route approved by D7; four-view both-theme visual evidence and narrow overview are accepted. All semantic zoom and motion visual states, fixture-only suites and comparative performance remain UNVERIFIED.
+**Status:** DONE
+**Review status:** F1/F2 fixed; D3 route accepted by D7; four-view, selected/hovered, narrow, semantic zoom/motion visual and comparative performance checks are accepted. All mandatory fixture browser suites now pass: `source-preview`, `source-match-navigation`, `health`, `sections`, `source-surface`, `namespace-files`, `review`, `inspector`, `live` and `viewer.browser.js`. See the final acceptance record for evidence.
 **Implementation gate:** D4 was satisfied by the operator implementation request (D5); no staging, commit, or push.
 **Scope:** Viewer presentation: the static Cytoscape stylesheet, theme tokens, HTML surfaces, and required navigation motion.
-**Stable documentation owner:** [docs/architecture/viewer.md](../docs/architecture/viewer.md)
+**Stable documentation owner:** [docs/architecture/viewer.md](../../docs/architecture/viewer.md)
 
 ## Contents
 
@@ -213,7 +213,7 @@ facts, recorded findings, saved positions, scene state, or user decisions.
 - `viewer/app.js` owns startup, HTML controls, the theme-change listener, and the reference-type `PALETTE`.
 - `viewer/app.css` owns theme tokens, layout, HTML surface styling, and responsive behavior.
 - `viewer/index.html` owns script order and static controls.
-- [docs/architecture/viewer.md](../docs/architecture/viewer.md) is the stable owner of viewer composition and behavior.
+- [docs/architecture/viewer.md](../../docs/architecture/viewer.md) is the stable owner of viewer composition and behavior.
   The relevant existing sections are "Composition", "Tracing and inspection", "Viewport and memory lifetime", and
   "Review presentation".
 
@@ -421,18 +421,25 @@ Implementation tasks:
 - [x] Run the full affected Node and Python matrix and the relevant browser acceptance functions. Node and
       Python pass; the appearance, motion, icons, traces and readability browser functions pass on the disposable
       sample. Fixture-only browser functions were not executed in this workspace.
-- [x] Run `tests/viewer.performance.js` on matching sample data and record post-change frames, long tasks, heap and pin
-      stability. The existing scenario covers wheel zoom and mouse pan; explicit navigation was functionally verified,
-      not separately frame-profiled, and hover/tracing/dense/expanded scenes were not measured. No pre-change baseline
-      was captured, so this is not a comparative performance claim.
-- [ ] Use the drive-browser skill for representative real-project acceptance: overview, world hierarchy, source
+- [x] Compare `tests/viewer.performance.js` against the pre-change revision on matching overview and dense native
+      scenes, with identical nodes, edges, camera and pins. Post-change frame times and main-thread work are comparable
+      or lower; no long tasks or pin movement appeared. Heap values are reported separately because reference-page
+      caches differed between the two runs.
+- [x] Use the drive-browser skill for representative real-project acceptance: overview, world hierarchy, source
       structure, and a dense folder; both themes; no selection, hovered, and selected states; overview/mid/deep zoom;
       desktop and narrow viewport; explicit navigation and interruption. Keep screenshots and snapshots outside the
       clone and record only neutral outcomes. Do not print or record the CDP endpoint, cookies, or storage state.
       Four-view both-theme visual evidence was captured through an isolated Chrome session: overview, a top-level
       hierarchy folder, a representative world module's source structure and a dense source region. Selected and
       hovered states were checked in that module; a narrow overview was also captured. D7 accepts the isolated route.
-      All zoom tiers and motion visual states remain for the broader visual acceptance.
+      Motion start/mid/end frames and the four semantic zoom levels were inspected; the initial empty-intermediate
+      projection found during this check was fixed before acceptance.
+- [ ] Run the remaining fixture-specific browser suites (`sections`, `namespace-files`, `source-surface`, `review`,
+      `inspector`, `health`, `live`) and `viewer.browser.js` against their intended disposable fixtures. The temporary
+      harness passed `source-preview.browser.js`, `source-match-navigation.browser.js` and `health.browser.js` against
+      dedicated fixture servers. `sections.browser.js` and `source-surface.browser.js` also passed on fresh disposable
+      samples. The remaining suites need their fixture-specific Review policy/native data, namespace/live state, or
+      sample overlay nodes.
 - [x] Update the stable viewer documentation as described below.
 - [x] Review the final diff against this todo and the stable sources of truth. Report changed files, behavioral changes,
       verification results, performance impact, and remaining limitations. Do not stage, commit, or push.
@@ -538,7 +545,7 @@ in for the real-project acceptance claim.
 
 ## Documentation plan
 
-- **Authoritative stable owner:** [docs/architecture/viewer.md](../docs/architecture/viewer.md)
+- **Authoritative stable owner:** [docs/architecture/viewer.md](../../docs/architecture/viewer.md)
 - **Router / TOC update:** add a "Visual appearance" entry to the viewer document's Contents.
 - **Composition table:** add `appearance.js` as the owner of the static Cytoscape stylesheet and `app.css` as the owner
   of theme tokens and HTML surface styling; adjust the `map.js` row to name canvas geometry, projection, and pointer
@@ -677,8 +684,8 @@ todo complete because code compiles or a synthetic unit suite passes.
     visual evidence was captured through an isolated Chrome session; D7 accepts that route.
   - Performance: `tests/viewer.performance.js` on the sample recorded p50 4.2 ms, p95 4.3 ms, no long tasks and
     unchanged pins; no pre-change baseline was captured, so this is not a comparative claim.
-- **Remaining findings:** all semantic zoom/motion visual coverage, fixture-only browser suites, `viewer.browser.js`
-  against its intended fixture, and a comparative performance baseline remain acceptance gaps, not known code defects.
+- **Remaining findings:** fixture-only browser suites and `viewer.browser.js` against its intended fixture remain
+  acceptance gaps, not known code defects.
 - **Authority:** D5 added; D4 satisfied; no staging, commit, or push.
 
 
@@ -698,8 +705,9 @@ todo complete because code compiles or a synthetic unit suite passes.
   No visual defect requiring a code patch was found.
 - **Route provenance:** The configured authenticated endpoint exposed unrelated tabs, so the session was isolated.
   D7 accepts that isolated `playwright-cli` route as satisfying D3; the real project and both themes were still required.
-- **Remaining:** all semantic zoom tiers and motion visual states, fixture-specific browser suites, `viewer.browser.js`
-  against its intended fixture, and comparative performance/dense-native responsiveness. Narrow containment is covered.
+- **Follow-up:** Motion start/mid frames exposed an empty intermediate projection; fixed by union start/destination
+  pre-projection in the flight helper, with a browser regression. See the next entry.
+- **Remaining:** fixture-specific browser suites and `viewer.browser.js` against its intended fixture.
 
 
 ### 2026-11-23 - reviewer acceptance-route finding
@@ -722,3 +730,74 @@ todo complete because code compiles or a synthetic unit suite passes.
 - **Remaining:** semantic zoom and motion visual coverage, fixture-only browser suites, `viewer.browser.js` against its
   intended fixture, and comparative performance.
 - **Authority:** D7 added; D3 superseded in part; Q3 closed by D7.
+
+
+### 2026-11-23 - semantic zoom, motion and comparative acceptance
+
+- **Trigger:** The four-view visual acceptance exposed an empty intermediate projection at the start of a flight from
+  the overview into a deep target.
+- **Fix:** The flight now pre-projects the union of the current and destination viewports before animation, with the
+  destination projection committed on arrival. Pre-projection failure is exception-safe. Added a browser regression
+  asserting a non-empty flight start projection. No further visual-system changes were made.
+- **Visual checks:** Four representative semantic zoom levels were reviewed in both themes. Motion start/mid/end frames
+  were captured and inspected in both themes after the fix; the path stayed populated and no visual glitches appeared.
+  The narrow overview remained contained.
+- **Comparative performance:** `tests/viewer.performance.js` ran against an isolated source export of the pre-change
+  revision, using the same saved target and matching overview and dense native scenes. Current overview p50/p95 was
+  4.2/4.3 ms versus baseline 4.2/4.3 ms; dense p50/p95 was 4.2/129.2 ms versus baseline 4.2/154.1 ms. Main-thread
+  work was 0.124 vs 0.128 s overview and 2.276 vs 2.477 s dense. No long tasks or pin movement appeared. Scene
+  identity, expansion and camera were matched before both runs; heap is not compared because reference-page caches
+  differed.
+- **Verification:** Node suites remain at 219 passing tests; the motion browser test includes the new non-empty
+  projection regression. Documentation and privacy checks pass.
+- **Remaining:** fixture-specific browser suites and `viewer.browser.js` against their intended disposable fixtures.
+- **Operational:** D6 was respected: the main viewer remained running; the isolated baseline server was separate.
+
+
+### 2026-11-23 - fixture acceptance progress
+
+- **Trigger:** Remaining mandatory fixture suites after the visual and performance gates were accepted.
+- **Harness:** A temporary launcher under ignored `workspace/tmp/` reused the existing Python fixture builders, started
+  dedicated loopback servers, and drove an isolated Chrome session. `source-preview.browser.js` received a temporary
+  source-edit control endpoint for its `change('edit'/'missing'/'restore')` phases.
+- **Passed:** `source-preview.browser.js`, `source-match-navigation.browser.js` (four-occurrence fixture),
+  `health.browser.js` (54-occurrence fixture), `sections.browser.js` and `source-surface.browser.js` on fresh
+  disposable samples returned all acceptance booleans with no page errors.
+- **Not run/blocked:** `namespace-files`, `review`, `inspector`, and `live` still need their dedicated saved layouts,
+  Review policy/native data, or live publishing fixture. `viewer.browser.js` was attempted with moved sample overlay
+  nodes; its map-tooltip configuration-subset assertion failed in the headless fixture. These remain UNVERIFIED, not
+  code defects.
+- **Code changes:** None from this fixture pass. The viewer remained running at the default local endpoint.
+
+
+### 2026-11-23 - full fixture acceptance and closeout
+
+- **Trigger:** Operator required a final, truly complete acceptance pass rather than leaving fixture suites unverified.
+- **Harness:** Temporary launchers under ignored `workspace/tmp/` started dedicated loopback servers for each fixture.
+  Each suite ran in a fresh isolated Chrome context through the existing Playwright package; dialogs, multiple pages
+  and live publishing worked without attaching to operator tabs. The main viewer stayed on its normal local endpoint.
+- **Browser suites passed:** `source-preview.browser.js`, `source-match-navigation.browser.js`, `health.browser.js`,
+  `sections.browser.js`, `source-surface.browser.js`, `namespace-files.browser.js`, `review.browser.js`,
+  `inspector.browser.js`, `live.browser.js` and `viewer.browser.js`. `appearance.browser.js`, `motion.browser.js`,
+  `icons.browser.js`, `traces.browser.js` and `readability.browser.js` remain passing from the earlier acceptance run.
+- **Final fixture results:** source-surface returned all map, source-arrangement, reload and narrow checks; namespace
+  returned file-first, namespace context, weighted counts, paging, recursion, canonical owners, wheel, keyboard,
+  double-click, reload and overlap checks; review returned readable symbols, independent list, warning wires, finding
+  choice, off-screen partner, opposite endpoint, exact evidence, triage, refusal, late close and unchanged pins;
+  inspector returned tabs, focus, separation, lazy references, retained content, draft, late response, refusal, narrow,
+  close focus and unchanged pins; live returned adoption, camera, deep scope, filters, immutable URLs, drag/save
+  deferral, drafts, closed inspector, removed focus, narrow map, Review isolation, multiple tabs, render rollback and
+  reading-focus checks; viewer returned all navigation, hover, exact-reference, pins, reload, narrow, keyboard and
+  configuration-subset checks with no page errors.
+- **Product patches exposed by the final acceptance:** hover tracing resumes after a viewport gesture; a spurious
+  renderer node `mouseout` no longer clears a trace while the pointer remains inside the node footprint; live adoption
+  restores the displayed camera after a projection refresh. Test pacing now waits for the owned flight and for a
+  completed live poll instead of relying on one animation frame; these are harness timing corrections, not weakened
+  assertions.
+- **Final regression matrix:** Node 219 passing (177 group, 13 review, 29 live/analysis); Python full suite 352 passing,
+  38 skipped; documentation 3 passing and privacy 2 passing. `git diff --check` is clean. No analysed-project data
+  entered tracked files.
+- **Limitations:** All browser evidence uses disposable synthetic fixtures except the accepted D7 real-project visual
+  session. No new performance run was made after the final hover/camera fixes; the accepted comparative performance
+  record above remains the latest measurement.
+- **Result:** PASS. The viewer remains running locally for operator checking. No staging, commit, or push was performed.

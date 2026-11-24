@@ -83,6 +83,13 @@ function startNavigationFlight(target, options = {}) {
   state.flightGeneration = flight.generation;
   state.flight = flight;
   state.framing = true;
+  try {
+    const projection=flightProjectionCut(destination,Array.isArray(options.force)?options.force:[]);
+    if(projection)refreshMap(projection);
+  } catch (error) {
+    releaseNavigationFlight(flight, false, false);
+    throw error;
+  }
 
   const tick = time => {
     try {
@@ -102,7 +109,6 @@ function startNavigationFlight(target, options = {}) {
       };
       setWorldViewport(level, pan, false);
       if (progress < 1) {
-        scheduleViewport();
         flight.frame = requestAnimationFrame(tick);
         return;
       }
@@ -163,7 +169,7 @@ function fitOverview() {
   cancelNavigationFlight();
   setSceneScope(state.universe.root);
   const camera=overviewCamera();
-  if(camera) startNavigationFlight(camera);
+  if(camera) startNavigationFlight(camera,{force:[state.universe.root]});
 }
 
 function rememberView() {
@@ -275,7 +281,7 @@ function toggleGroup(id) {
   if(target){
     map.reveal(target);if(map.isGroup(target))map.expanded.add(target);
     setSceneScope(target);unfocus();refreshMap();
-    const camera=nodeFrameCamera(target);if(camera)startNavigationFlight(camera);
+    const camera=nodeFrameCamera(target);if(camera)startNavigationFlight(camera,{force:[target]});
     return;
   }
   if (!map.isGroup(id)) { selectNode(id); return; }
@@ -287,7 +293,7 @@ function toggleGroup(id) {
   } else {
     map.reveal(id); map.expanded.add(id);
     setSceneScope(id); refreshMap();
-    const camera=nodeFrameCamera(id);if(camera)startNavigationFlight(camera);
+    const camera=nodeFrameCamera(id);if(camera)startNavigationFlight(camera,{force:[id]});
   }
 }
 
@@ -309,7 +315,7 @@ function flyToNode(id, inspect = true) {
     else renderDetails(null);
   };
   const camera=nodeFrameCamera(id);
-  if(camera)startNavigationFlight(camera,{complete:inspectTarget});
+  if(camera)startNavigationFlight(camera,{force:[id],complete:inspectTarget});
   else inspectTarget();
 }
 
@@ -335,7 +341,7 @@ function followReference(edge) {
     }
   };
   const camera=nodeFrameCamera(edge.target);
-  if(camera)startNavigationFlight(camera,{complete:inspectReference});
+  if(camera)startNavigationFlight(camera,{force:[edge.source,edge.target],complete:inspectReference});
   else inspectReference();
 }
 

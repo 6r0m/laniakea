@@ -95,7 +95,16 @@ function renderGraph() {
   });
   cy.on('mouseover mousemove',event=>schedulePreview(event.target,event.renderedPosition));
   cy.on('mouseout','node, edge',event=>{
-    if(state.hoverTarget?.element===event.target||event.target.hasClass('hovered'))schedulePreview(cy,event.renderedPosition);
+    const target=state.hoverTarget?.element,pointer=state.pointer;
+    // A renderer can emit a spurious node mouseout while the pointer is still inside its footprint.
+    // Keep the node trace instead of clearing it and replacing it with a background hover.
+    if(target===event.target&&target.isNode()&&pointer){
+      const box=target.renderedBoundingBox();
+      if(pointer.x>=box.x1&&pointer.x<=box.x2&&pointer.y>=box.y1&&pointer.y<=box.y2){
+        schedulePreview(target,pointer);return;
+      }
+    }
+    if(target===event.target||event.target.hasClass('hovered'))schedulePreview(cy,event.renderedPosition);
   });
   $('graph').onmouseleave=()=>{cancelAnimationFrame(state.hoverFrame);state.hoverFrame=null;unfocus();};
   cy.on('zoom', () => {
@@ -140,6 +149,21 @@ function viewportCamera(padding = 220) {
     x2:(cy.width()-pan.x+padding)/zoom,y2:(cy.height()-pan.y+padding)/zoom,zoom,force};
 }
 
+function cameraCut(level, pan, padding = 220) {
+  const cy=state.cy;
+  if(!cy) return null;
+  return {x1:(-pan.x-padding)/level,y1:(-pan.y-padding)/level,
+    x2:(cy.width()-pan.x+padding)/level,y2:(cy.height()-pan.y+padding)/level,zoom:level,force:[]};
+}
+
+function flightProjectionCut(target, force = []) {
+  const start=viewportCamera(220),finish=cameraCut(target.level,target.pan,220);
+  if(!start||!finish) return null;
+  return {x1:Math.min(start.x1,finish.x1),y1:Math.min(start.y1,finish.y1),
+    x2:Math.max(start.x2,finish.x2),y2:Math.max(start.y2,finish.y2),
+    zoom:Math.max(start.zoom,target.level),force:[...(start.force||[]),...force]};
+}
+
 function scheduleViewport() {
   if(state.viewportFrame || state.drag)return;
   state.viewportFrame=requestAnimationFrame(()=>{
@@ -152,13 +176,13 @@ function scheduleViewport() {
   });
 }
 
-function refreshMap() {
+function refreshMap(cut = null) {
   clearTimeout(state.inspectTimer);
   state.drag = null;
   $('graph').classList.remove('dragging');
   const universe = state.universe, cy = state.cy;
   clearTrace();
-  state.viewportCut=viewportCamera();
+  state.viewportCut=cut || viewportCamera();
   const view = universe.project(state.hidden, state.boundary,state.viewportCut);
   const members = new Set(view.nodes.filter(n => !n.boundary).map(n => n.id));
   const enclosures=new Set(view.nodes.filter(n=>n.id!==universe.root&&view.expanded.has(n.id)&&universe.isGroup(n.id)).map(n=>n.id));
@@ -859,7 +883,10 @@ function beginViewportGesture() {
   const cy=state.cy;
   state.gestureTimer=setTimeout(()=>{
     state.gestureActive=false;
-    if(state.cy===cy&&!cy.destroyed())readableLabels();
+    if(state.cy===cy&&!cy.destroyed()){
+      readableLabels();
+      if(state.hoverTarget)schedulePreview(state.hoverTarget.element,state.hoverTarget.pointer);
+    }
   },120);
 }
 

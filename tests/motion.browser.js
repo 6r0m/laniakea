@@ -133,6 +133,22 @@ async page=>{
     'A completed obsolete flight overwrote the newer Review-list selection');
   await page.evaluate(()=>{state.review.badges=new Map();state.review.findingIndex=new Map();renderDetails(null);});
 
+  const projected=await page.evaluate(()=>{
+    const root=state.universe.root;
+    state.universe.expanded=new Set([root]);
+    setSceneScope(root);renderDetails(null);unfocus(true);state.cy.elements().unselect();
+    refreshMap();fitMap();
+    const target=[...state.universe.nodes.values()].find(node=>node.level==='module'&&
+      (state.universe.paths.get(node.id)||[]).length>2)?.id;
+    if(!target)throw Error('Motion projection regression needs a nested module');
+    flyToNode(target,false);
+    return {flight:Boolean(state.flight),nodes:state.shard.nodes.length,target};
+  });
+  check(projected.flight,'Projection regression requires an active flight');
+  check(projected.nodes>0,'Flight start projected an empty scene');
+  await page.waitForFunction(()=>!state.flight);
+  await page.evaluate(()=>renderDetails(null));
+
   await page.emulateMedia({reducedMotion:'reduce'});
   const reduced=await page.evaluate(()=>{
     const id=[...state.universe.nodes.values()].find(node=>node.level==='module')?.id;

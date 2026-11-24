@@ -184,7 +184,8 @@ Camera-bearing explicit navigation (search results, reference Follow, Fit map an
 one cancellable camera flight in `scene.js`. Ordinary scope breadcrumbs continue to open their scope directly. The
 flight owns `state.flight` for its entire lifetime, including gaps between animation frames, so `live.js` cannot adopt
 a snapshot mid-flight. Frames check the originating renderer and generation; camera updates go through
-`setWorldViewport()` with intermediate culling, never `cy.animate()`. Wheel, drag, map-camera keyboard input, new
+`setWorldViewport()`, never `cy.animate()`. Before the flight, the current and destination viewports are projected
+together so the path stays populated; the destination projection is committed on arrival. Wheel, drag, map-camera keyboard input, new
 navigation and renderer replacement cancel the flight before proceeding; passive pointer movement does not. Clear
 selection, Escape-driven inspection clearing, graph arrow selection and Review-list selection also cancel a flight so
 the newer inspection intent wins. A frame or scheduling failure releases the flight, restores framing and surfaces the

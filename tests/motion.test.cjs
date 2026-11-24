@@ -36,7 +36,7 @@ test('a flight blocks live adoption for its whole lifetime and commits once at t
   assert.equal(done.flight,null);
   assert.equal(done.framing,false);
   assert.equal(done.remembered,1,'Camera history must be committed once');
-  assert.equal(done.refreshes,1);
+  assert.equal(done.refreshes,2,'One union pre-projection and one final projection');
   const final=done.calls[done.calls.length-1];
   assert.equal(final.level,2);
   assert.deepEqual(final.pan,{x:100,y:50});
@@ -99,7 +99,7 @@ test('a frame error releases the flight and restores the live-adoption gate',()=
 
 test('a final render error releases the flight without leaving a stale blocker',()=>{
   const {run}=motionViewer();
-  run(`globalThis.refreshMap=()=>{throw Error('render failed');};
+  run(`let refreshes=0;globalThis.refreshMap=()=>{if(++refreshes>1)throw Error('render failed');};
     startNavigationFlight({level:2,pan:{x:10,y:20}});`);
   const result=run(`globalThis.flightError='';
     try{frameQueue.shift()(0);frameQueue.shift()(1000);}catch(error){flightError=error.message;}
