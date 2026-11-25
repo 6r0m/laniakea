@@ -224,7 +224,8 @@ class Universe {
   }
 
   project(hiddenTypes = new Set(), boundary = true, camera = null) {
-    const internal = new Map(), bundles = new Map();
+    let internal = new Map();
+    const bundles = new Map();
     let edges = [];
     const cut = camera && this.spatial ? this.viewportCut(camera) : null;
     const expanded = cut ? cut.expanded : new Set([...this.expanded,...this.regions]);
@@ -287,6 +288,11 @@ class Universe {
       nodes=nodes.filter(n=>keep.has(n.id));
       visible=new Set(nodes.map(n=>n.id));
       edges=edges.filter(e=>visible.has(e.source)&&visible.has(e.target));
+      internal=new Map([...internal].filter(([owner])=>visible.has(owner)));
+      // Recompute represented references from the retained staging projection so
+      // omitted owners move into outside-view accounting instead of disappearing.
+      represented=edges.reduce((sum,e)=>sum+referenceTotal(e.refs||[e]),0)+
+        [...internal.values()].flat().reduce((sum,e)=>sum+referenceCount(e),0);
     } else visible=new Set(nodes.map(n=>n.id));
     const total=[...this.typeCounts.values()].reduce((a,b)=>a+b,0),configurationMarks=new Map();
     for(const target of this.configurationTargets) {

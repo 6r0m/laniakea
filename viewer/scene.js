@@ -319,7 +319,6 @@ function flyToNode(id, inspect = true) {
   state.selection=null;
   map.reveal(id);
   setSceneScope(id);
-  refreshMap();
   const inspectTarget=()=>{
     if (inspect && id===map.root) renderDetails({...map.nodes.get(id),projectContext:true});
     else if (inspect) selectNode(id);
@@ -327,7 +326,7 @@ function flyToNode(id, inspect = true) {
   };
   const camera=nodeFrameCamera(id);
   if(camera)startNavigationFlight(camera,{force:[id],complete:inspectTarget});
-  else inspectTarget();
+  else {refreshMap();inspectTarget();}
 }
 
 function followReference(edge) {

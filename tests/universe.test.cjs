@@ -34,16 +34,23 @@ test('a root that owns only an internal fact remains available for exact inspect
   assert.equal(view.edges.length,0);
 });
 
-test('a flight focus bounds staging to the visible start path without changing canonical containment',()=>{
-  const map=new Universe(fixture());
-  const camera={x1:-100000,y1:-100000,x2:100000,y2:100000,zoom:1,focus:['app.core.db']};
+test('a flight focus bounds staging without losing reference accounting',()=>{
+  const graph=difficultGraph(),map=new Universe(graph);
+  map.place({},'auto');map.reveal('app.core.nested.leaf');map.reveal('app.web.views');
+  const leaf=map.positions.get('app.core.nested.leaf');
+  const camera={x1:leaf.x-10,y1:leaf.y-10,x2:leaf.x+10,y2:leaf.y+10,zoom:20,
+    focus:['app.core.nested.leaf']};
   const view=map.project(new Set(),true,camera);
   const ids=view.nodes.map(node=>node.id);
-  assert.ok(ids.every(id=>['app','app.core','app.core.db','stdlib','stdlib.sqlite3'].includes(id)));
-  assert.ok(ids.includes('app.core.db')||ids.includes('app.core'),'the focus path must remain staged');
-  assert.equal(ids.includes('app.web.views'),false);
-  assert.equal(view.edges.some(edge=>edge.source==='app.web.views'||edge.target==='app.web.views'),false);
-  assert.deepEqual([...map.nodes.keys()].sort(),fixture().nodes.map(node=>node.id).sort(),
+  assert.ok(ids.includes('app.core.nested.leaf'),'the focus path must remain staged');
+  assert.ok([...view.internal.keys()].every(id=>ids.includes(id)),'internal owners must remain visible');
+  assert.ok(view.outside>0,'references to omitted focus siblings must remain outside-view');
+  const refs=[...view.edges.flatMap(edge=>edge.refs||[edge]),...[...view.internal.values()].flat()];
+  const retained=refs.reduce((sum,edge)=>sum+(edge.count===undefined?1:edge.count),0);
+  const total=graph.edges.reduce((sum,edge)=>sum+(edge.count===undefined?1:edge.count),0);
+  assert.equal(retained+view.outside+view.hidden,total,'focused staging must conserve every reference');
+  assert.equal(new Set(refs.map(edge=>edge.id)).size,refs.length);
+  assert.deepEqual([...map.nodes.keys()].sort(),graph.nodes.map(node=>node.id).sort(),
     'A bounded staging projection must not mutate canonical containment');
 });
 

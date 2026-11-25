@@ -186,7 +186,8 @@ flight owns `state.flight` for its entire lifetime, including gaps between anima
 a snapshot mid-flight. Frames check the originating renderer and generation; camera updates go through
 `setWorldViewport()`, never `cy.animate()`. The flight interpolates the world-space centre and logarithmic zoom, then
 derives the renderer pan from that camera; it does not interpolate pan linearly. Before the flight, the current and
-destination viewports are projected together, so the centre path stays inside the bounded pre-projection. That
+destination viewports are projected together, so the centre path stays inside the bounded pre-projection. The flight
+start owns that render; `flyToNode()` does not first render the same destination through the ordinary projection. That
 staging projection is limited to the visible start scene and the destination path; it does not pull every sibling
 source region inside the world-space rectangle into the renderer. The destination projection is committed on arrival. Wheel, drag, map-camera keyboard input, new navigation and renderer
 replacement cancel the flight before proceeding; passive pointer movement does not. Clear selection, Escape-driven
@@ -387,8 +388,8 @@ initial background loads do not move the reader. Inspecting another item resets 
 Viewport buffering and bounded retention follow [tile-cache practice](https://deck.gl/docs/api-reference/geo-layers/tile-layer).
 The canvas adapter uses [Cytoscape's native interaction optimizations](https://js.cytoscape.org/#performance) and the display's
 native pixel ratio; gesture performance does not depend on reducing display resolution. Explicit flights are bounded by
-the visible start scene plus the destination path; the flight performance probe records pre-projection time, cut bounds
-and zoom, peak rendered elements, final retention, long tasks and pin stability.
+the visible start scene plus the destination path; the flight performance probe records call/pre-projection time, first visible frame, total completion, cut bounds and zoom,
+peak rendered elements, final retention, long tasks and pin stability.
 
 ## Saved arrangements
 

@@ -14,10 +14,11 @@ async page => {
     if(!target)throw Error('Flight performance requires a module or class target');
     const camera=nodeFrameCamera(target.id);
     if(!camera)throw Error('Flight target has no camera');
-    const probe={longTasks:[],peak:{nodes:0,edges:0},samples:[]};
+    const probe={longTasks:[],peak:{nodes:0,edges:0},samples:[],started:performance.now(),firstFrameMs:null};
     probe.observer=new PerformanceObserver(list=>probe.longTasks.push(...list.getEntries().map(entry=>entry.duration)));
     probe.observer.observe({type:'longtask'});window.__flightPerformance=probe;
     const sample=()=>{
+      if(probe.firstFrameMs===null)probe.firstFrameMs=performance.now()-probe.started;
       probe.peak.nodes=Math.max(probe.peak.nodes,cy.nodes().length);
       probe.peak.edges=Math.max(probe.peak.edges,cy.edges().length);
       probe.samples.push(cy.nodes().length);
@@ -27,21 +28,22 @@ async page => {
     const before={nodes:cy.nodes().length,edges:cy.edges().length};
     const start=performance.now();
     flyToNode(target.id,false);
-    const preprojectionMs=performance.now()-start;
+    const callMs=performance.now()-start;
     const cut=state.viewportCut?{width:state.viewportCut.x2-state.viewportCut.x1,
       height:state.viewportCut.y2-state.viewportCut.y1,zoom:state.viewportCut.zoom,force:state.viewportCut.force.length}:null;
     const afterPreprojection={nodes:cy.nodes().length,edges:cy.edges().length};
     return {targetLevel:target.level,targetDepth:map.paths.get(target.id).length,before,
-      afterPreprojection,preprojectionMs,cut,frame};
+      afterPreprojection,callMs,cut,frame};
   });
   await page.waitForFunction(()=>!state.flight,{timeout:10000});
   const result=await page.evaluate(({frame,original})=>{
     const probe=window.__flightPerformance;
     cancelAnimationFrame(frame);probe.observer.disconnect();delete window.__flightPerformance;
     const final={nodes:state.cy.nodes().length,edges:state.cy.edges().length};
+    const totalMs=performance.now()-probe.started;
     const pinsUnchanged=JSON.stringify(state.positionCache.layouts)===original.pins&&
       JSON.stringify([...state.universe.positions])===original.positions;
-    return {final,pinsUnchanged,longTasksMs:probe.longTasks,
+    return {final,pinsUnchanged,longTasksMs:probe.longTasks,totalMs,firstFrameMs:probe.firstFrameMs,
       peakNodes:probe.peak.nodes,peakEdges:probe.peak.edges,frameSamples:probe.samples.length};
   },{frame:measurement.frame,original});
   await page.evaluate(original=>{
@@ -52,7 +54,7 @@ async page => {
   if(!result.pinsUnchanged)throw Error('Explicit flight changed world positions or saved pins');
   return {targetLevel:measurement.targetLevel,targetDepth:measurement.targetDepth,
     before:measurement.before,afterPreprojection:measurement.afterPreprojection,
-    preprojectionMs:measurement.preprojectionMs,cut:measurement.cut,final:result.final,
+    callMs:measurement.callMs,cut:measurement.cut,final:result.final,
     peakNodes:result.peakNodes,peakEdges:result.peakEdges,frameSamples:result.frameSamples,
-    longTasksMs:result.longTasksMs,pinsUnchanged:result.pinsUnchanged};
+    totalMs:result.totalMs,firstFrameMs:result.firstFrameMs,longTasksMs:result.longTasksMs,pinsUnchanged:result.pinsUnchanged};
 }

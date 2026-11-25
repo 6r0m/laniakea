@@ -99,6 +99,6 @@ Keep real-project screenshots outside the clone and other observations in the ig
 
 [viewer.performance.js](viewer.performance.js) measures mouse/wheel input, frames, main-thread work and heap through
 Playwright/CDP, restores the camera and checks that positions/pins did not move. [viewer.flight-performance.js](viewer.flight-performance.js)
-measures an explicit deep flight: pre-projection time, cut bounds/zoom, peak rendered nodes/edges, final retention,
-long tasks and pins. Compare matching data, scope, expansion and camera state; record scene differences and
+measures an explicit deep flight: call/pre-projection time, first visible frame, total completion, cut bounds/zoom,
+peak rendered nodes/edges, final retention, long tasks and pins. Compare matching data, scope, expansion and camera state; record scene differences and
 hardware/load. Reject repeatable, materially worse interaction or unbounded flight retention.
