@@ -4,7 +4,7 @@ async page=>{
   const check=(ok,message)=>{if(!ok)throw Error(message);},errors=[],writes=[];
   page.on('pageerror',e=>errors.push(e.message));
   page.on('request',r=>{if(r.method()==='POST'&&r.url().includes('/layout/'))writes.push(r.url());});
-  const settle=async()=>{await page.waitForFunction(()=>!state.viewportFrame&&!state.gestureActive&&!state.zoomFrame&&!state.wheelFrame&&!state.flight);
+  const settle=async()=>{await page.waitForFunction(()=>!state.viewportFrame&&!state.gestureActive&&!state.zoomFrame&&!state.wheel&&!state.flight);
     await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));};
   check(await page.evaluate(()=>state.target.id==='sample'&&state.universe.nodes.has('method')),'Requires the disposable source surface fixture');
   const initial=await page.evaluate(()=>JSON.stringify(state.positionCache.layouts));

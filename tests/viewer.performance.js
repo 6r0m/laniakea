@@ -29,7 +29,7 @@ async page => {
       await page.mouse.move(box.x+box.width*.3+(i%4)*50,box.y+box.height*.45);
       await page.mouse.wheel(0,i<6?-55:55);
     }
-    await page.waitForFunction(()=>!state.wheelFrame&&!state.zoomFrame&&!state.viewportFrame&&!state.gestureActive);
+    await page.waitForFunction(()=>!state.wheel&&!state.wheelFrame&&!state.zoomFrame&&!state.viewportFrame&&!state.gestureActive);
     const after=await cdp.send('Performance.getMetrics');
     const samples=await page.evaluate(original=>{
       const probe=window.mapPerformance;

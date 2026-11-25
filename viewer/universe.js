@@ -151,14 +151,12 @@ class Universe {
     return this.contains(id,file)||this.contains(id,this.fileContext(edge,end));
   }
 
-  endpoint(edge,end,expanded){
-    const base=this.representative(edge[end],expanded),file=this.fileIds[edge[end+'File']];
-    if(!file)return base;
+  fileEndpoint(edge,end,file,base,representative){
     const owner=this.nodes.get(file).attrs.source_owner;
     const node=this.nodes.get(base),context=this.fileContext(edge,end);
     if(!node.attrs?.presentation_group&&(node.level!=='namespace'||base===edge[end])&&base!==owner&&this.canonicalPaths.get(base)?.includes(owner))return base;
-    if(context!==file&&this.representative(context,expanded)===context)return context;
-    return this.representative(file,expanded);
+    if(context!==file&&representative(context)===context)return context;
+    return representative(file);
   }
 
   representative(id, expanded = this.expanded) {
@@ -195,12 +193,7 @@ class Universe {
     const focus=camera.focus ? new Set(camera.focus) : null;
     const seeds = new Set([...near,...endpoints].filter(id=>(!focus||focus.has(id)) &&
       this.representative(id,expanded)===id && (endpoints.has(id)||inWindow(id))));
-    const references = new Set();
-    for (const id of seeds) {
-      if(!inWindow(id))continue;
-      for (const edge of (expanded.has(id)?this.directReferences:this.referenceIndex).get(id) || []) references.add(edge);
-    }
-    return {expanded,seeds,references};
+    return {expanded,seeds,referenceSeeds:new Set([...seeds].filter(inWindow)),endpoints,focus};
   }
 
   indexPositions() {
@@ -223,15 +216,24 @@ class Universe {
     this.spatial.finish();
   }
 
-  project(hiddenTypes = new Set(), boundary = true, camera = null) {
+  project(hiddenTypes = new Set(), boundary = true, camera = null,
+    cut = camera && this.spatial ? this.viewportCut(camera) : null) {
     let internal = new Map();
-    const bundles = new Map();
+    const bundles = [], bundleSources = new Map(), rollupTypes = new Map();
     let edges = [];
-    const cut = camera && this.spatial ? this.viewportCut(camera) : null;
     const expanded = cut ? cut.expanded : new Set([...this.expanded,...this.regions]);
     const shown = new Map(), representative = id => {
       if (!shown.has(id)) shown.set(id,this.representative(id,expanded));
       return shown.get(id);
+    };
+    const contextual = new Map();
+    const endpoint = (edge,end,file) => {
+      const id = edge[end], base = representative(id);
+      if (!file) return base;
+      if (!contextual.has(id)) contextual.set(id,new Map());
+      const files = contextual.get(id);
+      if (!files.has(file)) files.set(file,this.fileEndpoint(edge,end,file,base,representative));
+      return files.get(file);
     };
     let hidden = 0;
     const excluded=e=>hiddenTypes.has(e.type) || this.isConfiguration(e) ||
@@ -242,31 +244,45 @@ class Universe {
       this.filteredTotals.set(filterKey,this.graph.edges.reduce((sum,e)=>sum+(excluded(e)?referenceCount(e):0),0));
     }
     hidden=this.filteredTotals.get(filterKey);
+    const references = cut ? new Set() : this.graph.edges;
+    if (cut) for (const id of cut.referenceSeeds) {
+      for (const edge of (expanded.has(id)?this.directReferences:this.referenceIndex).get(id) || []) references.add(edge);
+    }
     let represented=0;
-    for (const edge of cut ? cut.references : this.graph.edges) {
+    for (const edge of references) {
       if (excluded(edge)) continue;
       represented+=referenceCount(edge);
-      const source = this.endpoint(edge,'source',expanded), target = this.endpoint(edge,'target',expanded);
+      const source = endpoint(edge,'source',this.fileIds[edge.sourceFile]);
+      const target = endpoint(edge,'target',this.fileIds[edge.targetFile]);
       const exact = source === edge.source && target === edge.target;
       if (source === target && (!exact || edge.internal_to_owner)) {
         if (!internal.has(source)) internal.set(source, []);
         internal.get(source).push(edge);
       } else {
-        const type = edge.type.split('.')[0] + '.rollup';
-        const key = JSON.stringify([type, source, target]);
-        if (!bundles.has(key)) bundles.set(key, { id: this.bundlePrefix + key, type, source, target,
-          status: 'derived', origin: 'rollup', refs: [] });
-        const bundle = bundles.get(key);
+        if (!rollupTypes.has(edge.type)) rollupTypes.set(edge.type,edge.type.split('.')[0]+'.rollup');
+        const type = rollupTypes.get(edge.type);
+        if (!bundleSources.has(source)) bundleSources.set(source,new Map());
+        const targets = bundleSources.get(source);
+        if (!targets.has(target)) targets.set(target,new Map());
+        const types = targets.get(target);
+        if (!types.has(type)) {
+          const id = this.bundlePrefix + JSON.stringify([type,source,target]);
+          const bundle = {id,type,source,target,status:'derived',origin:'rollup',refs:[]};
+          types.set(type,bundle);
+          bundles.push(bundle);
+        }
+        const bundle = types.get(type);
         bundle.refs.push(edge);
         if (exact && bundle.refs.length === 1) bundle.exact = edge;
         else bundle.exact = null;
       }
     }
-    for (const edge of bundles.values()) {
+    for (const edge of bundles) {
       if (edge.exact) edges.push({ ...edge.exact, refs: edge.refs });
       else {
         const {exact, ...bundle} = edge;
-        edges.push({ ...bundle, count:referenceTotal(edge.refs), attrs: { edges: referenceTotal(edge.refs),
+        const count=referenceTotal(edge.refs);
+        edges.push({ ...bundle, count, attrs: { edges: count,
           kinds: [...new Set(edge.refs.map(e => e.type))].sort() } });
       }
     }

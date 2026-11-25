@@ -79,8 +79,9 @@ Source-file fixtures must use the normal pipeline/read index/server and real exa
 | [sections.browser.js](sections.browser.js) | Source/header navigation, paging, source links, reload and real-symbol pin dragging |
 | [endpoints.browser.js](endpoints.browser.js) | Boundary-anchored references across expanded layers and trusted wire interaction |
 | [icons.browser.js](icons.browser.js) | Type glyphs, themes, pointer hits, title geometry and the keyboard-accessible key |
-| [appearance.browser.js](appearance.browser.js) | Theme atmosphere, selection/warning semantics, luminous underlays, graph identity and clear-selection cleanup |
+| [appearance.browser.js](appearance.browser.js) | Theme atmosphere, painted SVG falloff, selection/warning semantics, graph identity and clear-selection cleanup |
 | [motion.browser.js](motion.browser.js) | Explicit navigation flight: exact destination, centre/log-zoom interpolation, projected-region coverage, inter-frame live blocking, interruption, stationary cancellation restoration and reduced motion |
+| [wheel.browser.js](wheel.browser.js) | Source-surface fixture: trusted wheel frames, accumulated input, scale crossings, definition portal, reversal and reduced motion |
 | [source-surface.browser.js](source-surface.browser.js) | [Source-surface fixture](../fixtures/source-surface.graph.json): files, symbol identity, gradual/reversible zoom and local arrangement |
 | [namespace-files.browser.js](namespace-files.browser.js) | [Namespace fixture](../fixtures/namespace-files.graph.json): file contexts, exact references, navigation and pins |
 | [review.browser.js](review.browser.js) | [Review fixture](test_review.py): direct explanation, exact evidence, triage, refused writes, late close and pins |

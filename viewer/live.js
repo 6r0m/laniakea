@@ -8,7 +8,7 @@ function liveGeneration(target) { return JSON.stringify([target?.id,target?.run,
 function liveBlockReason() {
   if(state.review?.comparison)return 'Comparing recorded source evidence';
   if(state.drag||state.labelDrag||state.pointerDown||state.gestureActive||state.framing||state.flight||
-    state.wheelFrame||state.zoomFrame||state.viewportFrame)return 'Finish moving the map';
+    state.wheel||state.zoomFrame||state.viewportFrame)return 'Finish moving the map';
   if(unsavedPositionCaches.size)return 'Waiting for positions to save';
   if(state.analysis?.dirty())return 'Finish or reload the check choices';
   if(state.review?.saving||[...document.querySelectorAll('[name="review-reason"]')]

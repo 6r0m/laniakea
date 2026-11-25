@@ -2,7 +2,6 @@
 // Scene navigation changes detail and camera position without replacing the surrounding universe.
 'use strict';
 
-// One cancellable camera flight owns explicit navigation; wheel and drag stay immediate.
 function prefersReducedMotion() {
   return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
@@ -11,12 +10,11 @@ function easeFlight(value) {
   return value * value * (3 - 2 * value);
 }
 
-function cancelPendingFlightFrames() {
-  for (const key of ['wheelFrame', 'zoomFrame', 'viewportFrame']) {
+function cancelQueuedViewportWork() {
+  for (const key of ['zoomFrame', 'viewportFrame']) {
     if (state[key] != null && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(state[key]);
     state[key] = null;
   }
-  state.wheelDelta = 0;
 }
 
 function releaseNavigationFlight(flight, remember = false, completed = false, restoreProjection = true) {
@@ -49,7 +47,8 @@ function startNavigationFlight(target, options = {}) {
   if (!state.cy || !target || !Number.isFinite(target.level) ||
       !target.pan || !Number.isFinite(target.pan.x) || !Number.isFinite(target.pan.y)) return false;
   cancelNavigationFlight({restore:false});
-  cancelPendingFlightFrames();
+  cancelWheelMotion(false);
+  cancelQueuedViewportWork();
   const cy = state.cy;
   const destination = {
     level: Math.max(cy.minZoom(), Math.min(cy.maxZoom(), target.level)),
@@ -151,24 +150,130 @@ function zoomWithWheel(event) {
   // Leave browser zoom available through Ctrl+wheel. Ordinary wheel input belongs to this canvas only.
   event.stopImmediatePropagation();
   if (event.ctrlKey || event.metaKey) return;
-  cancelNavigationFlight();
   event.preventDefault();
   const bounds = $('graph').getBoundingClientRect();
   state.pointer = {x:event.clientX-bounds.left,y:event.clientY-bounds.top};
-  state.wheelPoint = state.pointer;
-  const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? state.cy.height() : 1;
-  state.wheelDelta = (state.wheelDelta || 0) + event.deltaY * unit;
-  if (state.wheelFrame) return;
-  state.wheelFrame = requestAnimationFrame(() => {
-    state.wheelFrame = null;
-    const factor = Math.exp(Math.max(-0.7,Math.min(0.7,-state.wheelDelta*0.0018)));
-    state.wheelDelta = 0;
-    zoomAt(worldZoom()*factor,state.wheelPoint);
-  });
+  const cy = state.cy, unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? cy.height() : 1;
+  const delta = -event.deltaY * unit * 0.0018;
+  if (!Number.isFinite(delta) || !delta) return;
+  cancelNavigationFlight();
+  if (prefersReducedMotion()) {
+    zoomAt(worldZoom()*Math.exp(delta),state.pointer);
+    return;
+  }
+  if (!state.wheel) {
+    cancelQueuedViewportWork();
+    state.wheel = {cy, map:state.universe, target:Math.log(worldZoom()), frame:null, time:null, portal:null, detail:true};
+  }
+  const wheel = state.wheel;
+  if (delta < 0 && wheel.portal) {
+    abandonWheelPortal(wheel);
+    refreshMap();
+  }
+  wheel.point = state.pointer;
+  wheel.client = {x:event.clientX,y:event.clientY};
+  wheel.detail = true;
+  wheel.target = clampWheelLog(cy,wheel.target+delta);
+  queueWheelFrame(wheel);
+}
+
+function clampWheelLog(cy, level) {
+  return Math.max(Math.log(cy.minZoom()),Math.min(Math.log(cy.maxZoom()),level));
+}
+
+function cancelWheelMotion(restore = true) {
+  const wheel = state.wheel;
+  if (!wheel) return;
+  state.wheel = null;
+  if (wheel.frame !== null) cancelAnimationFrame(wheel.frame);
+  if (!wheel.cy.destroyed()) wheel.frontier?.nodes.removeStyle('opacity');
+  const staged = abandonWheelPortal(wheel);
+  if (restore && wheel.cy === state.cy && wheel.map === state.universe && !wheel.cy.destroyed()) {
+    if (staged) refreshMap();
+    else rememberView();
+  }
+}
+
+function abandonWheelPortal(wheel) {
+  if (!wheel.portal) return false;
+  wheel.map.expanded = wheel.portal.expanded;
+  wheel.portal = null;
+  return true;
+}
+
+function queueWheelFrame(wheel) {
+  if (wheel.frame !== null) return;
+  try {
+    wheel.frame = requestAnimationFrame(time => advanceWheel(wheel,time));
+  } catch (error) {
+    cancelWheelMotion();
+    throw error;
+  }
+}
+
+function advanceWheel(wheel, time) {
+  if (state.wheel !== wheel) return;
+  wheel.frame = null;
+  if (state.cy !== wheel.cy || state.universe !== wheel.map || wheel.cy.destroyed() || state.drag) {
+    cancelWheelMotion(false);
+    return;
+  }
+  try {
+    const elapsed = wheel.time === null ? 7 : time-wheel.time;
+    // Keep the target accumulating between paints on high-refresh displays.
+    if (elapsed < 5) {
+      queueWheelFrame(wheel);
+      return;
+    }
+    const before = worldZoom(), from = Math.log(before), point = state.pointer || wheel.point;
+    const dt = Math.min(20,elapsed);
+    const fraction = 1-Math.exp(-dt/43);
+    wheel.time = time;
+    if (wheel.frontier) {
+      const frontier = wheel.frontier;
+      frontier.elapsed += dt;
+      if (frontier.elapsed>=105) {
+        frontier.nodes.removeStyle('opacity');
+        wheel.frontier = null;
+      } else frontier.nodes.style('opacity',0.25+0.75*easeFlight(frontier.elapsed/105));
+    }
+    const distance = wheel.target-from;
+    const remaining = Math.abs(distance);
+    const easedStep = remaining < 0.001 ? remaining : remaining*fraction;
+    const step = Math.sign(distance)*Math.min(easedStep,0.045,dt*0.0034);
+    const pan = wheel.cy.pan(), anchor = {x:(point.x-pan.x)/before,y:(point.y-pan.y)/before};
+    const portal = wheel.portal;
+    let adjustment = 0;
+    if (portal) {
+      portal.elapsed = Math.min(portal.duration,portal.elapsed+dt);
+      const progress = easeFlight(portal.elapsed/portal.duration);
+      const travel = progress-portal.progress;
+      portal.progress = progress;
+      adjustment = portal.log*travel;
+      anchor.x += portal.x*travel;
+      anchor.y += portal.y*travel;
+      wheel.target = clampWheelLog(wheel.cy,wheel.target+adjustment);
+      if (progress===1) wheel.portal = null;
+    }
+    const level = Math.exp(clampWheelLog(wheel.cy,from+step+adjustment));
+    if (step || portal) setWorldViewport(level,{x:point.x-anchor.x*level,y:point.y-anchor.y*level},true);
+    if (!portal && step && wheel.detail && applySemanticZoom(Math.sign(step),point,wheel)) wheel.detail=false;
+    if (portal && !wheel.portal) {
+      setSceneScope(portal.id);
+      refreshMap();
+    }
+    if (!wheel.portal) scheduleViewport();
+    if (wheel.portal || wheel.frontier || step!==distance) queueWheelFrame(wheel);
+    else cancelWheelMotion(false);
+  } catch (error) {
+    cancelWheelMotion();
+    throw error;
+  }
 }
 
 function zoomAt(level, point) {
   if (state.drag) return;
+  cancelWheelMotion();
   cancelNavigationFlight();
   level = Math.max(state.cy.minZoom(),Math.min(state.cy.maxZoom(),level));
   const ratio = level/worldZoom(), pan = state.cy.pan();
@@ -178,13 +283,14 @@ function zoomAt(level, point) {
 function fitOverview() {
   if (!state.cy) return;
   cancelNavigationFlight();
+  cancelWheelMotion();
   setSceneScope(state.universe.root);
   const camera=overviewCamera();
   if(camera) startNavigationFlight(camera,{force:[state.universe.root]});
 }
 
 function rememberView() {
-  if (!state.cy || !state.universe || state.framing) return;
+  if (!state.cy || !state.universe || state.framing || state.wheel) return;
   const scene = { target: state.target.id, run: state.target.run, expanded: [...state.universe.expanded],
     scope:state.scopeShard.scope,
     layout:$('layout').value,configuration:{...state.configuration},
@@ -194,6 +300,7 @@ function rememberView() {
 
 function restoreView(scene) {
   cancelNavigationFlight();
+  cancelWheelMotion();
   const map = state.universe;
   if (!scene || scene.target !== state.target.id || scene.run !== state.target.run ||
       !Array.isArray(scene.expanded) || !scene.pan || !Number.isFinite(scene.pan.x) ||
@@ -223,9 +330,18 @@ function scopeFor(id) {
     lookup(state.universe.nodes.get(id).attrs.source_owner):null);
 }
 
+function rememberDepartedGroup(next) {
+  const map = state.universe;
+  const from = map?.paths.get(state.scopeShard?.scope), to = map?.paths.get(next);
+  if (!from || !to) return;
+  const departed = from.find(id => id!==map.root && !to.includes(id) && map.isGroup(id));
+  if (departed) state.lastVisitedGroup = departed;
+}
+
 function setSceneScope(id) {
   const map = state.universe, entry = scopeFor(id);
   if (!entry) return;
+  rememberDepartedGroup(id);
   const n = map.nodes.get(id);
   state.file = entry.file;
   state.scopeShard = {scope:id,title:n.label,parents:map.paths.get(id).slice(0,-1).map(a => {
@@ -236,18 +352,40 @@ function setSceneScope(id) {
   renderCrumbs(); rememberView();
 }
 
-function enterWheelScope(id, from=id) {
+function enterWheelScope(id, from=id, wheel=null, point=null) {
   const map=state.universe;
+  let projection=null;
   if(from!==id){
-    // A catalog portal changes world context, not its apparent footprint or screen location.
     const source=map.positions.get(from),bounds=map.bounds.get(id),p=map.positions.get(id),pan=state.cy.pan(),zoom=worldZoom();
     const center=map.isGroup(id)?{x:(bounds.x1+bounds.x2)/2,y:(bounds.y1+bounds.y2)/2}:p;
     const span=Math.max(bounds.x2-bounds.x1,bounds.y2-bounds.y1,2*map.radii.get(id));
     const level=Math.max(state.cy.minZoom(),Math.min(state.cy.maxZoom(),zoom*2*map.radii.get(from)/span));
-    setWorldViewport(level,{x:source.x*zoom+pan.x-center.x*level,y:source.y*zoom+pan.y-center.y*level});
+    const destination={level,pan:{x:source.x*zoom+pan.x-center.x*level,y:source.y*zoom+pan.y-center.y*level}};
+    if (wheel) {
+      // The same point in the source and destination footprints remains under the cursor at handoff.
+      wheel.portal={id,expanded:new Set(map.expanded),log:Math.log(level/zoom),
+        x:(point.x-destination.pan.x)/level-(point.x-pan.x)/zoom,
+        y:(point.y-destination.pan.y)/level-(point.y-pan.y)/zoom};
+      Object.assign(wheel.portal,{elapsed:0,progress:0,
+        duration:Math.min(340,210+Math.hypot(wheel.portal.x,wheel.portal.y)*zoom/16)});
+      const target=Math.exp(clampWheelLog(wheel.cy,wheel.target+wheel.portal.log));
+      const finalPan={x:point.x-(point.x-destination.pan.x)*target/level,
+        y:point.y-(point.y-destination.pan.y)*target/level};
+      projection=flightProjectionCut({level:target,pan:finalPan},[from,id]);
+    } else setWorldViewport(destination.level,destination.pan);
   }
   map.reveal(id);if(map.isGroup(id))map.expanded.add(id);
-  setSceneScope(id);unfocus();refreshMap();
+  if (!wheel?.portal) setSceneScope(id);
+  unfocus();refreshWheelProjection(wheel,projection);
+}
+
+function refreshWheelProjection(wheel, cut=null) {
+  const added = refreshMap(cut);
+  if (!wheel || !added?.length) return;
+  wheel.frontier?.nodes.removeStyle('opacity');
+  const nodes=added.nodes();
+  wheel.frontier={nodes,elapsed:0};
+  nodes.style('opacity',0.25);
 }
 
 function semanticZoom(direction) {
@@ -255,37 +393,37 @@ function semanticZoom(direction) {
   if (state.zoomFrame) cancelAnimationFrame(state.zoomFrame);
   state.zoomFrame = requestAnimationFrame(() => {
     state.zoomFrame = null;
-    if (!state.pointer || !state.cy || state.drag) return;
-    const map = state.universe, cy = state.cy, zoom = worldZoom(), pan = cy.pan();
-    const detail=direction>0&&detailAtPointer(state.pointer);
-    if(detail){
-      const id=map.navigationTarget(detail)||detail;
-      enterWheelScope(id,detail);rememberView();return;
-    }
-    const point = {x:(state.pointer.x-pan.x)/zoom,y:(state.pointer.y-pan.y)/zoom};
-    let change, changed = false;
-    for (let i = 0; i < map.nodes.size; i++) {
-      change = map.zoomStep(zoom, point, direction);
-      if (!change) break;
-      changed = true;
-      if(change.action==='definition'){
-        enterWheelScope(change.id,change.from);break;
-      }
-      if (change.action === 'expand') {setSceneScope(change.id);break;}
-      if (change.action === 'collapse') {
-        if (map.contains(change.id, state.scopeShard.scope)) {
-          setSceneScope(map.viewParents.get(change.id) || map.root);
-        }
-        break;
-      }
-    }
-    if (changed) { unfocus(); refreshMap(); }
+    applySemanticZoom(direction,state.pointer);
     rememberView();
   });
 }
 
+function applySemanticZoom(direction, pointer, wheel=null) {
+  if (!pointer || !state.cy || state.drag) return false;
+  const map = state.universe, zoom = worldZoom(), pan = state.cy.pan();
+  const detail = direction>0 && detailAtPointer(pointer);
+  if (detail) {
+    enterWheelScope(map.navigationTarget(detail)||detail,detail,wheel,pointer);
+    return true;
+  }
+  const point = {x:(pointer.x-pan.x)/zoom,y:(pointer.y-pan.y)/zoom};
+  const change = map.zoomStep(zoom,point,direction);
+  if (!change) return false;
+  if (change.action==='definition') {
+    if (wheel) map.expanded.delete(change.from);
+    enterWheelScope(change.id,change.from,wheel,pointer);
+  }
+  else {
+    if (change.action==='expand') setSceneScope(change.id);
+    else if (map.contains(change.id,state.scopeShard.scope)) setSceneScope(map.viewParents.get(change.id)||map.root);
+    unfocus();refreshWheelProjection(wheel);
+  }
+  return true;
+}
+
 function toggleGroup(id) {
   cancelNavigationFlight();
+  cancelWheelMotion();
   const map = state.universe;
   if(map.regions.has(id)){selectNode(id);return;}
   const target=map.navigationTarget(id);
@@ -310,6 +448,7 @@ function toggleGroup(id) {
 
 function flyToNode(id, inspect = true) {
   cancelNavigationFlight();
+  cancelWheelMotion();
   state.review?.closeComparison?.();
   const map = state.universe;
   if (!map.nodes.has(id)) return;
@@ -331,6 +470,7 @@ function flyToNode(id, inspect = true) {
 
 function followReference(edge) {
   cancelNavigationFlight();
+  cancelWheelMotion();
   const map = state.universe;
   rememberView();
   const entry = scopeFor(edge.target);
@@ -371,5 +511,10 @@ function resizeMap() {
     }
   }
   state.mapSize = size;
+  if (state.wheel) {
+    const {left,top}=$('graph').getBoundingClientRect(),{x,y}=state.wheel.client;
+    state.wheel.point={x:x-left,y:y-top};
+    if (state.pointer) state.pointer=state.wheel.point;
+  }
   readableLabels();
 }

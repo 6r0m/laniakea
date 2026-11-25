@@ -10,7 +10,10 @@ async page => {
   const onError=error=>errors.push(error.message);
   page.on('request',observe);page.on('pageerror',onError);
   try {
+    await page.emulateMedia({reducedMotion:'no-preference'});
+    await page.waitForFunction(()=>!state.review?.loading&&!state.review?.requests?.size);
     await page.evaluate(()=>{
+      state.analysis?.markHandled();state.analysis?.panel(false);
       const node=(id,label)=>({id,label,level:id==='root'?'project':'function',parent:id==='root'?null:'root',
         boundary:false,status:'in-target'});
       const nodes=[node('root','Sample'),node('a','Sender'),node('b','Receiver'),node('c','Crossing source'),
@@ -41,6 +44,37 @@ async page => {
       await page.waitForFunction(()=>!state.gestureActive&&!state.viewportFrame);
       await page.mouse.move(p.x,p.y);await frames();
     };
+    await frames();
+    await page.waitForFunction(()=>!state.gestureActive&&!state.viewportFrame&&
+      state.mapSize.width===state.cy.width()&&state.mapSize.height===state.cy.height());
+    check(await page.evaluate(()=>{
+      const parallel=state.cy.edges('.derived').filter(e=>ConnectionTrace.key(e.data('source'),e.data('target'))===ConnectionTrace.key('a','b'));
+      const alpha=e=>Number(e.style('line-opacity'));
+      const combined=1-parallel.reduce((remainder,edge)=>remainder*(1-alpha(edge)),1);
+      return parallel.length>1&&combined<=alpha(state.cy.getElementById(state.universe.renderPrefix+'cross'))+.001&&
+        state.cy.edges().every(e=>e.style('line-gradient-stop-positions')==='0% 45% 55% 100%');
+    }),'Idle wires shimmer or coincident paths exceed the single-wire brightness budget');
+    await move(await point('a','b',.25));
+    const findFlow=()=>!!document.querySelector('#graph .wire-breath');
+    check(!(await page.evaluate(findFlow)),'Passing over a wire started its pulse before dwell');
+    await page.waitForFunction(findFlow);
+    check(await page.evaluate(()=>{
+      const layer=document.querySelector('#graph .wire-flow'),lights=[...layer.querySelectorAll('.wire-feed > span')];
+      if(lights.length!==2||lights.some(light=>light.classList.contains('wire-warning')))return false;
+      const pulse=lights.map(light=>light.getAnimations().find(animation=>animation.animationName==='wire-light'));
+      if(pulse.some(animation=>!animation))return false;
+      const playback=pulse.map(animation=>animation.currentTime);
+      pulse.forEach(animation=>{animation.currentTime=STAR_PULSE_PERIOD/2;});
+      const visible=lights.every(light=>Number(getComputedStyle(light).opacity)>.65);
+      pulse.forEach((animation,i)=>{animation.currentTime=playback[i];});
+      const colors=['a','b'].map(id=>starPalette().stars[state.cy.getElementById(id).data('starFamily')]);
+      return layer.dataset.paths==='1'&&getComputedStyle(layer).pointerEvents==='none'&&
+        lights[0].style.offsetPath!==lights[1].style.offsetPath&&
+        visible&&colors.every(color=>lights.some(light=>light.style.getPropertyValue('--wire-color')===color));
+    }),'Ordinary reciprocals should show both recorded directions together in family colors');
+    const straightWire=await point('a','b',.25),straightCard=await page.locator('#hover-card').boundingBox();
+    check(straightCard&&(straightCard.y>straightWire.y+12||straightCard.y+straightCard.height<straightWire.y-12),
+      'The readout should clear a horizontal wire when space is available');
     let stable,cardPosition,lastFocus;
     for(const fraction of [.2,.3,.4,.6,.7,.8]) {
       await move(await point('a','b',fraction));
@@ -107,6 +141,10 @@ async page => {
       getComputedStyle($('details').querySelector('.trace-incoming')).color),'Candidate direction colors are indistinguishable');
     const candidate=page.locator('#details .connections button').first();await candidate.focus();await frames();
     check(await page.evaluate(()=>state.trace?.kind==='pair'),'Keyboard focus must emphasize one candidate');
+    await page.waitForFunction(findFlow);
+    await page.emulateMedia({reducedMotion:'reduce'});
+    await page.waitForFunction(()=>!appearanceMotion.get(state.cy));
+    await page.emulateMedia({reducedMotion:'no-preference'});
     await candidate.click();await frames();
     check(await page.evaluate(()=>state.selection?.pairInspection&&state.selection.refs.length===9),
       'Choosing an overlap candidate must reuse both-direction exact inspection');
@@ -138,9 +176,32 @@ async page => {
       text.includes('No incoming references recorded in this snapshot.')),'Zero incoming references must be explicit on the star card');
     await move(await point('c','d',.25));
     check(await page.evaluate(()=>state.trace?.key===JSON.stringify(['pair','c','d'])),'Unrelated crossing pair reused old endpoints');
+    await move(await point('b','b'));
+    await page.waitForFunction(()=>Number(document.querySelector('#graph .wire-flow')?.dataset.paths)===2);
     await move(await point('b','e',.5));
     check(await page.evaluate(()=>state.trace?.counts.outgoing===1&&state.trace.counts.incoming===0),
       'One-way connection invented reverse references');
+    await page.waitForFunction(()=>state.trace?.key===ConnectionTrace.key('b','e')&&
+      document.querySelectorAll('#graph .wire-feed > span').length===1);
+    check(await page.evaluate(()=>{
+      const edge=state.cy.getElementById(state.universe.renderPrefix+'one'),
+        pulse=document.querySelector('#graph .wire-feed > span');
+      const coordinates=pulse.style.offsetPath.match(/-?[\d.]+/g).map(Number);
+      const [x,y]=coordinates;
+      const source=edge.renderedSourceEndpoint(),target=edge.renderedTargetEndpoint();
+      const [travel,light]=pulse.getAnimations(),playback=[travel.currentTime,light.currentTime];
+      travel.currentTime=600;light.currentTime=0;
+      const first=parseFloat(getComputedStyle(pulse).offsetDistance),edgeAlpha=Number(getComputedStyle(pulse).opacity);
+      travel.currentTime=1800;light.currentTime=STAR_PULSE_PERIOD/2;
+      const moving=parseFloat(getComputedStyle(pulse).offsetDistance)>first+20,
+        crest=Number(getComputedStyle(pulse).opacity);
+      travel.currentTime=STAR_PULSE_PERIOD+350;
+      const timing=travel.effect.getComputedTiming();
+      [travel.currentTime,light.currentTime]=playback;
+      return Math.hypot(x-source.x,y-source.y)<.1&&
+        Math.hypot(coordinates.at(-2)-target.x,coordinates.at(-1)-target.y)<.1&&moving&&
+        timing.duration===STAR_PULSE_PERIOD&&timing.currentIteration===1&&crest>.75&&edgeAlpha<.02;
+    }),'The directional glow should travel, breathe and repeat on the star cadence');
     const loop=await page.evaluate(()=>{
       const edge=state.cy.edges().filter(e=>e.source().id()==='a'&&e.target().id()==='a')[0];
       const p=edge.renderedMidpoint(),box=$('graph').getBoundingClientRect();return{x:box.x+p.x,y:box.y+p.y};
@@ -185,7 +246,7 @@ async page => {
       'Narrow readout is not keyboard accessible or overflows the page');
     await page.setViewportSize({width:1440,height:1000});await frames();
     await move(await point('a','b',.3));await page.mouse.wheel(0,55);
-    await page.waitForFunction(()=>!state.gestureActive&&!state.wheelFrame&&!state.viewportFrame);
+    await page.waitForFunction(()=>!state.gestureActive&&!state.wheel&&!state.viewportFrame);
     check(await page.evaluate(()=>!state.trace&&$('hover-card').hidden&&state.cy.edges('.trace-outgoing,.trace-incoming,.trace-within').length===0),
       'Gesture retained a trace');
     check(await page.evaluate(()=>JSON.stringify(state.positionCache.layouts)===traceProof.pins&&
@@ -236,7 +297,7 @@ async page => {
     check(await page.evaluate(()=>state.cy.getElementById('sdk').length===1),
       'Several consumers created duplicate provider identities');
     await page.getByRole('button',{name:'SampleDerived (class) -> Sample SDK (folder)',exact:true}).first().click();
-    await page.waitForFunction(()=>!state.gestureActive&&!state.viewportFrame&&!state.zoomFrame&&!state.wheelFrame);
+    await page.waitForFunction(()=>!state.flight&&!state.gestureActive&&!state.viewportFrame&&!state.zoomFrame&&!state.wheel);
     check(await page.evaluate(()=>state.selection?.attrs.target_declaration.id==='declaration-base-a'),
       'Following an exact external relationship lost its original declaration');
     await page.evaluate(()=>{delete state.target.roots['sample-sdk'];state.detailsKey=null;renderDetails(state.selection);});
@@ -313,7 +374,7 @@ async page => {
       state.selection.key===ConnectionTrace.key('first','sdk')),
       'Double-clicking a wire routed through an expanded background must not fold the group');
     check(requests.length===0&&errors.length===0,'Pointer routing wrote layouts or produced runtime errors');
-    return {nativeReciprocalPath:true,bothDirectionInspection:true,oneWay:true,recursion:true,filterRefresh:true,
+    return {nativeReciprocalPath:true,wireFlow:true,bothDirectionInspection:true,oneWay:true,recursion:true,filterRefresh:true,
       noHoverRequests:true,noDecorations:true,keyboardReadout:true,externalOwnership:true,externalZoom:true,
       exactDeclarationLinks:true,sharedProvider:true,missingProvenance:true,crossingCandidates:true,proximityFocus:true,midpointStable:true,
       coincidentPairs:true,stableOverlapCard:true,keyboardCandidate:true,compactSharedEndpoint:true,longPeersNarrow:true,

@@ -4,10 +4,12 @@ async page=>{
   const check=(ok,message)=>{if(!ok)throw Error(message);},errors=[],writes=[];
   page.on('pageerror',e=>errors.push(e.message));
   page.on('request',r=>{if(r.method()==='POST')writes.push(r.url());});
-  const settle=async()=>{await page.waitForFunction(()=>!state.viewportFrame&&!state.gestureActive&&!state.zoomFrame&&!state.wheelFrame&&!state.flight);
+  const settle=async()=>{await page.waitForFunction(()=>!state.viewportFrame&&!state.gestureActive&&!state.zoomFrame&&!state.wheel&&!state.flight);
     await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));};
   check(await page.evaluate(()=>state.target.id==='sample'),'Requires disposable sample');
   await page.evaluate(()=>{
+    state.analysis?.markHandled();
+    state.analysis?.panel(false);
     const node=(id,parent,level,attrs={})=>({id,parent,level,label:id,attrs,status:'in-target',boundary:false});
     const graph={schema:'laniakea.graph/1',nodes:[node('root',null,'project'),node('module','root','module'),
       node('namespace','module','namespace'),node('class','namespace','class'),node('method','class','function',{declaration_kind:'method'}),
@@ -28,19 +30,20 @@ async page=>{
     await page.emulateMedia({colorScheme:theme});await settle();
     const proof=await page.evaluate(async()=>{
       const cy=state.cy,zoom=cy.zoom(),node=cy.getElementById('method'),expanded=cy.getElementById('class');
-      const uri=node.style('background-image');
-      const image=new Image();image.src=Array.isArray(uri)?uri[0]:uri;await image.decode();
+      const [halo,glyph]=node.style('background-image').split(' ');
+      const image=new Image();image.src=glyph;await image.decode();
       const canvas=document.createElement('canvas');canvas.width=24;canvas.height=24;
       const ctx=canvas.getContext('2d');ctx.drawImage(image,0,0);
       const painted=ctx.getImageData(0,0,24,24).data.some((n,i)=>i%4===3&&n>0);
-      return {painted,kind:node.data('iconKind'),
-        opacity:node.style('background-image-opacity')[0],icon:parseFloat(node.style('background-width'))*zoom,
-        expanded:expanded.hasClass('expanded'),titleVisible:expanded.style('background-image-opacity')[0],
+      return {painted,kind:node.data('iconKind'),halo:decodeURIComponent(halo).includes('<radialGradient'),
+        opacity:Number(node.style('background-image-opacity').split(' ')[1]),
+        icon:Number.parseFloat(node.style('background-width').split(' ')[1])*zoom,
+        expanded:expanded.hasClass('expanded'),titleVisible:expanded.style('background-image-opacity').split(' ')[0],
         titleTop:parseFloat(expanded.style('bounds-expansion')),titleY:parseFloat(expanded.style('background-offset-y')),
         offset:parseFloat(expanded.style('background-offset-x'))*zoom,
         ids:cy.elements().map(n=>n.id()).sort(),positions:JSON.stringify([...state.universe.positions])};
     });
-    check(proof.painted&&proof.kind==='function'&&Number(proof.opacity)===1,'Callable icon did not decode or is hidden');
+    check(proof.halo&&proof.painted&&proof.kind==='function'&&proof.opacity===1,'Callable halo or icon did not decode or is hidden');
     check(Math.abs(proof.icon-26*.58)<.1,'Icon size changed with native renderer units');
     check(proof.expanded&&Number(proof.titleVisible)===1&&proof.offset<0,'Expanded title lost its type icon');
     check(proof.titleTop>=Math.max(0,-proof.titleY),'Expanded title images are clipped by native texture bounds');
@@ -62,7 +65,7 @@ async page=>{
     state.universe.expanded=new Set([state.universe.root]);state.scopeShard={scope:state.universe.root};
     refreshMap();setWorldViewport(.02,{x:300,y:300});
   });await settle();
-  check(await page.evaluate(()=>state.cy.nodes().every(n=>Number(n.style('background-image-opacity')[0])===0)),
+  check(await page.evaluate(()=>state.cy.nodes().every(n=>Number(n.style('background-image-opacity').split(' ')[1])===0)),
     'Far overview keeps unreadable detail icons');
   await page.setViewportSize({width:640,height:900});await settle();
   await page.locator('#type-key summary').click();

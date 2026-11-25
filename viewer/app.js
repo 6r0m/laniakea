@@ -2,7 +2,6 @@
 // Levels, edge types and sources come from the manifest; Universe owns the continuing map.
 'use strict';
 
-const PALETTE = ['#4e79a7', '#f28e2b', '#59a14f', '#e15759', '#76b7b2', '#b07aa1', '#9c755f', '#edc948', '#ff9da7', '#bab0ac'];
 const state = { targets: [], target: null, manifest: null, shard: null, file: null, cy: null,
   hidden: new Set(), boundary: true, configuration: {}, navigation: 0, selection: null };
 const $ = (id) => document.getElementById(id);
@@ -30,12 +29,6 @@ function connectionTypes(type, refs = []) {
   if (types.some(t => t.id === type) || !type.endsWith('.rollup')) return [type];
   const originals = [...new Set(refs.map(r => r.type))];
   return originals.length ? originals : types.filter(t => t.id.split('.')[0] === type.split('.')[0]).map(t => t.id);
-}
-
-function colorOf(type, refs) {
-  const types = connectionTypes(type, refs);
-  const index = types.length === 1 ? state.manifest.edge_types.findIndex(t => t.id === types[0]) : -1;
-  return index < 0 ? '#888888' : PALETTE[index % PALETTE.length];
 }
 
 // The current scope lives in the URL hash, #/<target id>/<shard file>, so Back, Forward, reload and links all work.
@@ -119,11 +112,16 @@ async function start() {
   $('graph').addEventListener('pointermove', event => {
     const box = $('graph').getBoundingClientRect();
     state.pointer = { x: event.clientX - box.left, y: event.clientY - box.top };
+    if(state.wheel){
+      state.wheel.point=state.pointer;
+      state.wheel.client={x:event.clientX,y:event.clientY};
+    }
   });
   $('graph').addEventListener('pointerleave', () => { state.pointer = null; unfocus(); });
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
     if (state.cy) { state.cy.style(style()); readableLabels();renderIconKey(); }
   });
+  matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change',syncAppearanceMotion);
   document.addEventListener('keydown', onKey);
   const wanted = route();
   const id = known(state.targets.some(target => target.id === wanted.target) ? wanted.target : state.startup.target);
@@ -139,13 +137,17 @@ async function start() {
     if(event.target.closest('button')){$('view-controls').open=false;$('view-summary').focus();}
   });
   document.addEventListener('pointerdown',event=>{if(!event.target.closest('#view-controls'))$('view-controls').open=false;});
-  document.addEventListener('visibilitychange',()=>state.live.tick());
+  document.addEventListener('visibilitychange',()=>{
+    syncAppearanceMotion();
+    state.live.tick();
+  });
   window.addEventListener('pagehide',()=>state.live.stop());
   window.addEventListener('pageshow',()=>{if(state.live.stopped)state.live.start();});
   $('graph').addEventListener('pointerdown',()=>{
+    cancelWheelMotion();
     if(typeof cancelNavigationFlight==='function')cancelNavigationFlight({remember:true});
     state.pointerDown=true;
-  });
+  },true);
   window.addEventListener('pointerup',()=>{state.pointerDown=false;});
   window.addEventListener('pointercancel',()=>{state.pointerDown=false;});
   window.addEventListener('blur',()=>{state.pointerDown=false;});
@@ -160,6 +162,7 @@ function known(id) {
 // Show a target's scope. mode: 'push' adds a history entry, 'replace' rewrites the current one, 'none' follows history.
 async function show(id, file, mode) {
   if(typeof cancelNavigationFlight==='function')cancelNavigationFlight();
+  if(typeof cancelWheelMotion==='function')cancelWheelMotion();
   state.review?.closeComparison?.();
   const savedScene = mode === 'none' || !state.cy ? history.state && history.state.scene : null;
   const navigation = ++state.navigation;
@@ -208,6 +211,8 @@ async function show(id, file, mode) {
     if (changed) { state.hidden = new Set(); state.configuration = {}; state.referencePages?.clear(); }
     const referencePages = changed || !state.referencePages ? referenceReader(target,universe) : state.referencePages;
     const fresh = changed || !state.cy;
+    if (changed) state.lastVisitedGroup = null;
+    else rememberDepartedGroup(shard.scope);
     Object.assign(state, { target, manifest, shard, scopeShard: shard, universe, file: wanted,
       elsewhere: null, selection: null, positionCache, index, referencePages,
       indexLookup:new Map(index.nodes.map(n=>[n.id,n])) });
@@ -386,11 +391,8 @@ function renderFilters() {
     box.checked = !state.hidden.has(type.id);
     box.disabled = !present.has(type.id);
     box.onchange = () => { box.checked ? state.hidden.delete(type.id) : state.hidden.add(type.id); applyFilters(); };
-    const swatch = el('span', null, { class: `swatch ${type.status}` });
-    swatch.style.background = type.status === 'derived' ? '' : colorOf(type.id);
-    swatch.style.color = colorOf(type.id);
     const label = el('label', null, { class: 'filter', title: `${type.status}` });
-    label.append(box, swatch, el('span', `${type.label} (${count})`));
+    label.append(box, el('span', `${type.label} (${count})`));
     panel.append(label);
   }
   panel.append(el('h2', 'Nodes'));
@@ -783,7 +785,11 @@ function renderOverlapDetails(panel,trace) {
         const id=pair.roles.keys().next().value,edge=state.cy.getElementById(state.universe.renderPrefix+id);
         if(edge.length)preview(edge,null,pair);
       };
+      const release=()=>{
+        if(state.trace?.key===pair.key&&document.activeElement!==button&&!button.matches(':hover'))unfocus();
+      };
       button.onmouseenter=emphasize;button.onfocus=emphasize;
+      button.onmouseleave=release;button.onblur=release;
       button.onclick=()=>{cancelNavigationFlight();inspectPair(pair.source,pair.target);};
       row.append(button,...traceSummary(pair).rows.map(([name,count,role])=>el('small',`${name}: ${count} refs`,{class:'trace-'+role})),
         el('small',traceTypes(pair.refs)));

@@ -35,10 +35,11 @@ function nodeDescription(node) {
 function mapNode(node, members, drill) {
   const entry = nodeMetadata(node.id), group = entry && entry.child_count > 0 &&
     !(node.parent === null && !node.boundary);
-  const caption=node.attrs?.source_caption||node.label;
-  return { group: 'nodes', data: { id: node.id, label: node.label, caption,iconKind:NodeIcons.kind(node),
+  const caption=node.attrs?.source_caption||node.label,iconKind=NodeIcons.kind(node);
+  const family=starFamily(node,state.universe);
+  return { group: 'nodes', data: { id: node.id, label: node.label, caption,iconKind,starFamily:family,
     ...(caption!==node.label?{displayName:caption}:{}) },
-    classes: [members.has(node.id) && 'member', group && 'group', Object.hasOwn(drill,node.id) && 'openable',
+    classes: ['star-'+family, members.has(node.id) && 'member', group && 'group', Object.hasOwn(drill,node.id) && 'openable',
       node.attrs?.presentation_group && 'source-region',(node.attrs?.source_private||node.attrs?.source_partition?.collapsed)&&'implementation',
       node.attrs?.source_file&&'source-file',
       ['private','protected'].includes(node.attrs?.access)&&'restricted-member',node.attrs?.source_region&&'organizational',
@@ -46,20 +47,22 @@ function mapNode(node, members, drill) {
 }
 
 function renderGraph() {
-  stopNavigationFlight();
+  stopCameraMotion();
+  clearWireFlow();
   renderIconKey();
   clearTimeout(state.inspectTimer);
   clearTimeout(state.gestureTimer);state.gestureActive=false;
-  for (const key of ['zoomFrame', 'wheelFrame','viewportFrame','hoverFrame']) {
+  for (const key of ['zoomFrame','viewportFrame','hoverFrame']) {
     if (state[key]) cancelAnimationFrame(state[key]);
     state[key] = null;
   }
-  state.pointer = null; state.wheelDelta = 0; state.drag = null;state.renderScale=1;
+  state.pointer = null; state.drag = null;state.renderScale=1;
   releaseConstellationLabel();
   if (state.cy) state.cy.destroy();
   state.cy = cytoscape({ container: $('graph'), elements: [], style: style(),
     minZoom: 0.015, maxZoom: 20000, textureOnViewport:true });
   state.viewportCut=null;
+  state.viewportProjection=null;
   const cy = state.cy;
   state.mapSize = {width:cy.width(),height:cy.height()};
   cy.on('tap', 'node', event => {
@@ -99,8 +102,9 @@ function renderGraph() {
     // A renderer can emit a spurious node mouseout while the pointer is still inside its footprint.
     // Keep the node trace instead of clearing it and replacing it with a background hover.
     if(target===event.target&&target.isNode()&&pointer){
-      const box=target.renderedBoundingBox();
-      if(pointer.x>=box.x1&&pointer.x<=box.x2&&pointer.y>=box.y1&&pointer.y<=box.y2){
+      const body=target.hasClass('expanded')?target.renderedBoundingBox():markerBox(target);
+      const label=state.labelBoxes?.get(target.id());
+      if([body,label].some(box=>box&&pointer.x>=box.x1&&pointer.x<=box.x2&&pointer.y>=box.y1&&pointer.y<=box.y2)){
         schedulePreview(target,pointer);return;
       }
     }
@@ -109,11 +113,17 @@ function renderGraph() {
   $('graph').onmouseleave=()=>{cancelAnimationFrame(state.hoverFrame);state.hoverFrame=null;unfocus();};
   cy.on('zoom', () => {
     if (state.framing) return;
+    cancelWheelMotion();
     const level = worldZoom(), direction = Math.sign(level - (state.lastZoom || level));
     setWorldViewport(level, cy.pan());
     if (direction && state.pointer) semanticZoom(direction);
   });
-  cy.on('pan', () => { if (!state.framing) {beginViewportGesture();scheduleViewport();} });
+  cy.on('pan', () => {
+    if (!state.framing) {
+      beginViewportGesture();
+      if (!state.wheel?.portal) scheduleViewport();
+    }
+  });
   cy.on('grabon', 'node', event => {
     state.drag = { id: event.target.id(), start: { ...event.target.position() } };
     $('graph').classList.add('dragging');
@@ -179,22 +189,49 @@ function scheduleViewport() {
   if(state.viewportFrame || state.drag)return;
   state.viewportFrame=requestAnimationFrame(()=>{
     state.viewportFrame=null;if(!state.cy || state.drag)return;
-    const now=viewportCamera(60),cut=state.viewportCut;
+    // Wheel motion can spend the viewport buffer before rebuilding the frontier.
+    const moving=!!state.wheel, now=viewportCamera(moving?0:60),cut=state.viewportCut;
     if(now && (!cut || now.x1<cut.x1 || now.y1<cut.y1 || now.x2>cut.x2 || now.y2>cut.y2 ||
-      now.zoom/cut.zoom>1.5 || now.zoom/cut.zoom<0.67)) refreshMap();
+      !moving && (now.zoom/cut.zoom>1.5 || now.zoom/cut.zoom<0.67))) refreshViewport();
     else readableLabels();
     rememberView();
   });
 }
 
-function refreshMap(cut = null) {
+function equalMembers(a,b) {
+  if(a.size!==b.size)return false;
+  for(const id of a)if(!b.has(id))return false;
+  return true;
+}
+
+function refreshViewport() {
+  const zoomingOut=state.wheel && state.wheel.target < Math.log(worldZoom());
+  const camera=viewportCamera(zoomingOut?420:220), universe=state.universe, previous=state.viewportProjection;
+  const next=camera&&universe.spatial?universe.viewportCut(camera):null;
+  const prior=previous?.cut;
+  if(prior && next && !prior.focus && previous.universe===universe &&
+    previous.boundary===state.boundary && equalMembers(previous.hidden,state.hidden) &&
+    equalMembers(prior.expanded,next.expanded) && equalMembers(prior.seeds,next.seeds) &&
+    equalMembers(prior.referenceSeeds,next.referenceSeeds) && equalMembers(prior.endpoints,next.endpoints)) {
+    state.viewportCut=camera;
+    readableLabels();
+    return;
+  }
+  refreshMap(camera,next);
+}
+
+function refreshMap(cut = null, projection = undefined) {
   clearTimeout(state.inspectTimer);
   state.drag = null;
   $('graph').classList.remove('dragging');
   const universe = state.universe, cy = state.cy;
   clearTrace();
   state.viewportCut=cut || viewportCamera();
-  const view = universe.project(state.hidden, state.boundary,state.viewportCut);
+  if (projection === undefined) {
+    projection=state.viewportCut&&universe.spatial?universe.viewportCut(state.viewportCut):null;
+  }
+  const view = universe.project(state.hidden,state.boundary,state.viewportCut,projection);
+  state.viewportProjection={universe,cut:projection,boundary:state.boundary,hidden:new Set(state.hidden)};
   const members = new Set(view.nodes.filter(n => !n.boundary).map(n => n.id));
   const enclosures=new Set(view.nodes.filter(n=>n.id!==universe.root&&view.expanded.has(n.id)&&universe.isGroup(n.id)).map(n=>n.id));
   const drill = Object.fromEntries(state.index.nodes.map(n => [n.id, n.file]));
@@ -218,45 +255,58 @@ function refreshMap(cut = null) {
       item.classes += ' expanded';
       Object.assign(item.data,size);
       item.data.layer=universe.paths.get(n.id).length+1;
+    } else if (n.id===state.lastVisitedGroup && universe.isGroup(n.id)) {
+      item.classes += ' last-visited';
     }
     item.position=position;
     return item;
   });
   const spans = new Map(nodes.map(n => [n.data.id, Math.max(n.data.spanX || 0,n.data.spanY || 0)]));
-  const edges = view.edges.map(e => ({ group: 'edges', data: { id: universe.renderPrefix + e.id,
-    referenceId: e.id, source: e.source, target: e.target,
-    type: e.type, color: colorOf(e.type, e.refs), weight: referenceTotal(e.refs),
-    count: referenceTotal(e.refs) > 1 ? String(referenceTotal(e.refs)) : '',
-    ...(e.source===e.target?{loopDistance:Math.max(200/cy.zoom(),2*spans.get(e.source))}:{}) },
-    classes: [e.status,e.source===e.target&&'loop',
-      spans.get(e.source)>0&&'source-expanded',spans.get(e.target)>0&&'target-expanded'].filter(Boolean).join(' ') }));
+  const families = new Map(nodes.map(n => [n.data.id,n.data.starFamily]));
+  const sharedStrokes = new Map();
+  for(const edge of view.edges){
+    if(edge.status!=='derived'||edge.source===edge.target)continue;
+    const key=ConnectionTrace.key(edge.source,edge.target);
+    sharedStrokes.set(key,(sharedStrokes.get(key)||0)+1);
+  }
+  const edges = view.edges.map(e => {
+    const sourceFamily=families.get(e.source),targetFamily=families.get(e.target),weight=referenceTotal(e.refs);
+    const sharedStrokeCount=e.status==='derived'&&sharedStrokes.get(ConnectionTrace.key(e.source,e.target))||1;
+    return {group:'edges',data:{id:universe.renderPrefix+e.id,referenceId:e.id,source:e.source,target:e.target,
+      type:e.type,sourceFamily,targetFamily,sharedStrokeCount,weight,count:weight>1?String(weight):'',
+      ...(e.source===e.target?{loopDistance:Math.max(200/cy.zoom(),2*spans.get(e.source))}:{})},
+      classes:[e.status,e.source===e.target&&'loop',
+        spans.get(e.source)>0&&'source-expanded',spans.get(e.target)>0&&'target-expanded'].filter(Boolean).join(' ')};
+  });
   const elements = [...nodes, ...edges];
   const previous = state.renderedMap?.cy === cy ? state.renderedMap.elements : new Map();
   const definitions = new Map(elements.map(item => [item.data.id, JSON.stringify(item)]));
   const added = elements.filter(item => !previous.has(item.data.id));
   const updated = elements.filter(item => previous.has(item.data.id) && previous.get(item.data.id) !== definitions.get(item.data.id));
   const removed = cy.elements().filter(item => !definitions.has(item.id()));
+  let entered = null;
   // Update only changed elements; a distant constellation keeps its native renderer geometry.
   if (added.length || updated.length || removed.length) {
     cy.batch(() => {
-      removed.remove(); cy.add(added);
+      removed.remove(); entered=cy.add(added);
       for (const item of updated) {
         const value = {...item};
         cy.getElementById(item.data.id).json(value);
       }
     });
     state.labelGeometry = null;
+    state.labelAlign = null;
     state.visibleLabels = null;
   }
   state.renderedMap = {cy, elements:definitions};
   state.review?.project();
-  readableLabels();
+  readableLabels(state.gestureActive);
   updateScopeSummary();
   renderFilters();
-  // An intermediate flight frame may project the inspected target out of view; keep the
-  // selection until the flight settles, then revalidate it against the final projection.
-  if (state.selection && !state.flight) renderDetails(state.selection,{reopen:false});
+  // Staging can temporarily omit the inspected target. Revalidate it at the settled camera.
+  if (state.selection && !state.flight && !state.wheel?.portal) renderDetails(state.selection,{reopen:false});
   rememberView();
+  return entered;
 }
 
 function selectNode(id) {
@@ -297,13 +347,23 @@ function backgroundConnection(event) {
   return connectionAt(p);
 }
 
+function renderedConnectionGeometry(edge,position,project) {
+  const straight=edge.hasClass('derived')&&!edge.hasClass('loop');
+  // Summary strokes meet node centres except at named constellation boundaries.
+  const a=straight&&!edge.hasClass('source-expanded')?position(edge.data('source')):edge.renderedSourceEndpoint();
+  const b=straight&&!edge.hasClass('target-expanded')?position(edge.data('target')):edge.renderedTargetEndpoint();
+  if(!a||!b||![a.x,a.y,b.x,b.y].every(Number.isFinite))return null;
+  return {a,b,controls:straight?[]:(edge.controlPoints()||[]).map(project)};
+}
+
 function connectionAt(pointer,fallback=null) {
   if(!pointer||!Number.isFinite(pointer.x)||!Number.isFinite(pointer.y))
     return fallback&&ConnectionTrace.pair(state.shard,fallback.source,fallback.target);
   const cy=state.cy,pan=cy.pan(),key=[cy.zoom(),pan.x,pan.y].join();
   let cache=state.connectionHits;
   if(!cache||cache.cy!==cy||cache.view!==state.shard||cache.key!==key){
-    const records=[],positions=new Map(),mid=(a,b)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
+    const records=[],positions=new Map(),zoom=cy.zoom(),mid=(a,b)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
+    const project=p=>({x:p.x*zoom+pan.x,y:p.y*zoom+pan.y});
     const position=id=>{
       if(!positions.has(id))positions.set(id,cy.getElementById(id).renderedPosition());
       return positions.get(id);
@@ -315,12 +375,9 @@ function connectionAt(pointer,fallback=null) {
     };
     for(const edge of cy.edges()){
       if(!edge.visible())continue;
-      // Folded summary endpoints reuse node positions; boundary anchors and curves use native geometry.
-      const straight=edge.hasClass('derived')&&!edge.hasClass('loop');
-      const a=straight&&!edge.hasClass('source-expanded')?position(edge.data('source')):edge.renderedSourceEndpoint(),
-        b=straight&&!edge.hasClass('target-expanded')?position(edge.data('target')):edge.renderedTargetEndpoint();
-      if(!a||!b||![a.x,a.y,b.x,b.y].every(Number.isFinite))continue;
-      const controls=straight?[]:(edge.controlPoints()||[]).map(p=>({x:p.x*cy.zoom()+pan.x,y:p.y*cy.zoom()+pan.y})),points=[a];
+      const geometry=renderedConnectionGeometry(edge,position,project);
+      if(!geometry)continue;
+      const {a,b,controls}=geometry,points=[a];
       for(let i=0;i<controls.length;i++)curve(points,points[points.length-1],controls[i],
         i+1<controls.length?mid(controls[i],controls[i+1]):b);
       if(!controls.length)points.push(b);
@@ -530,8 +587,20 @@ function showHoverCard(trace,point,review=null) {
   card.hidden=false;
   const box=card.getBoundingClientRect(),gap=18;
   let x=anchor.x+gap;if(x+box.width>graph.width-12)x=anchor.x-box.width-gap;
+  let y=anchor.y-12;
+  if(trace.kind==='pair'&&trace.source!==trace.target){
+    const wire=cy.getElementById(state.universe.renderPrefix+trace.roles.keys().next().value);
+    if(wire.hasClass('derived')){
+      const a=wire.renderedSourceEndpoint(),b=wire.renderedTargetEndpoint();
+      if(a&&b&&Math.abs(a.y-b.y)<=8){
+        const below=Math.max(a.y,b.y)+gap,above=Math.min(a.y,b.y)-gap-box.height;
+        if(below+box.height<=graph.height-8)y=below;
+        else if(above>=8)y=above;
+      }
+    }
+  }
   card.style.left=graph.left-map.left+Math.max(12,Math.min(graph.width-box.width-12,x))+'px';
-  card.style.top=graph.top-map.top+Math.max(8,Math.min(graph.height-box.height-8,anchor.y-12))+'px';
+  card.style.top=graph.top-map.top+Math.max(8,Math.min(graph.height-box.height-8,y))+'px';
 }
 
 function showTraceReadout(trace,point) {
@@ -578,6 +647,7 @@ function clearTrace() {
   $('hover-card').hidden=true;
   if(state.cy)state.cy.elements('.faded,.focus,'+TRACE_SELECTOR).removeClass('faded focus '+TRACE_CLASSES);
   state.trace=null;
+  clearWireFlow();
   $('map-tooltip').hidden=false;
   $('map-tooltip').textContent=analysisHint(state.universe?.nodes.get(state.scopeShard?.scope))||
     'Hover a star or connection to trace references in this view.';
@@ -585,11 +655,12 @@ function clearTrace() {
 
 function unfocus(clearReadout = false) {
   $('hover-card').hidden=true;
+  state.trace=null;
+  clearWireFlow();
   if (state.cy) {
     const marked=state.cy.elements('.faded,.focus,'+TRACE_SELECTOR);
     if(marked.length){marked.removeClass('faded focus '+TRACE_CLASSES);readableLabels();}
   }
-  state.trace=null;
   if(clearReadout)clearTrace();
   else {
     const title=$('map-tooltip').firstElementChild;
@@ -598,49 +669,58 @@ function unfocus(clearReadout = false) {
 }
 
 function applyFilters() {
-  stopNavigationFlight();
+  stopCameraMotion();
   if (state.cy) { unfocus(); refreshMap(); }
 }
 
 function readableLabels(geometryOnly = false) {
   if (!state.cy || state.styling || state.gestureActive && !geometryOnly) return;
+  const cy = state.cy, zoom = cy.zoom(), styleZoom=2**(Math.round(Math.log2(zoom)*2)/2);
+  const previous=state.labelGeometry;
+  const changed = !previous || previous.cy!==cy || (state.wheel ?
+    Math.abs(Math.log(zoom/previous.appliedZoom))>=0.025 : previous.zoom!==styleZoom);
+  if (geometryOnly && !changed) return;
   state.styling = true;
-  const cy = state.cy, zoom = cy.zoom(), leaves = cy.nodes().not('.expanded');
-  const styleZoom=2**(Math.round(Math.log2(zoom)*2)/2);
-  const changed = !state.labelGeometry || state.labelGeometry.cy !== cy || state.labelGeometry.zoom !== styleZoom;
-  const border = n => (n.selected() ? 3 : n.hasClass('expanded') ? 1 : n.hasClass('group') ? 2 : 1) / zoom;
-  const alignments = leaves.map(n => {
-    const x = n.renderedPosition('x');
-    return [n, x < 155 ? 'right' : x > cy.width() - 155 ? 'left' : 'center'];
-  });
-  cy.batch(() => {
-    if (changed) {
-      cy.nodes().style({ 'font-size': 13 / zoom, 'text-max-width': n=>(n.hasClass('source-file')?180:150)/zoom,
-        'text-background-padding': 3 / zoom, 'border-width': border,
-        'outline-width':n=>n.hasClass('configured')?2/zoom:0,'outline-offset':4/zoom });
-      const diameter = n => n.hasClass('group') ?
-        Math.max(27, Math.min(100, 2 * state.universe.radii.get(n.id()) * worldZoom() * 0.3)) : n.hasClass('member') ? 15 : 11;
-      leaves.style({ width: n => diameter(n) / zoom, height: n => diameter(n) / zoom,
-        'underlay-padding': 6 / zoom, 'text-valign': 'bottom', 'text-margin-y': 8 / zoom });
-      cy.nodes('.expanded').style({width:n=>n.data('spanX'),height:n=>n.data('spanY'),
-        padding: 26 / zoom, 'text-margin-y': -8 / zoom,'text-valign':'top','text-halign':'center' });
-      cy.edges('.loop').forEach(edge => edge.data('loopDistance',
-        2*Math.max(edge.source().outerWidth(),edge.source().outerHeight())+20/zoom));
-      cy.edges('.review-candidate,.review-violation').style({'underlay-padding':4/zoom,'font-size':13/zoom,
-        'text-background-padding':3/zoom,'text-border-width':1/zoom});
-      state.labelAlign = new Map();
-    }
-    for (const [n, align] of alignments) {
-      if (state.labelAlign.get(n.id()) !== align) {
-        n.style('text-halign', align); state.labelAlign.set(n.id(), align);
+  try {
+    const leaves = cy.nodes().not('.expanded');
+    const border = n => (n.selected() ? 3 : n.hasClass('expanded') ? 1 : n.hasClass('group') ? 2 : 1) / zoom;
+    const alignments = geometryOnly ? [] : leaves.map(n => {
+      const x = n.renderedPosition('x');
+      return [n, x < 155 ? 'right' : x > cy.width() - 155 ? 'left' : 'center'];
+    });
+    state.labelAlign ||= new Map();
+    cy.batch(() => {
+      if (changed) {
+        cy.nodes().style({ 'font-size': 13 / zoom, 'text-max-width': n=>(n.hasClass('source-file')?180:150)/zoom,
+          'text-background-padding': 2 / zoom, 'border-width': border,
+          'outline-width':n=>n.hasClass('configured')||n.hasClass('expanded')?2/zoom:0,
+          'outline-offset':n=>(n.hasClass('configured')?4:2)/zoom });
+        const diameter = n => n.hasClass('group') ? 27 : n.hasClass('member') ? 15 : 11;
+        // Folded nodes keep their renderer identity, so release the expanded geometry overrides.
+        leaves.removeStyle('padding corner-radius');
+        leaves.style({ width: n => diameter(n) / zoom, height: n => diameter(n) / zoom,
+          'underlay-padding': 6 / zoom, 'text-valign': 'bottom', 'text-margin-y': 8 / zoom });
+        cy.nodes('.expanded').style({width:n=>n.data('spanX'),height:n=>n.data('spanY'),
+          padding: 26 / zoom, 'text-margin-y': -8 / zoom,'text-valign':'top','text-halign':'center',
+          'corner-radius':14/zoom });
+        cy.edges('.loop').forEach(edge => edge.data('loopDistance',
+          2*Math.max(edge.source().outerWidth(),edge.source().outerHeight())+20/zoom));
+        cy.edges('.review-candidate,.review-violation').style({'underlay-padding':4/zoom,'font-size':13/zoom,
+          'text-background-padding':3/zoom,'text-border-width':1/zoom});
       }
+      for (const [n, align] of alignments) {
+        if (state.labelAlign.get(n.id()) !== align) {
+          n.style('text-halign', align); state.labelAlign.set(n.id(), align);
+        }
+      }
+      NodeIcons.update(cy,state.universe,state.scopeShard.scope,worldZoom(),zoom,starPalette());
+    });
+    if (changed) state.labelGeometry = {cy, zoom:styleZoom,appliedZoom:zoom};
+    if (!geometryOnly) {
+      declutterLabels();
+      syncAppearanceMotion();
     }
-    NodeIcons.update(cy,state.universe,state.scopeShard.scope,worldZoom(),zoom,{fg:css('--fg'),bg:css('--bg'),
-      candidate:css('--review-candidate'),violation:css('--review-violation')});
-  });
-  state.labelGeometry = {cy, zoom:styleZoom};
-  if (!geometryOnly) declutterLabels();
-  state.styling = false;
+  } finally {state.styling = false;}
 }
 
 function labelObstacles(glyphs) {
@@ -714,6 +794,13 @@ function measureLabelVariants(items, textOf) {
   }
 }
 
+function markerBox(node) {
+  const box=node.renderedBoundingBox({includeLabels:false,includeOverlays:false,includeUnderlays:false});
+  // The renderer includes drawing spill even in body-only bounds. Collision checks use the marker.
+  const spill=(parseFloat(node.style('bounds-expansion'))||0)*state.cy.zoom();
+  return {x1:box.x1+spill,y1:box.y1+spill,x2:box.x2-spill,y2:box.y2-spill};
+}
+
 function declutterLabels() {
   if (!state.cy) return;
   const cy = state.cy;
@@ -727,8 +814,7 @@ function declutterLabels() {
         n.hasClass('match') || n.id() === state.scopeShard.scope ? 6 : traced.has(n.id()) ? 5 :
           n.hasClass('overlapping-context')?4:expanded ? 2 : 1 };
   }).sort((a,b)=>b.priority-a.priority);
-  const glyphs = cy.nodes().not('.expanded').map(n => ({id:n.id(),box:n.renderedBoundingBox({includeLabels:false,
-    includeOverlays:false,includeUnderlays:false})}));
+  const glyphs = cy.nodes().not('.expanded').map(n => ({id:n.id(),box:markerBox(n)}));
   let kept=new Map();
   const obstacles=labelObstacles(glyphs);
   const measure=item=>item.node.renderedBoundingBox({includeNodes:false,includeEdges:false,includeLabels:true,
@@ -779,7 +865,7 @@ function declutterLabels() {
   state.labelBoxes=new Map([...kept.values()].map(n=>[n.id,n.textBox||n.box]));
   const titled=cy.nodes('.expanded').filter(node=>node.data('iconKind'));
   if(titled.length){
-    const palette={fg:css('--fg'),bg:css('--bg'),candidate:css('--review-candidate'),violation:css('--review-violation')};
+    const palette=starPalette();
     cy.batch(()=>titled.forEach(node=>NodeIcons.title(node,kept.get(node.id())?.textBox,cy.zoom(),palette)));
   }
 }
@@ -906,31 +992,37 @@ function setWorldViewport(level, pan, gesture = false) {
   level = Math.max(cy.minZoom(), Math.min(cy.maxZoom(), level));
   const scale = level > 2 ? 2 ** Math.ceil(Math.log2(level)) : 1;
   const rescaled = scale !== (state.renderScale || 1);
-  state.framing = true;
   cy.startBatch();
-  if(gesture)beginViewportGesture();
-  if (rescaled) {
-    state.renderScale = scale;
-    cy.nodes().positions(n => {
-      const {position,...size}=nodeGeometry(n.id(),n.hasClass('expanded'),scale);
-      if(n.hasClass('expanded'))n.data(size);
-      return position;
-    });
-    state.labelGeometry = null;
+  state.framing = true;
+  try {
+    if(gesture)beginViewportGesture();
+    if (rescaled) {
+      state.renderScale = scale;
+      cy.nodes().positions(n => {
+        const {position,...size}=nodeGeometry(n.id(),n.hasClass('expanded'),scale);
+        if(n.hasClass('expanded'))n.data(size);
+        return position;
+      });
+      state.labelGeometry = null;
+    }
+    cy.viewport({zoom:level/scale,pan});
+    // Pixel-sized styles must change units with positions before the renderer can paint.
+    if (rescaled || state.wheel) readableLabels(true);
+  } finally {
+    try {cy.endBatch();}
+    finally {state.framing = framing;}
   }
-  cy.viewport({zoom:level/scale,pan});
-  // Pixel-sized styles must change units with positions before the renderer can paint.
-  if (rescaled) readableLabels(true);
-  cy.endBatch();
   state.lastZoom = level;
-  state.framing = framing;
   readableLabels();
-  if(gesture) scheduleViewport();
-  if (gesture && !framing && state.pointer && level !== before) semanticZoom(Math.sign(level-before));
+  if (gesture && !state.wheel) {
+    scheduleViewport();
+    if (!framing && state.pointer && level !== before) semanticZoom(Math.sign(level-before));
+  }
 }
 
-function stopNavigationFlight() {
+function stopCameraMotion() {
   if (typeof cancelNavigationFlight === 'function') cancelNavigationFlight({restore:false});
+  if (typeof cancelWheelMotion === 'function') cancelWheelMotion(false);
 }
 
 function cameraForBounds(bounds, padding = 75, maxZoom = 1.2) {
@@ -944,7 +1036,7 @@ function cameraForBounds(bounds, padding = 75, maxZoom = 1.2) {
 }
 
 function frame(bounds, padding = 75, maxZoom = 1.2) {
-  stopNavigationFlight();
+  stopCameraMotion();
   const camera=cameraForBounds(bounds,padding,maxZoom);
   if(!camera) return null;
   setWorldViewport(camera.level,camera.pan);
@@ -1000,7 +1092,7 @@ function frameNode(id) {
 
 function layout({fit=true}={}) {
   if (!state.cy) return;
-  stopNavigationFlight();
+  stopCameraMotion();
   const map = state.universe, mode = $('layout').value;
   const top = [...map.childIds(map.root), ...map.childIds(null).filter(id => id !== map.root)];
   const fake = top.map(id => ({id:()=>id,hasClass:()=>!map.nodes.get(id).boundary}));

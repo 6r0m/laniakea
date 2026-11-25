@@ -2,6 +2,7 @@
 // Serve test_review.fixture through the ordinary pipeline/index/server in a disposable workspace.
 async page=>{
   const check=(ok,message)=>{if(!ok)throw Error(message);},errors=[],requests=[],writes=[];
+  await page.emulateMedia({reducedMotion:'no-preference'});
   page.on('pageerror',e=>errors.push(e.message));
   page.on('request',r=>{requests.push(r);if(r.method()==='POST'&&r.url().includes('/layout/'))writes.push(r.url());});
   const pins=await page.evaluate(()=>JSON.stringify(state.positionCache.layouts));
@@ -30,12 +31,56 @@ async page=>{
   const marked=await page.evaluate(()=>{
     const node=state.cy.nodes().find(n=>n.data('reviewMark')),edge=state.cy.edges('.review-candidate,.review-violation')[0];
     return{images:(node.style('background-image').match(/data:image\/svg\+xml/g)||[]).length,
-      badge:parseFloat(node.style('background-width').split(/\s+/)[1])*state.cy.zoom(),
+      badge:parseFloat(node.style('background-width').split(/\s+/).at(-1))*state.cy.zoom(),
       label:edge.style('label'),size:parseFloat(edge.style('font-size'))*state.cy.zoom()};
   });
-  check(marked.images===2&&Math.abs(marked.badge-16)<.1,'Warning icon is not independently readable: '+JSON.stringify(marked));
+  check([3,4].includes(marked.images)&&Math.abs(marked.badge-16)<.1,'Warning icon is not independently readable: '+JSON.stringify(marked));
   check(['?','!'].includes(marked.label)&&marked.size>=12,'Idle wire hides its review symbol');
   const paint=await badgePixels();check(paint.count>30,'Warning badge pixels: '+JSON.stringify(paint));
+  await page.evaluate(()=>{
+    const trace=ConnectionTrace.pair(state.shard,'A','B');
+    const edge=state.cy.getElementById(state.universe.renderPrefix+trace.roles.keys().next().value);
+    preview(edge,null,trace);
+  });
+  await page.waitForFunction(()=>document.querySelectorAll('#graph .wire-feed > span').length===2);
+  check(await page.evaluate(()=>{
+    const lights=[...document.querySelectorAll('#graph .wire-feed > span')];
+    const tint=state.cy.edges('.focus.review-violation').length?css('--review-violation'):css('--review-candidate');
+    return lights.length===2&&lights[0].style.offsetPath!==lights[1].style.offsetPath&&
+      lights.every(light=>light.style.getPropertyValue('--wire-color')===tint&&light.classList.contains('wire-warning')&&
+        getComputedStyle(light).getPropertyValue('--wire-peak').trim()==='1');
+  }),'A witnessed cycle did not show opposing flows with Review severity');
+  await page.evaluate(()=>unfocus());
+  const pulseBadge=await page.evaluate(()=>state.cy.nodes().find(n=>!n.hasClass('expanded')&&
+    n.data('reviewMark')?.endsWith(':false')).id());
+  const pulseSample=id=>{
+    const n=state.cy.getElementById(id),layers=n.style('background-image-opacity').split(/\s+/).map(Number);
+    const images=n.style('background-image').split(' ');
+    const x=parseFloat(n.style('background-offset-x')),y=parseFloat(n.style('background-offset-y'));
+    return {glow:layers.length===4?layers[0]:0,centered:x===0&&y===0&&images[0]===images[1],
+      badge:layers.at(-1),width:n.renderedWidth(),position:n.renderedPosition()};
+  };
+  const peak=await page.waitForFunction(id=>{
+    const n=state.cy.getElementById(id),alpha=n.style('background-image-opacity').split(/\s+/).map(Number);
+    return alpha.length===4&&alpha[0]>.45;
+  },pulseBadge,{timeout:5000});
+  await peak.dispose();
+  const bright=await page.evaluate(pulseSample,pulseBadge);
+  check(bright.centered,'The pulse must use the star halo at its centre');
+  await page.waitForTimeout(4600);
+  const ongoing=await page.evaluate(pulseSample,pulseBadge);
+  check(ongoing.glow>0,'The active star stopped pulsing');
+  await page.waitForFunction(({id,glow})=>{
+    const alpha=state.cy.getElementById(id).style('background-image-opacity').split(/\s+/).map(Number);
+    return alpha.length===4&&Math.abs(alpha[0]-glow)>.05;
+  },{id:pulseBadge,glow:ongoing.glow});
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await page.waitForFunction(id=>state.cy.getElementById(id).style('background-image-opacity').split(/\s+/).length===3,
+    pulseBadge,{timeout:2000});
+  const still=await page.evaluate(pulseSample,pulseBadge);
+  check(bright.glow>still.glow&&still.badge===1&&bright.badge===1&&bright.width===still.width&&
+    bright.position.x===still.position.x&&bright.position.y===still.position.y,'Review glow moved or faded the badge or star');
+  await page.emulateMedia({reducedMotion:'no-preference'});
   if(await page.evaluate(()=>new URL(location.href).searchParams.has('policy-proof'))) {
     await page.locator('#toggle-review').click();
     await page.waitForFunction(()=>state.review.data?.counts.violation===1);
@@ -111,7 +156,7 @@ async page=>{
     if(await page.evaluate(()=>state.shard.expanded.has('A')&&state.cy.getElementById('C').renderedPosition().y>state.cy.height()+100))break;
     await page.mouse.wheel(0,-90);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
   }
-  await page.waitForFunction(()=>!state.gestureActive&&!state.viewportFrame&&!state.zoomFrame&&!state.wheelFrame);
+  await page.waitForFunction(()=>!state.gestureActive&&!state.viewportFrame&&!state.zoomFrame&&!state.wheel);
   const connectionPoint=await page.evaluate(id=>{
     const edge=state.shard.edges.find(e=>state.review.links.get(e.id)?.has(id));
     if(!edge||edge.source!=='functionA')throw Error('Warning did not follow the revealed callable');

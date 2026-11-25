@@ -78,7 +78,7 @@ namespaces, classes and callables. Other layout modes keep separate saved arrang
 
 | action | result |
 |---|---|
-| Wheel over a group or file | Reveal or fold detail gradually, one layer at a time |
+| Wheel over a group or file | Zoom around the pointer and reveal or fold detail one layer at a time |
 | Drag empty space | Fly through the map |
 | Hover a star or connection | Trace references without selecting |
 | Click a star or wire | Inspect source context and exact references |
@@ -97,7 +97,8 @@ wheel, drag, Clear selection, Escape or a newer selection; wheel and drag themse
 breadcrumbs open the target scope directly. With reduced motion enabled, navigation jumps directly.
 
 Hover colors are relative to the card's named focus: cyan outgoing, amber incoming, violet within/self. Wire focus
-can change near the opposite endpoint. Idle wire colors describe types listed in **Browse & filters**. Crossings are
+can change near the opposite endpoint. Idle wires take the colors of the stars at their ends. Find reference types
+in **Browse & filters** and in the connection inspector. Crossings are
 not junctions; click overlapping wires to choose a named pair and inspect both directions.
 
 **Inspector** has two tabs: **Review** explains findings and decisions; **Details** shows source information and

@@ -1,6 +1,7 @@
 # Luminous viewer appearance and navigation polish
 
-**Status** REVIEW REQUIRED - reopened 2026-11-25  
+**Status** CANDIDATE - operator visual and interaction acceptance pending (Q4)
+
 **Baseline** `c2d88cc` on develop  
 **Stable owner** [Viewer architecture](../docs/architecture/viewer.md#visual-appearance-and-motion)
 
@@ -114,12 +115,26 @@ Use Laniakea's own hierarchy, shapes and semantics to express that direction.
   - Effect - visual appearance and perceived wheel smoothness remain open after technical verification.
   - Reason - the previous technical acceptance failed to establish the intended experience.
   - Source - 2026-11-25 operator request.
+- **D12** Implement the reviewed change and apply the review findings supported by the code and project decisions.
+  - Effect - satisfies the implementation gate for this round. D11 continues to govern DONE.
+  - Reason - not stated.
+  - Source - 2026-11-25 operator implementation request.
+- **D13** Show one soft glow for the last group visited.
+  - Effect - the cue replaces the previous one as navigation continues. Its light falls off without a hard outer edge.
+  - Reason - multiple oversized rings made previous groups compete.
+  - Source - 2026-11-25 operator visual feedback.
+- **D14** Use canonical ownership for architectural color. Assign the curated light and dark palette in top-level
+  branch ID order, use each color before reuse, and inherit the assignment through descendants.
+  - Effect - supersedes A7. Fixed palette tokens, family-independent glyphs, interaction cues, wires,
+    external dependencies and Review severity remain part of visual acceptance.
+  - Reason - one color should connect the visible parts of the same architectural branch at every zoom level.
+  - Source - 2026-11-25 operator palette direction.
 
 ### Current gate and assumptions
 
 - **Q4 [OPEN - BLOCKING FOR DONE]** Does the operator approve the before and after views and the wheel behavior shown
   in the interactive build and recording under D11?
-- **A7 [ACTIVE]** Use build units, source organization, data types and callables as the first palette families. Keep
+- **A7 [SUPERSEDED BY D14]** Use build units, source organization, data types and callables as the first palette families. Keep
   external, selection, trace and Review cues independent. Derive both themes from the same family assignments.
 - **A8 [ACTIVE]** Use the fully expanded sample scenes as reproducible comparison views. Repeat the paired visual
   and interaction checks on the approved real-project route under D3 and D7 before closing Q4.
@@ -170,12 +185,11 @@ Use Laniakea's own hierarchy, shapes and semantics to express that direction.
 
 ## Design
 
-**Proposal under D9-D10.** Let [appearance.js](../viewer/appearance.js) own family assignments, light roles,
+**Design under D9-D10 and D14.** Let [appearance.js](../viewer/appearance.js) own family assignments, light roles,
 label hierarchy and emphasis. Let [app.css](../viewer/app.css) supply theme colors and broad atmospheric gradients.
-Use the existing glyph kind or recorded presentation metadata for family membership. Keep node shape and glyph as
-readable cues alongside color. Start in dark mode with a deep blue-violet field, teal build units, indigo source
-regions, lilac data types and coral callables. Tune corresponding light-mode colors against the pale field. These are
-starting roles for the visual pass and may change after contrast and density checks.
+Follow canonical paths for architectural nodes and use the recorded owner for source presentation wrappers. Keep
+entity shape and glyph as readable cues. The root has a neutral color and external dependencies retain their role.
+The fixed palette uses the same order in both themes.
 
 Compose the leaf as an illuminated core, a soft transparent radial falloff and a crisp glyph. Prototype native radial
 fill for the core and a cached local SVG halo for the falloff beyond the silhouette. Extend the existing native image
@@ -225,17 +239,18 @@ and input. Procedural scenery, parallax, per-node clocks, a second renderer and 
 
 ## Implementation tasks
 
-- [ ] Re-run the trusted wheel baseline cases and save the matched comparison scene metadata. Add red browser assertions
+- [x] Re-run the trusted wheel baseline cases and save the matched comparison scene metadata. Add red browser assertions
   for intermediate notch frames and portal handoff continuity before changing camera behavior. Extend image and geometry
   guards only where they detect a concrete regression.
-- [ ] Deliver P0 wheel interpolation through the scene owner. Coordinate semantic thresholds, projection refresh,
+- [x] Deliver P0 wheel interpolation through the scene owner. Coordinate semantic thresholds, projection refresh,
   rescaling, portal alignment, cancellation and live deferral. Test ordinary motion and the portal as independent cases.
-- [ ] Deliver P0 native radial illumination, then tune P1 family colors, atmosphere, boundaries, labels and idle wires
+- [x] Deliver P0 native radial illumination, then tune P1 family colors, atmosphere, boundaries, labels and idle wires
   on the same before and after scenes. Check both themes, dense overlap and foreground emphasis as part of tuning.
-- [ ] Compare input latency, frame deltas, long frames and visible retention on equivalent scenes under moderate and
+- [x] Compare input latency, frame deltas, long frames and visible retention on equivalent scenes under moderate and
   dense workloads. Check drawing bounds, image reuse and projection bounds after repeated gestures.
-- [ ] Run the verification matrix, review the diff, update stable docs and present paired views, a trusted-wheel
+- [x] Run the verification matrix, review the diff, update stable docs and present paired views, a trusted-wheel
   recording and a live viewer for Q4. Keep the local viewer running per D6.
+- [ ] Record operator visual and interaction approval under Q4.
 
 ## Verification
 
@@ -507,3 +522,62 @@ Keep experiments, comparison settings and review decisions here.
 - **Authority** D8-D11 added. A2 and A3 superseded by D9. Q4 holds DONE pending operator acceptance.
 - **History** The prior implementation plan and its original evidence remain in Git at
   `c2d88cc:todo/done/2026-11-23_1813-luminous-viewer-appearance.md`.
+
+### 2026-11-25 - candidate implementation and review
+
+- **Authority** D12 was received after reviewer approval. Q4 remains open.
+- **Review** The overview contains many folders with the same glyph. Branch hues derive from recorded containment
+  so those folders are distinguishable. Retargeting uses the outstanding logarithmic target so it preserves
+  input received during interpolation. Camera and projection updates share a frame, and a brief entrance fade
+  addresses the visible replacement of the frontier.
+- **Red evidence** `tests/wheel.browser.js` failed on the baseline because one trusted notch painted no intermediate
+  camera scales. The same trusted-input proof covers the notch, scale boundary, retargeting and recorded definition route.
+- **Candidate** Real before and after captures used matching camera and layout settings in four views and both themes.
+  A narrow pair and trusted wheel recordings supplement those views. The synthetic portal recording reaches the same
+  canonical symbol in both versions. Capture files are local and outside the clone. The saved-map viewer remains running.
+- **Verification** `node --test tests/*.test.cjs` passed 226 tests. Python documentation and privacy checks passed
+  five tests. The wheel, appearance, source-surface, namespace-files, icons, motion, traces, endpoints, readability,
+  viewer, sections, Review, Inspector, health, source preview, source-match navigation and live browser suites passed
+  on disposable fixtures. The live camera assertion now compares the world centre across panel resizes.
+- **Performance** Three alternating baseline and candidate rounds compared wheel and explicit-flight behavior
+  on the same saved data. Pins and world positions were preserved. A high-refresh timing guard reduced repeated
+  renderer updates. The final wheel comparison showed comparable p95 frame intervals and the same long-task counts,
+  with more total main-thread work during animated bursts. Explicit flights had comparable first-frame and total timings.
+  [Wheel measurements](../workspace/tmp/luminous-perf-final.json) [Flight measurements](../workspace/tmp/luminous-flight-perf.json)
+
+### 2026-11-25 - single last-visit cue
+
+- **Authority** D13 was received. Q4 remains open for the revised appearance.
+- **Root cause** Folding a node reused its renderer element and retained expanded padding, letting several groups
+  retain an oversized circle. Folded geometry releases the expanded overrides.
+- **Verification** The successive-departure regression reproduced the stale 26 px padding. The fixed behavior
+  keeps the folded body compact and moves the wider halo to the latest group. A saved-map Chrome check exited
+  two successive groups through Up and confirmed that the cue moved to the second marker.
+
+### 2026-11-25 - architectural ownership palette
+
+- **Authority** D14 supersedes A7. Q4 remains open for the revised appearance.
+- **Palette** Curated sixteen matching theme pairs. Offline selection used minimum CIELAB distance across the two
+  themes. Ordering improved the separation between consecutive colors, including the wraparound pair.
+  [Glasbey paper](https://strathprints.strath.ac.uk/30312/) [Carbon categorical palettes](https://www.carbondesignsystem.com/building-blocks/data-visualization/color-palettes)
+- **Regression** The original type-based implementation assigned only two colors to sixteen synthetic branches
+  with repeated glyphs. The ownership test verifies unique slots before reuse, stable ordering, inherited color
+  through source presentation and semantic depth, and the separate external role.
+- **Verification** The 228 Node tests passed. Chrome verified radial falloff, selection outlines, glyphs and
+  warning layers on the synthetic fixture. The saved-map overview and three deeper views in both themes confirmed
+  distinct visible top-level colors and matching descendant colors. The weakest solid palette token measured
+  4.67:1 against the map background stops. Captures of the saved map are outside the clone.
+
+### 2026-11-25 - wheel pacing and viewport reuse
+
+- **Authority** The operator accepted the direction of the revised appearance and reported residual jumps during
+  inward and outward wheel motion. Q4 remains open for the revised interaction.
+- **Change** The wheel camera limits travel per paint and advances on consecutive 144 Hz frames. Folded marker
+  geometry follows zoom more closely. The wheel uses existing viewport coverage before recutting, reuses equivalent
+  projections, and reduces repeated lookup work when a cut changes.
+- **Evidence** On matched headless Chrome wheel passes, the maximum folded-marker jump went from about 10.6 px
+  to under 1 px. Ordinary matched bursts stayed within the reusable coverage. Reprojection can still cause a
+  pause on a longer semantic zoom-out. A local recording shows a branch opening and folding on trusted wheel input.
+- **Verification** The 231 Node tests passed. Python ran 352 tests with 38 skips. Chrome passed the wheel,
+  appearance and source-surface fixture suites, including pointer anchoring, reversal, reduced motion, file
+  definition handoff and physical-file reference paging.

@@ -21,7 +21,8 @@ const NodeIcons=(()=>{
     section:'<path d="m3 7 9-4 9 4-9 4zm0 5 9 4 9-4M3 17l9 4 9-4"/>',
     entity:'<circle cx="12" cy="12" r="8"/><path d="M12 8v8m-4-4h8"/>'
   };
-  const images=new Map(),styles=new WeakMap(),titles=new WeakMap();
+  const images=new Map(),styles=new WeakMap(),titles=new WeakMap(),glyphs=new WeakMap();
+  const starGlows=new WeakMap();
   function kind(node){
     const a=node.attrs||{},k=typeof a.declaration_kind==='string'?a.declaration_kind:node.level||'';
     if(a.source_file)return 'file';
@@ -57,28 +58,70 @@ const NodeIcons=(()=>{
     }
     return images.get(key);
   }
+  function halo(tint) {
+    tint=/^#[0-9a-f]{6}$/i.test(tint)?tint:'#888888';
+    const key='halo'+tint;
+    if(!images.has(key)){
+      if(images.size>=128)images.clear();
+      images.set(key,'data:image/svg+xml,'+encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">'+
+        '<defs><radialGradient id="light"><stop stop-color="#fff" stop-opacity=".58"/>'+
+        '<stop offset=".21" stop-color="'+tint+'" stop-opacity=".56"/>'+
+        '<stop offset=".43" stop-color="'+tint+'" stop-opacity=".36"/>'+
+        '<stop offset=".7" stop-color="'+tint+'" stop-opacity=".11"/>'+
+        '<stop offset="1" stop-color="'+tint+'" stop-opacity="0"/></radialGradient></defs>'+
+        '<circle cx="48" cy="48" r="48" fill="url(#light)"/></svg>'));
+    }
+    return images.get(key);
+  }
   function apply(node,value){
     const signature=JSON.stringify(value);
     if(styles.get(node)!==signature){node.style(value);styles.set(node,signature);}
   }
-  function paint(node,zoom,palette,visible=true){
+  function paint(node,zoom,palette){
     if(!node.data('iconKind'))return;
     const expanded=node.hasClass('expanded'),title=titles.get(node),open=node.hasClass('group')||node.hasClass('source-region')||node.hasClass('not-in-target');
-    const ink=expanded||open?palette.fg:palette.bg;
+    const tint=palette.stars?.[node.data('starFamily')];
+    const ink=expanded?palette.fg:tint?palette.ink:open?palette.fg:palette.bg;
     const size=expanded?16:Math.min(20,node.width()*zoom*0.58);
-    const mark=node.data('reviewMark')||'',badge=warning(mark,mark.startsWith('violation:')?palette.violation:palette.candidate,palette.bg);
+    const mark=node.data('reviewMark')||'',severityColor=mark.startsWith('violation:')?palette.violation:palette.candidate;
+    const badge=warning(mark,severityColor,palette.bg);
     const x=expanded&&title?.visible?title.x/zoom:0,y=expanded&&title?.visible?title.y/zoom:0;
-    apply(node,{'background-image':badge?[image(node.data('iconKind'),ink),badge]:image(node.data('iconKind'),ink),
-      'background-fit':badge?['none','none']:'none','background-clip':badge?['none','none']:'none',
-      'background-image-containment':badge?['over','over']:'over',
-      'background-width':badge?[size/zoom,16/zoom]:size/zoom,'background-height':badge?[size/zoom,16/zoom]:size/zoom,
-      'background-position-x':badge?['50%','50%']:'50%',
-      'background-position-y':badge?[expanded?'0%':'50%',expanded?'0%':'50%']:expanded?'0%':'50%',
-      'background-offset-x':badge?[x,expanded?x-19/zoom:node.width()/2]:x,
-      'background-offset-y':badge?[y,expanded?y:-node.height()/2]:y,
-      'background-image-opacity':badge?[expanded?(title?.visible?1:0):visible?1:0,expanded?(title?.visible?1:0):1]:
-        expanded?(title?.visible?1:0):visible?1:0,
-      'bounds-expansion':expanded?[title?.visible?Math.max(0,-y)+2/zoom:0,(badge?40:22)/zoom,0,(badge?40:22)/zoom]:badge?10/zoom:0});
+    const glyphOpacity=expanded?Number(Boolean(title?.visible)):Number(glyphs.get(node)??true);
+    const layers=[{uri:image(node.data('iconKind'),ink),size,x,y,opacity:glyphOpacity}];
+    const diameter=expanded?0:node.width()*zoom;
+    const haloSize=!expanded&&tint?(node.hasClass('last-visited')?132:Math.max(61,diameter*1.3+42)):0;
+    const glow=haloSize&&mark.endsWith(':false')&&starGlows.get(node);
+    const glowSize=glow?haloSize*1.26:0;
+    if(haloSize){
+      const muted=node.hasClass('not-in-target')||node.hasClass('implementation')||node.hasClass('restricted-member');
+      layers.unshift({uri:halo(tint),size:haloSize,x:0,y:0,opacity:palette.haloOpacity*(muted ? 0.52 : 1)});
+      if(glow)layers.unshift({uri:halo(tint),size:glowSize,x:0,y:0,opacity:glow});
+    }
+    if(badge){
+      const badgeX=expanded?x-19/zoom:node.width()/2,badgeY=expanded?y:-node.height()/2;
+      layers.push({uri:badge,size:16,x:badgeX,y:badgeY,opacity:expanded?glyphOpacity:1});
+    }
+    const sizes=layers.map(layer=>layer.size/zoom);
+    apply(node,{'background-image':layers.map(layer=>layer.uri),
+      'background-fit':layers.map(()=>'none'),'background-clip':layers.map(()=>'none'),
+      'background-image-containment':layers.map(()=>'over'),
+      'background-width':sizes,'background-height':sizes,
+      'background-position-x':layers.map(()=>'50%'),'background-position-y':layers.map(()=>expanded?'0%':'50%'),
+      'background-offset-x':layers.map(layer=>layer.x),'background-offset-y':layers.map(layer=>layer.y),
+      'background-image-opacity':layers.map(layer=>layer.opacity),
+      'bounds-expansion':expanded?[title?.visible?Math.max(0,-y)+2/zoom:0,(badge?40:22)/zoom,0,(badge?40:22)/zoom]:
+        Math.max(badge?10:0,(Math.max(haloSize,glowSize)-diameter)/2)/zoom});
+  }
+  function shine(node,opacity,zoom,palette){
+    const previous=starGlows.get(node)||0;
+    if(previous===opacity)return;
+    if(opacity)starGlows.set(node,opacity);
+    else starGlows.delete(node);
+    if(node.removed())return;
+    const layers=previous&&opacity?node.style('background-image-opacity').split(/\s+/):[];
+    if(layers.length===4)node.style('background-image-opacity',[opacity,...layers.slice(1).map(Number)]);
+    else paint(node,zoom,palette);
   }
   function update(cy,map,scope,level,zoom,palette){
     const owner=map.nodes.get(scope),detail=owner&&(owner.attrs?.source_sections||owner.attrs?.presentation_group||
@@ -90,7 +133,8 @@ const NodeIcons=(()=>{
         const diameter=visible?26:node.hasClass('member')?15:11;
         if(Math.abs(node.width()*zoom-diameter)>0.01)node.style({width:diameter/zoom,height:diameter/zoom});
       }
-      paint(node,zoom,palette,visible);
+      glyphs.set(node,visible);
+      paint(node,zoom,palette);
     }
   }
   function titleBox(node,box){
@@ -103,6 +147,6 @@ const NodeIcons=(()=>{
     titles.set(node,box?{visible:true,x:-box.w/2-14,y:(box.y1+box.y2)/2-(p.y-node.outerHeight()*zoom/2)-8}:{visible:false});
     paint(node,zoom,palette);
   }
-  return{kind,image,warning,update,titleBox,title};
+  return{kind,image,warning,update,shine,titleBox,title};
 })();
 if(typeof module!=='undefined')module.exports={NodeIcons};

@@ -114,12 +114,13 @@ boundary and viewport filtering, labelled "In this view". Node inspection separa
 Connection inspection combines all shown families and both directions for the same unordered endpoint pair. A deterministic
 ID order fixes its A/B identities, with full ownership paths and levels. Both directional totals and a bounded
 type breakdown remain stable across native family/direction hits. A one-way pair explicitly reports zero in reverse;
-a real self-loop reports within/self. Coincident reciprocal paths have a neutral stroke and direction-colored arrows.
+a real self-loop reports within/self. Coincident reciprocal paths keep their endpoint colors and direction-colored arrows.
 Tracing styles existing edges only: no extra lanes, geometry changes, graph facts, hover requests or saved positions.
 Wire hover titles the endpoint nearest the pointer among the hovered pairs and marks it with a neutral halo. Incoming
 and outgoing colors and counts are relative to that title. A screen-space dead band holds the current viewpoint around
 midpoints; a clearly closer endpoint changes it. The compact card lists peer names and counts in two columns, scoped to
-hovered connections rather than whole-node usage. Within/self remains separate. Type breakdowns stay in Details.
+hovered connections rather than whole-node usage. It clears a nearly horizontal summary wire when space permits.
+Within/self remains separate. Type breakdowns stay in Details.
 When different endpoint pairs overlap, hit testing retains all pairs under a fixed screen-space tolerance. The card
 counts only unique represented references incident to its titled endpoint, and discloses unrelated pairs separately.
 A visual crossing never creates a dependency junction. Peer captions are bounded, with explicit disclosure when either
@@ -167,18 +168,36 @@ projection refresh does not.
 
 ## Visual appearance and motion
 
-`app.css` owns the light/dark theme tokens, the static map atmosphere and HTML surface styling. `appearance.js` owns
-the single static Cytoscape stylesheet; `map.js` keeps geometry-sensitive label and marker styles, projection and
-pointer interaction. The atmosphere is a static CSS gradient on the map surface, not a renderer element or pointer
-target. It introduces no graph facts, decorative nodes or idle animation.
+`app.css` owns the light/dark theme tokens, layered map atmosphere and HTML surface styling. `appearance.js` assigns
+ownership colors and owns the static Cytoscape stylesheet. The direct architectural children of the canonical project
+root take colors in branch ID order. Every descendant inherits its top-level owner's color. Derived source folders and
+files follow their recorded owner. The project root and external dependencies have dedicated colors.
+Both themes use the same ordered assignments. Colors cycle when the palette is exhausted. Changing the set of
+top-level branches can shift assignments. Shape, glyph and caption identify the entity and its available actions.
 
-Luminous emphasis is limited to existing elements: ordinary nodes stay quiet, the actual hovered node receives a local
-underlay, and selection uses the dedicated selection role plus a stronger border/underlay. Review candidates and
-violations keep their amber/red badges and wire symbols; the ordinary member glow is not a finding. Expanded
-containers keep underlay opacity zero and use their fill, border and title badge instead of a large circular halo.
-The pinned renderer types `underlay-color` as a color, so underlays are solid; gradient atmosphere belongs to CSS or a
-node background, never to a fake finding or an extra layer. Theme changes replace the stylesheet on the existing
-renderer; they do not recreate the graph or change saved positions.
+Folded nodes use a native radial core and cached local SVG light falloff. `icons.js` orders the halo, glyph and Review
+badge in the node's image stack. The halo extends beyond the marker in drawing bounds. The node body, caption and
+existing pointer geometry own interaction. Expanded constellations use a tinted surface and rounded double contour.
+The most recently exited group gets a wider halo when drawn as a folded marker. The cue lives in the current tab and
+updates on departure from a different group. Folded group bodies stay compact at any camera zoom.
+Review, selection and directional tracing keep their own colors and emphasis. Theme changes repaint the existing
+renderer, with positions and graph identities preserved.
+
+Wheel bursts accumulate normalized deltas into one logarithmic world-zoom target in `scene.js`. The current
+displayed camera approaches that target with elapsed-time easing and a limit on the zoom change per paint.
+Each step applies zoom and pan together through
+`setWorldViewport()`, using the newest pointer position as its anchor. A semantic reveal or fold updates the projection
+at the same camera, then briefly fades in newly visible nodes. Small geometry corrections keep folded markers
+close to their intended pixel sizes between renderer scale changes. Label alignment, collision work and live
+adoption settle after movement.
+Reduced motion applies the requested scale and any immediate scope change directly.
+
+A navigation-only file entry stages a bounded source and destination projection and eases the camera into the
+recorded destination. The handoff aligns the source and destination footprints under the pointer. The displayed
+portion of the scale adjustment carries into the outstanding wheel target. Reversing or interrupting a pending
+handoff drops its staging expansion and retains the displayed camera. Arrival commits the destination scope,
+ordinary projection and settled history. Explicit navigation, keyboard zoom, drag and renderer replacement release
+pending wheel frames before taking ownership of the camera.
 
 Camera-bearing explicit navigation (search results, reference Follow, Fit map and presentation-group breadcrumbs) uses
 one cancellable camera flight in `scene.js`. Ordinary scope breadcrumbs continue to open their scope directly. The
@@ -231,11 +250,9 @@ remain authoritative: a source region is not proof that a declaration is an abst
 Sibling file captions may omit a long common identifier prefix at a word boundary. Full filenames, source paths and
 reference identities remain available in hover and inspection; the shortened caption is presentation only and takes
 priority over the full filename on the canvas.
-Wheel input over a file glyph, name or revealed code group keeps the pointer-anchored camera scale. Its next layer
-opens only when there is enough screen space, using the same threshold as surrounding constellations. Each wheel
-callback opens or closes at most one layer and never fits its contents automatically; outward steps use the separate
-closing threshold. Navigation-only file entries preserve their apparent footprint and screen anchor when entering a recorded
-context elsewhere in the layout. Double-click and explicit Open controls retain direct, fitted navigation.
+Wheel input over a file glyph, name or revealed code group uses the [continuous camera](#visual-appearance-and-motion).
+The next layer opens when there is enough screen space. Outward movement uses a separate closing threshold.
+Each semantic step changes one layer. Double-click and explicit Open controls fit the destination.
 Empty files with no unambiguous navigation target do not
 invent internals. Mixed-file namespaces retain their canonical scope and their namespace type icon beside file boxes.
 Implementation styling also follows a semantic entity's recorded source partition; its shape still identifies code,
@@ -341,6 +358,10 @@ without erasing requested expansion or world positions. Incident reference index
 context; distant detail leaves Cytoscape rather than accumulating across flights. Enlarging an ancestor's background
 does not pull all its references into a deep view. Exact-reference navigation keeps its endpoints represented.
 Remote context endpoints do not recursively load their unrelated neighbours; approaching them reveals their own references.
+During wheel motion the camera can use the existing buffer up to its edge. Outward recuts use a larger bounded
+buffer to cover the growing viewport. Once the wheel settles, the ordinary viewport checks resume. A camera-only
+recut reuses the current projection when the expanded groups, visible seeds, reference seeds, forced endpoints
+and filters are identical. When they change, reference grouping reuses endpoint and bundle lookups within that projection.
 Spatial and visual container bounds include all descendants, including manually moved pins outside the automatic layout.
 An unrelated visible star inside an expanded enclosure gains an explicit owner caption and a neutral context outline.
 This identifies an overlap in the saved arrangement without changing containment or silently moving a user's pins.
@@ -374,7 +395,16 @@ A previous hover target cannot clear a newer trace.
 Constellation dragging uses Cytoscape's native selected-node drag layer. Moving wires settle on release while the selected
 connection remains visible; reference facts and counts are retained throughout the gesture.
 Native viewport textures and straight summary lines reduce gesture rendering work. Direction arrows and bundle counts
-appear on tracing or inspection. Label collision work settles after input pauses; wheel events and viewport
+appear on tracing or inspection. Idle wires use the displayed endpoints' family colors and fade toward a muted
+midpoint. Coincident straight summary strokes share an opacity budget, including during tracing. Focused and
+selected wires strengthen their endpoint colors. Arrowheads and the readout carry direction. Focused wires breathe
+subtly. A soft light glides along each eligible direction and repeats on the same cadence as the Review star glow.
+Pulses backed by cycle evidence use the Review
+severity color and a stronger glow. Reciprocal wires show both recorded directions together. Each direction
+uses its source family's color unless the displayed references carry active cycle evidence.
+Node and overlap focus share the decoration on coincident summaries and soften the glow as path density grows.
+CSS drives the effect along the geometry used by wire hit testing. Label collision work
+settles after input pauses; wheel events and viewport
 updates coalesce by animation frame. Renderer rescaling keeps deep zoom numerically useful. A change of renderer units
 updates positions, background dimensions and pixel-sized styles, including configuration outlines, in one batch before
 painting, even during a gesture; collision work remains deferred. History and pins stay in world coordinates.
@@ -448,7 +478,11 @@ reopening revalidates their files. No editor dependency or source write is added
 
 Exact reference-group associations also mark existing projected connections and their revealed endpoints. Amber/red
 halos identify candidates/violations independently of direction colors. Fixed-size amber triangle and red stop-sign
-badges remain separate from type icons; counts belong to hover and inspection. Native wire labels show a compact
+badges remain separate from type icons; counts belong to hover and inspection. Visible stars with active findings
+pulse continuously in their family color, with priority for violations on crowded maps. The badge stays steady.
+Star pulses hold their current light during camera gestures. Connection motion clears as the camera moves. Reduced
+motion uses static lighting throughout.
+Native wire labels show a compact
 `?` candidate or `!` violation symbol while idle. The map key explains both, without adding hit targets.
 Warnings follow file, class and callable projection,
 including a visible line to an off-screen endpoint. A halo means the connection contains finding evidence, not that

@@ -20,6 +20,36 @@ function motionViewer(){
   return {run};
 }
 
+test('wheel motion blocks adoption and a cancelled or failed frame cannot outlive its camera intent',()=>{
+  const {run}=motionViewer();
+  run(`$('graph').getBoundingClientRect=()=>({left:0,top:0});
+    globalThis.wheelInput={deltaY:-120,deltaMode:0,clientX:300,clientY:200,
+      preventDefault(){},stopImmediatePropagation(){}};
+    zoomWithWheel(wheelInput);`);
+  assert.match(run('liveBlockReason()'),/Finish moving the map/);
+  run('cancelWheelMotion();frameQueue.shift()(16);');
+  assert.equal(run('cameraCalls.length'),0,'A cancelled callback must leave the camera fixed');
+  assert.equal(run('liveBlockReason()'),'');
+
+  run(`globalThis.setWorldViewport=()=>{throw Error('wheel camera failed');};
+    zoomWithWheel(wheelInput);`);
+  assert.throws(()=>run('frameQueue.shift()(32);'),/wheel camera failed/);
+  assert.equal(run('state.wheel'),null);
+  assert.equal(run('liveBlockReason()'),'');
+});
+
+test('rapid wheel input starts gently and advances on consecutive 144 Hz frames',()=>{
+  const {run}=motionViewer();
+  run(`$('graph').getBoundingClientRect=()=>({left:0,top:0});
+    globalThis.applySemanticZoom=()=>false;
+    zoomWithWheel({deltaY:-480,deltaMode:0,clientX:300,clientY:200,preventDefault(){},stopImmediatePropagation(){}});
+    frameQueue.shift()(0);frameQueue.shift()(1000/144);`);
+  const calls=run('cameraCalls');
+  assert.equal(calls.length,2,'A normal high-refresh display should not skip every other wheel frame');
+  assert.ok(Math.log(calls[0].level)<.04,'The first painted step applied too much of the wheel burst');
+  run('cancelWheelMotion(false);');
+});
+
 test('a flight blocks live adoption for its whole lifetime and commits once at the exact destination',()=>{
   const {run}=motionViewer();
   const started=run(`startNavigationFlight({level:2,pan:{x:100,y:50}});

@@ -76,7 +76,7 @@ async (page) => {
       'Wheel expansion must explain why recorded structure stops at an outside-target module');
     const unavailable=await point('module:SampleDisabled');
     await page.mouse.move(unavailable.x,unavailable.y);await page.mouse.wheel(0,-120);
-    await page.waitForFunction(()=>!state.gestureActive&&!state.wheelFrame&&!state.zoomFrame&&!state.viewportFrame);
+    await page.waitForFunction(()=>!state.gestureActive&&!state.wheel&&!state.zoomFrame&&!state.viewportFrame);
     check(await page.evaluate(()=>/Outside.*target/.test($('map-tooltip').textContent)),
       'Further wheel zoom discarded the coverage hint');
     await page.evaluate(()=>{state.universe.expanded=new Set([state.universe.root]);setSceneScope(state.universe.root);refreshMap();fitMap();});

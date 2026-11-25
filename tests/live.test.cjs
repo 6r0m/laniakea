@@ -29,7 +29,7 @@ test('native checkpoint styles retain functions without freezing stylesheet inte
 test('live adoption waits for gestures, unsaved positions and Review decisions',()=>{
   const {run}=fixture();
   assert.equal(run('liveBlockReason()'),'');
-  for(const flag of ['drag','labelDrag','pointerDown','gestureActive','wheelFrame','zoomFrame','viewportFrame']){
+  for(const flag of ['drag','labelDrag','pointerDown','gestureActive','wheel','zoomFrame','viewportFrame']){
     run(`state.${flag}=true`);assert.notEqual(run('liveBlockReason()'),'');run(`state.${flag}=false`);
   }
   run('layouts.add({})');assert.match(run('liveBlockReason()'),/position/);run('layouts.clear()');

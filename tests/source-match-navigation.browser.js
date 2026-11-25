@@ -8,7 +8,7 @@ async(page,{screenshot=async()=>{}}={})=>{
   if(await page.locator('#analysis').isVisible())await page.locator('#analysis-close').click();
   await page.locator('#toggle-review').click();await page.locator('#review-items [data-finding]').first().click();
   const compare=page.getByRole('button',{name:'Compare matches',exact:true});
-  await page.waitForFunction(()=>!document.querySelector('.source-evidence .primary-action').disabled);
+  await page.waitForFunction(()=>document.querySelector('.source-evidence .primary-action')?.disabled===false);
   const before=await page.evaluate(()=>JSON.stringify([state.cy.pan(),worldZoom(),state.positionCache.layouts]));
   await compare.click();const view=page.locator('.source-comparison'),panes=view.locator('.source-pane');
   await view.getByText('Showing matches 1 and 2 of 4',{exact:true}).waitFor();

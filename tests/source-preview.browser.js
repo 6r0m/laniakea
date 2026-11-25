@@ -7,6 +7,7 @@ async(page,{change,screenshot=async()=>{}})=>{
  if(await page.locator('#analysis').isVisible())await page.locator('#analysis-close').click();
  await page.locator('#toggle-review').click();await page.locator('#review-items [data-finding]').first().click();
  const review=page.locator('#inspector-page-architecture'),compare=review.getByRole('button',{name:'Compare matches',exact:true});
+ await compare.first().waitFor({state:'visible'});
  check(await compare.count()===1,'Selected duplication has no direct Compare matches action');
  await review.getByText('Locations 1-50 of 51',{exact:true}).waitFor();
  check(await review.locator('.source-evidence details').count()===0,'Source evidence still uses nested spoilers');

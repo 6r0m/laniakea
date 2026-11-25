@@ -51,7 +51,7 @@ async (page,{publish})=>{
   }
   await page.evaluate(()=>renderDetails(null));
   await page.waitForFunction(()=>!liveBlockReason());
-  view=await page.evaluate(()=>({pan:{...state.cy.pan()},zoom:worldZoom(),scope:state.scopeShard.scope,
+  view=await page.evaluate(()=>({pan:{...state.cy.pan()},size:{...state.mapSize},zoom:worldZoom(),scope:state.scopeShard.scope,
     expanded:[...state.universe.expanded],url:location.hash,mode:$('layout').value}));
   let run=await publish();
   await page.evaluate(()=>{state.pointerDown=true;});await poll();
@@ -62,9 +62,11 @@ async (page,{publish})=>{
   await page.waitForFunction(()=>!liveBlockReason());
   await poll();
   check(await page.evaluate(run=>state.target.run===run,run),'Ready snapshot was not adopted');
-  const after=await page.evaluate(()=>({pan:{...state.cy.pan()},zoom:worldZoom(),scope:state.scopeShard.scope,
+  const after=await page.evaluate(()=>({pan:{...state.cy.pan()},size:{...state.mapSize},zoom:worldZoom(),scope:state.scopeShard.scope,
     expanded:[...state.universe.expanded],url:location.hash,mode:$('layout').value,filter:state.hidden.has('type_ref')}));
-  check(JSON.stringify(view.pan)===JSON.stringify(after.pan)&&view.zoom===after.zoom,'Adoption changed the camera');
+  const center=camera=>({x:(camera.size.width/2-camera.pan.x)/camera.zoom,y:(camera.size.height/2-camera.pan.y)/camera.zoom});
+  const start=center(view),end=center(after);
+  check(view.zoom===after.zoom&&Math.hypot(start.x-end.x,start.y-end.y)<1e-8,'Adoption changed the world camera');
   check(view.scope===after.scope&&view.url===after.url&&view.mode===after.mode&&after.filter,'Adoption lost scope, URL, layout or filters');
   check(view.expanded.every(id=>after.expanded.includes(id)),'Expanded containers were lost');
   check(await page.evaluate(()=>state.referencePages.url.includes(state.target.run)&&state.positionCache.url.includes(state.target.run)),
@@ -116,7 +118,7 @@ async (page,{publish})=>{
   await page.evaluate(()=>renderDetails(null));run=await publish();await poll();
   check(await page.evaluate(()=>$('details').hidden),'Adoption reopened closed Inspector');
   await page.waitForFunction(()=>!state.framing&&!state.gestureActive&&!state.flight&&
-    state.wheelFrame==null&&state.zoomFrame==null&&state.viewportFrame==null);
+    state.wheel==null&&state.zoomFrame==null&&state.viewportFrame==null);
   await page.evaluate(()=>{const input=el('input',null,{name:'review-reason',value:''});input.value='draft';$('details').append(input);});
   run=await publish();await poll();check(await page.evaluate(run=>state.target.run!==run,run),'Adoption discarded a decision draft');
   check(await page.locator('#toggle-analysis').getAttribute('title').then(text=>/decision draft/.test(text)),

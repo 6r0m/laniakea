@@ -594,16 +594,13 @@ test('stale warnings disclose complete diagnostics without filling the collapsed
   assert.equal(run("$('banner').hidden"),true);
 });
 
-test('grouped compiler references keep manifest names and colors without exposing generated type ids',()=>{
+test('grouped compiler references keep manifest names without exposing generated type ids',()=>{
   const {run}=viewer();
   run(`state.manifest.edge_types=[{id:'calls',label:'calls (statically resolved)'},
     {id:'uses.function',label:'function reference'},{id:'uses.type',label:'type reference'}];`);
-  assert.equal(run("colorOf('calls.rollup')"),run("colorOf('calls')"));
   assert.match(run("typeLabel('calls.rollup')"),/calls.*summary/);
   assert.match(run("typeLabel('uses.rollup')"),/function reference.*type reference.*summary/);
-  assert.equal(run("colorOf('uses.rollup',[{type:'uses.type'}])"),run("colorOf('uses.type')"));
   assert.equal(run("typeLabel('uses.rollup',[{type:'uses.type'}])"),'type reference (summary)');
-  assert.notEqual(run("colorOf('uses.rollup',[{type:'uses.type'},{type:'uses.function'}])"),run("colorOf('uses.function')"));
   assert.equal(run("typeLabel('unknown')"),'unknown');
 });
 
@@ -787,6 +784,36 @@ test('opening a previously styled ring resets its dimensions and label hit geome
   run('state.cy.destroy()');
 });
 
+test('successive group departures replace the soft cue without enlarging either marker body',t=>{
+  const {run}=viewer();
+  t.after(()=>run('state.cy?.destroy()'));
+  run(`globalThis.css=name=>name==='--star-halo-opacity'?'1':'#888888';
+    state.scopeShard={scope:'app',parents:[]};
+    state.index={nodes:fixture.nodes.map(node=>({...node,file:node.id+'.json',
+      child_count:state.universe.childIds(node.id).length}))};
+    state.manifest={edge_types:[]};state.universe.place({},'auto');
+    state.cy=cytoscape({headless:true,styleEnabled:true,style:style(),elements:[]});
+    globalThis.viewportCamera=()=>null;
+    globalThis.nodeFrameCamera=()=>null;
+    setWorldViewport(5,{x:0,y:0});refreshMap();`);
+  const cue=()=>JSON.parse(run("JSON.stringify(state.cy.nodes('.last-visited').map(node=>node.id()))"));
+  const geometry=id=>JSON.parse(run(`JSON.stringify((()=>{
+    const node=state.cy.getElementById('${id}'),zoom=state.cy.zoom();
+    return {body:node.renderedWidth(),padding:node.padding()*zoom,halo:parseFloat(node.style('background-width'))*zoom};
+  })())`));
+  run("toggleGroup('app.core');toggleGroup('app.core');");
+  assert.deepEqual(cue(),['app.core']);
+  run("toggleGroup('app.web');toggleGroup('app.web');");
+  assert.deepEqual(cue(),['app.web']);
+  const prior=geometry('app.core'),last=geometry('app.web');
+  assert.ok(Math.abs(prior.body-27)<.001&&Math.abs(last.body-27)<.001);
+  assert.equal(prior.padding,0,'The first folded marker retained its expanded padding');
+  assert.equal(last.padding,0,'The most recent folded marker retained its expanded padding');
+  assert.ok(last.halo>prior.halo);
+  run("toggleGroup('app.web');");
+  assert.deepEqual(cue(),[]);
+});
+
 test('a target change resets renderer scale and cancels old viewport work',()=>{
   const {run}=viewer();
   run(`globalThis.css=()=>'#888';globalThis.cancelled=[];globalThis.cancelAnimationFrame=id=>cancelled.push(id);
@@ -936,8 +963,8 @@ test('wheel scale changes keep stars, fonts and expanded backgrounds in the same
     globalThis.paints=[];const renderer=state.cy.renderer(),notify=renderer.notify;
     renderer.notify=function(...args){
       const star=state.cy.getElementById('app.core.db'),group=state.cy.getElementById('app.core'),z=state.cy.zoom();
-      paints.push({font:parseFloat(star.style('font-size'))*z,glyph:star.width()*z,
-        icon:parseFloat(star.style('background-width'))*z,
+      const [halo,icon]=star.style('background-width').split(' ').map(parseFloat);
+      paints.push({font:parseFloat(star.style('font-size'))*z,glyph:star.width()*z,halo:halo*z,icon:icon*z,
         background:group.width()*z,padding:parseFloat(group.style('padding'))*z,
         outline:parseFloat(star.style('outline-width'))*z,offset:parseFloat(star.style('outline-offset'))*z});
       return notify.apply(this,args);
@@ -950,6 +977,7 @@ test('wheel scale changes keep stars, fonts and expanded backgrounds in the same
       assert.ok(Math.abs(paint.font-13)<0.001,`font flashed at ${from} -> ${to}: ${paint.font}px`);
       assert.ok(Math.abs(paint.glyph-26)<0.001,`star flashed at ${from} -> ${to}: ${paint.glyph}px`);
       assert.ok(Math.abs(paint.icon-26*0.58)<0.001,`type icon flashed at ${from} -> ${to}: ${paint.icon}px`);
+      assert.ok(Math.abs(paint.halo-75.8)<0.001,`radial halo flashed at ${from} -> ${to}: ${paint.halo}px`);
       const span=run("state.universe.bounds.get('app.core').x2-state.universe.bounds.get('app.core').x1");
       assert.ok(Math.abs(paint.background-span*to)<0.001,'background retained its old renderer scale');
       assert.ok(Math.abs(paint.padding-26)<0.001,'background padding retained its old renderer scale');
@@ -961,6 +989,46 @@ test('wheel scale changes keep stars, fonts and expanded backgrounds in the same
     assert.equal(run('JSON.stringify([...state.universe.positions])'),run('pins'));
   }
   run('state.cy.destroy()');
+});
+
+test('incremental wheel zoom keeps folded marker size steady between renderer scale changes',t=>{
+  const {run}=viewer();
+  t.after(()=>run('state.cy?.destroy()'));
+  const widths=run(`globalThis.css=()=>'#888888';state.scopeShard={scope:'app',parents:[]};
+    state.index={nodes:[]};state.manifest={edge_types:[]};state.universe.place({},'auto');
+    state.cy=cytoscape({headless:true,styleEnabled:true,style:style(),elements:[]});
+    globalThis.viewportCamera=()=>null;
+    globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=()=>{};
+    refreshMap();state.wheel={};
+    const node=state.cy.getElementById('app.core');
+    Array.from({length:16},(_,i)=>{
+      setWorldViewport(Math.exp((i+1)*.018),{x:0,y:0},true);
+      return node.renderedWidth();
+    });`);
+  assert.ok(widths.every(width=>Math.abs(width-27)<1),`Folded marker changed size during wheel zoom: ${widths.join(', ')}`);
+});
+
+test('camera recuts rebuild references only when their effective viewport changes',t=>{
+  const {run}=viewer();
+  t.after(()=>run('state.cy?.destroy()'));
+  run(`globalThis.css=()=>'#888888';state.scopeShard={scope:'app',parents:[]};
+    state.index={nodes:[]};state.manifest={edge_types:[]};state.universe.place({},'auto');
+    state.cy=cytoscape({headless:true,styleEnabled:true,style:style(),elements:[]});
+    globalThis.camera={x1:-10000,y1:-10000,x2:10000,y2:10000,zoom:1,force:[]};
+    globalThis.viewportCamera=()=>({...camera});
+    globalThis.pendingFrame=null;globalThis.requestAnimationFrame=fn=>{pendingFrame=fn;return 1;};
+    const project=state.universe.project.bind(state.universe);
+    globalThis.projections=0;state.universe.project=(...args)=>{projections++;return project(...args);};
+    refreshMap();state.wheel={};camera.zoom=2;scheduleViewport();pendingFrame();`);
+  assert.equal(run('state.viewportCut.zoom'),1,'A covered wheel frame refreshed the viewport while moving');
+  run('state.wheel=null;scheduleViewport();pendingFrame();');
+  assert.equal(run('projections'),1,'Equivalent coverage rebuilt all projected references');
+  assert.equal(run('state.viewportCut.zoom'),2,'The camera coverage was not updated');
+  run(`state.wheel={target:0};camera={x1:20000,y1:20000,x2:30000,y2:30000,zoom:2,force:[]};
+    scheduleViewport();pendingFrame();`);
+  assert.equal(run('projections'),2,'A different frontier did not rebuild projected references');
+  assert.equal(run('state.shard.edges.length'),0);
+  assert.equal(run('state.shard.outside'),run('state.universe.graph.edges.length'));
 });
 
 test('compiler locations become source links and structured metadata stays readable',()=>{
