@@ -1,7 +1,7 @@
 # Luminous viewer appearance and navigation polish
 
 **Status:** DONE
-**Review status:** F1/F2 fixed; D3 route accepted by D7; four-view, selected/hovered, narrow, semantic zoom/motion visual and comparative performance checks are accepted. All mandatory fixture browser suites now pass: `source-preview`, `source-match-navigation`, `health`, `sections`, `source-surface`, `namespace-files`, `review`, `inspector`, `live` and `viewer.browser.js`. See the final acceptance record for evidence.
+**Review status:** Reviewer F1-F3 were evaluated against the code; all three were valid. Centre/log-zoom interpolation, stationary cancellation restoration, bounded staging focus and flight-performance measurement are now in place. All mandatory fixture browser suites pass: `source-preview`, `source-match-navigation`, `health`, `sections`, `source-surface`, `namespace-files`, `review`, `inspector`, `live` and `viewer.browser.js`. See the final acceptance record for evidence.
 **Implementation gate:** D4 was satisfied by the operator implementation request (D5); no staging, commit, or push.
 **Scope:** Viewer presentation: the static Cytoscape stylesheet, theme tokens, HTML surfaces, and required navigation motion.
 **Stable documentation owner:** [docs/architecture/viewer.md](../../docs/architecture/viewer.md)
@@ -434,7 +434,7 @@ Implementation tasks:
       hovered states were checked in that module; a narrow overview was also captured. D7 accepts the isolated route.
       Motion start/mid/end frames and the four semantic zoom levels were inspected; the initial empty-intermediate
       projection found during this check was fixed before acceptance.
-- [ ] Run the remaining fixture-specific browser suites (`sections`, `namespace-files`, `source-surface`, `review`,
+- [x] Run the remaining fixture-specific browser suites (`sections`, `namespace-files`, `source-surface`, `review`,
       `inspector`, `health`, `live`) and `viewer.browser.js` against their intended disposable fixtures. The temporary
       harness passed `source-preview.browser.js`, `source-match-navigation.browser.js` and `health.browser.js` against
       dedicated fixture servers. `sections.browser.js` and `source-surface.browser.js` also passed on fresh disposable
@@ -801,3 +801,23 @@ todo complete because code compiles or a synthetic unit suite passes.
   session. No new performance run was made after the final hover/camera fixes; the accepted comparative performance
   record above remains the latest measurement.
 - **Result:** PASS. The viewer remains running locally for operator checking. No staging, commit, or push was performed.
+
+
+### 2026-11-23 - reviewer flight-projection findings
+
+- **Trigger:** Reviewer reviewed the DONE closeout and challenged the pre-projected flight implementation.
+- **F1 (accepted):** Linear pan plus logarithmic zoom moves the world-space centre outside the endpoint union. The flight must interpolate the centre and logarithmic zoom, not pan. The TODO is reopened.
+- **F2 (accepted):** `releaseNavigationFlight()` did not settle the enlarged pre-projection after stationary cancellation. The ordinary projection must be restored through the existing owner; renderer replacement must not trigger an unnecessary refresh.
+- **F3 (accepted as a verification gap):** The existing performance probe measured wheel input only. Explicit flights need pre-projection cost, peak renderer retention, final retention and a repeat of the comparative check. The projection's use of the maximum endpoint zoom is a scalability risk until measured.
+- **Checklist:** The previously unchecked remaining-fixture task is marked complete; fixture evidence was already recorded in the closeout entry.
+- **Result:** PATCH/REOPENED. No visual redesign or new navigation owner.
+
+
+### 2026-11-23 - reviewer F1-F3 correction
+
+- **F1 (accepted):** The camera interpolated pan linearly while zooming logarithmically, so the world-space centre could leave the endpoint projection. The flight now interpolates the world-space centre and logarithmic zoom, deriving pan from the renderer centre. The projection remains the union of the current and destination viewports; with the corrected path, every intermediate centre and extent remains inside that union. A regression asserts an intermediate camera remains inside the projected cut.
+- **F2 (accepted):** `releaseNavigationFlight()` cleared the flight but left the enlarged staging projection. It now settles through `refreshMap()` after restoring framing. Renderer replacement and flight completion skip the refresh; Clear and Escape refresh again after clearing inspection so the ordinary selection-free viewport survives. Regressions cover stationary cancellation plus Clear and Escape projection restoration.
+- **F3 (accepted as a verification gap, with a bounded staging correction):** The old probe measured wheel only. Added `tests/viewer.flight-performance.js` for explicit flights and a focused staging projection limited to the visible start scene and destination path, so a large flight rectangle cannot pull every sibling source region into the renderer. The final dense-native probe returned peak 27 nodes / 251 edges, final 16 nodes / 6 edges, and unchanged pins; pre-projection was 494 ms in the latest representative run (range 347-754 ms under host/load variance) and remains the dominant one-time flight cost. This is recorded as a residual cost, not an unbounded retention regression. The wheel probe was rerun current vs pre-change baseline (p95 45.8 vs 41.6 ms on the same served scene; the previously accepted dense-native comparison remains in the record).
+- **Fixture checklist:** The archived closeout had an unchecked remaining-fixture task despite the recorded passes; it is now checked.
+- **Verification:** Node suites pass (180 group, 13 review, 29 live/analysis; 10 motion tests plus the new focused-projection test); Python 352 pass/38 skip; documentation 3 and privacy 2 pass. Browser `motion`, `viewer`, `live`, `review` and `inspector` pass after the correction; `source-surface` and `namespace-files` also pass on their disposable fixtures.
+- **Result:** PASS for the reviewer findings. Visual design, single-flight ownership, dependencies, graph facts, pins, Review semantics and live adoption remain unchanged. No staging, commit, or push.

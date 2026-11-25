@@ -149,6 +149,14 @@ function viewportCamera(padding = 220) {
     x2:(cy.width()-pan.x+padding)/zoom,y2:(cy.height()-pan.y+padding)/zoom,zoom,force};
 }
 
+function cameraCenter(level, pan, width, height) {
+  return {x:(width/2-pan.x)/level,y:(height/2-pan.y)/level};
+}
+
+function cameraPanAt(center, level, width, height) {
+  return {x:width/2-center.x*level,y:height/2-center.y*level};
+}
+
 function cameraCut(level, pan, padding = 220) {
   const cy=state.cy;
   if(!cy) return null;
@@ -159,9 +167,12 @@ function cameraCut(level, pan, padding = 220) {
 function flightProjectionCut(target, force = []) {
   const start=viewportCamera(220),finish=cameraCut(target.level,target.pan,220);
   if(!start||!finish) return null;
+  // The flight interpolates the world-space centre and logarithmic zoom, so
+  // every intermediate viewport stays inside the union of these endpoint viewports.
+  const focus=new Set([...(start.force||[]),...force,...(state.shard?.nodes||[]).map(node=>node.id)]);
   return {x1:Math.min(start.x1,finish.x1),y1:Math.min(start.y1,finish.y1),
     x2:Math.max(start.x2,finish.x2),y2:Math.max(start.y2,finish.y2),
-    zoom:Math.max(start.zoom,target.level),force:[...(start.force||[]),...force]};
+    zoom:Math.max(start.zoom,target.level),force:[...(start.force||[]),...force],focus:[...focus]};
 }
 
 function scheduleViewport() {
@@ -919,7 +930,7 @@ function setWorldViewport(level, pan, gesture = false) {
 }
 
 function stopNavigationFlight() {
-  if (typeof cancelNavigationFlight === 'function') cancelNavigationFlight();
+  if (typeof cancelNavigationFlight === 'function') cancelNavigationFlight({restore:false});
 }
 
 function cameraForBounds(bounds, padding = 75, maxZoom = 1.2) {

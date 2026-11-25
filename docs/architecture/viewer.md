@@ -184,16 +184,22 @@ Camera-bearing explicit navigation (search results, reference Follow, Fit map an
 one cancellable camera flight in `scene.js`. Ordinary scope breadcrumbs continue to open their scope directly. The
 flight owns `state.flight` for its entire lifetime, including gaps between animation frames, so `live.js` cannot adopt
 a snapshot mid-flight. Frames check the originating renderer and generation; camera updates go through
-`setWorldViewport()`, never `cy.animate()`. Before the flight, the current and destination viewports are projected
-together so the path stays populated; the destination projection is committed on arrival. Wheel, drag, map-camera keyboard input, new
-navigation and renderer replacement cancel the flight before proceeding; passive pointer movement does not. Clear
-selection, Escape-driven inspection clearing, graph arrow selection and Review-list selection also cancel a flight so
-the newer inspection intent wins. A frame or scheduling failure releases the flight, restores framing and surfaces the
-error; stale cleanup cannot release a newer flight. A completed flight commits the exact destination and history once.
-An interrupted flight leaves the user's new camera action in place and never snaps back. Selection survives intermediate
-projection refreshes and is revalidated against the final projection; inspection that depends on the destination is
-applied when the flight reaches it. A graph resize shifts an active flight's start and target pan with the same centre
-delta used by `resizeMap()`. Reduced motion uses the existing immediate path. The existing hover and selection state
+`setWorldViewport()`, never `cy.animate()`. The flight interpolates the world-space centre and logarithmic zoom, then
+derives the renderer pan from that camera; it does not interpolate pan linearly. Before the flight, the current and
+destination viewports are projected together, so the centre path stays inside the bounded pre-projection. That
+staging projection is limited to the visible start scene and the destination path; it does not pull every sibling
+source region inside the world-space rectangle into the renderer. The destination projection is committed on arrival. Wheel, drag, map-camera keyboard input, new navigation and renderer
+replacement cancel the flight before proceeding; passive pointer movement does not. Clear selection, Escape-driven
+inspection clearing, graph arrow selection and Review-list selection also cancel a flight so the newer inspection
+intent wins. Cancellation settles the pre-projection against the actual interrupted camera through `refreshMap()`;
+Clear and Escape refresh again after clearing inspection so the ordinary, selection-free viewport is retained.
+Renderer replacement and flight completion deliberately skip that cancellation refresh. A frame or scheduling failure
+releases the flight, restores framing and surfaces the error; stale cleanup cannot release a newer flight. A completed
+flight commits the exact destination and history once. An interrupted flight leaves the user's new camera action in
+place and never snaps back. Selection survives intermediate projection refreshes and is revalidated against the final
+projection; inspection that depends on the destination is applied when the flight reaches it. A graph resize shifts an
+active flight's start and target pan with the same centre delta used by `resizeMap()`. Reduced motion uses the existing
+immediate path. The existing hover and selection state
 owners in [Tracing and inspection](#tracing-and-inspection) remain unchanged.
 
 ## Source organization
@@ -380,7 +386,9 @@ initial background loads do not move the reader. Inspecting another item resets 
 
 Viewport buffering and bounded retention follow [tile-cache practice](https://deck.gl/docs/api-reference/geo-layers/tile-layer).
 The canvas adapter uses [Cytoscape's native interaction optimizations](https://js.cytoscape.org/#performance) and the display's
-native pixel ratio; gesture performance does not depend on reducing display resolution.
+native pixel ratio; gesture performance does not depend on reducing display resolution. Explicit flights are bounded by
+the visible start scene plus the destination path; the flight performance probe records pre-projection time, cut bounds
+and zoom, peak rendered elements, final retention, long tasks and pin stability.
 
 ## Saved arrangements
 

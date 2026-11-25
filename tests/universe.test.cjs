@@ -34,6 +34,19 @@ test('a root that owns only an internal fact remains available for exact inspect
   assert.equal(view.edges.length,0);
 });
 
+test('a flight focus bounds staging to the visible start path without changing canonical containment',()=>{
+  const map=new Universe(fixture());
+  const camera={x1:-100000,y1:-100000,x2:100000,y2:100000,zoom:1,focus:['app.core.db']};
+  const view=map.project(new Set(),true,camera);
+  const ids=view.nodes.map(node=>node.id);
+  assert.ok(ids.every(id=>['app','app.core','app.core.db','stdlib','stdlib.sqlite3'].includes(id)));
+  assert.ok(ids.includes('app.core.db')||ids.includes('app.core'),'the focus path must remain staged');
+  assert.equal(ids.includes('app.web.views'),false);
+  assert.equal(view.edges.some(edge=>edge.source==='app.web.views'||edge.target==='app.web.views'),false);
+  assert.deepEqual([...map.nodes.keys()].sort(),fixture().nodes.map(node=>node.id).sort(),
+    'A bounded staging projection must not mutate canonical containment');
+});
+
 test('configuration filtering hides only original root declarations and accounts for them once',()=>{
   const graph=fixture();
   graph.edges=[

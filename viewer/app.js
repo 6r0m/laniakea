@@ -81,7 +81,8 @@ async function start() {
   $('reset-layout').onclick = resetPositions;
   $('arrange-files').onclick = arrangeSourceFiles;
   $('toggle-configuration').onclick = () => { setConfiguration(!configurationVisible()); applyFilters(); };
-  $('clear').onclick = () => { cancelNavigationFlight(); unfocus(true); renderDetails(null); };
+  $('clear').onclick = () => { const cancelled=cancelNavigationFlight(); unfocus(true); renderDetails(null);
+    if(cancelled)refreshMap(); };
   $('up').onclick = up;
   $('find').oninput = () => find().catch(reportError);
   document.addEventListener('pointerdown',event=>{if(!event.target.closest('.find-controls'))closeFindResults();});
@@ -291,7 +292,8 @@ function onKey(event) {
   if (typing || event.altKey || event.ctrlKey || event.metaKey) return;
   if (event.key === 'Backspace') { event.preventDefault(); up(); }
   if (event.key === '/') { event.preventDefault(); $('find').focus(); }
-  if (event.key === 'Escape') { cancelNavigationFlight(); $('type-key').open=false;unfocus(true); renderDetails(null); }
+  if (event.key === 'Escape') { const cancelled=cancelNavigationFlight(); $('type-key').open=false;unfocus(true); renderDetails(null);
+    if(cancelled)refreshMap(); }
   if (event.target === $('graph') && state.cy && ['+', '=', '-'].includes(event.key)) {
     event.preventDefault();
     state.pointer = {x:state.cy.width()/2,y:state.cy.height()/2};

@@ -19,7 +19,7 @@ function cancelPendingFlightFrames() {
   state.wheelDelta = 0;
 }
 
-function releaseNavigationFlight(flight, remember = false, completed = false) {
+function releaseNavigationFlight(flight, remember = false, completed = false, restoreProjection = true) {
   if (!flight || state.flight !== flight) return false;
   if (flight.frame != null && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(flight.frame);
   flight.frame = null;
@@ -30,19 +30,25 @@ function releaseNavigationFlight(flight, remember = false, completed = false) {
   state.flight = null;
   state.framing = flight.previousFraming;
   if (!completed) state.pendingReference = null;
+  // The flight owns an enlarged pre-projection. Settle it against the actual
+  // interrupted camera through the ordinary projection owner. Renderer replacement
+  // and completion deliberately skip this refresh.
+  if (restoreProjection && !completed && state.cy === flight.cy && state.cy && !state.cy.destroyed() && state.universe) {
+    refreshMap();
+  }
   if (remember && state.cy && state.universe) rememberView();
   return true;
 }
 
 function cancelNavigationFlight(options = {}) {
-  return releaseNavigationFlight(state.flight, Boolean(options.remember));
+  return releaseNavigationFlight(state.flight, Boolean(options.remember), false, options.restore !== false);
 }
 
 function startNavigationFlight(target, options = {}) {
   const complete = typeof options.complete === 'function' ? options.complete : null;
   if (!state.cy || !target || !Number.isFinite(target.level) ||
       !target.pan || !Number.isFinite(target.pan.x) || !Number.isFinite(target.pan.y)) return false;
-  cancelNavigationFlight();
+  cancelNavigationFlight({restore:false});
   cancelPendingFlightFrames();
   const cy = state.cy;
   const destination = {
@@ -50,6 +56,8 @@ function startNavigationFlight(target, options = {}) {
     pan: { x: target.pan.x, y: target.pan.y },
   };
   const start = { level: worldZoom(), pan: { ...cy.pan() } };
+  const startCenter = cameraCenter(start.level, start.pan, cy.width(), cy.height());
+  const targetCenter = cameraCenter(destination.level, destination.pan, cy.width(), cy.height());
   const commit = options.commit !== false;
 
   if (prefersReducedMotion() || typeof requestAnimationFrame !== 'function') {
@@ -76,7 +84,9 @@ function startNavigationFlight(target, options = {}) {
     frame: null,
     previousFraming: state.framing,
     start,
+    startCenter,
     target: destination,
+    targetCenter,
     started: null,
     duration,
   };
@@ -103,10 +113,11 @@ function startNavigationFlight(target, options = {}) {
       const eased = easeFlight(progress);
       const level = Math.exp(Math.log(start.level) +
         (Math.log(destination.level) - Math.log(start.level)) * eased);
-      const pan = {
-        x: start.pan.x + (destination.pan.x - start.pan.x) * eased,
-        y: start.pan.y + (destination.pan.y - start.pan.y) * eased,
+      const center = {
+        x: flight.startCenter.x + (flight.targetCenter.x - flight.startCenter.x) * eased,
+        y: flight.startCenter.y + (flight.targetCenter.y - flight.startCenter.y) * eased,
       };
+      const pan = cameraPanAt(center, level, cy.width(), cy.height());
       setWorldViewport(level, pan, false);
       if (progress < 1) {
         flight.frame = requestAnimationFrame(tick);

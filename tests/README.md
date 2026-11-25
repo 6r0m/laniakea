@@ -80,7 +80,7 @@ Source-file fixtures must use the normal pipeline/read index/server and real exa
 | [endpoints.browser.js](endpoints.browser.js) | Boundary-anchored references across expanded layers and trusted wire interaction |
 | [icons.browser.js](icons.browser.js) | Type glyphs, themes, pointer hits, title geometry and the keyboard-accessible key |
 | [appearance.browser.js](appearance.browser.js) | Theme atmosphere, selection/warning semantics, luminous underlays, graph identity and clear-selection cleanup |
-| [motion.browser.js](motion.browser.js) | Explicit navigation flight: exact destination, non-empty intermediate projection, inter-frame live blocking, interruption and reduced motion |
+| [motion.browser.js](motion.browser.js) | Explicit navigation flight: exact destination, centre/log-zoom interpolation, projected-region coverage, inter-frame live blocking, interruption, stationary cancellation restoration and reduced motion |
 | [source-surface.browser.js](source-surface.browser.js) | [Source-surface fixture](../fixtures/source-surface.graph.json): files, symbol identity, gradual/reversible zoom and local arrangement |
 | [namespace-files.browser.js](namespace-files.browser.js) | [Namespace fixture](../fixtures/namespace-files.graph.json): file contexts, exact references, navigation and pins |
 | [review.browser.js](review.browser.js) | [Review fixture](test_review.py): direct explanation, exact evidence, triage, refused writes, late close and pins |
@@ -98,5 +98,7 @@ Other functions use the served [sample](../sample/SampleProject/SampleProject.up
 Keep real-project screenshots outside the clone and other observations in the ignored workspace.
 
 [viewer.performance.js](viewer.performance.js) measures mouse/wheel input, frames, main-thread work and heap through
-Playwright/CDP, restores the camera and checks that positions/pins did not move. Compare matching data, scope,
-expansion and camera state; record scene differences and hardware/load. Reject repeatable, materially worse interaction.
+Playwright/CDP, restores the camera and checks that positions/pins did not move. [viewer.flight-performance.js](viewer.flight-performance.js)
+measures an explicit deep flight: pre-projection time, cut bounds/zoom, peak rendered nodes/edges, final retention,
+long tasks and pins. Compare matching data, scope, expansion and camera state; record scene differences and
+hardware/load. Reject repeatable, materially worse interaction or unbounded flight retention.

@@ -61,10 +61,11 @@ async page=>{
     flyToNode(id,true);
     const wasFlight=Boolean(state.flight);
     document.getElementById('clear').onclick();
-    return {wasFlight,flight:Boolean(state.flight)};
+    return {wasFlight,flight:Boolean(state.flight),projection:JSON.stringify(state.viewportCut)===JSON.stringify(viewportCamera())};
   });
   check(cleared.wasFlight,'Clear-selection regression requires an active flight');
   check(!cleared.flight,'Clear selection did not cancel the active flight');
+  check(cleared.projection,'Clear selection left the temporary flight projection');
   await page.waitForTimeout(400);
   check(await page.evaluate(()=>state.selection===null&&document.getElementById('details').hidden),
     'A completed obsolete flight reopened the cleared Inspector');
@@ -76,10 +77,11 @@ async page=>{
     flyToNode(id,true);
     const wasFlight=Boolean(state.flight);
     document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
-    return {wasFlight,flight:Boolean(state.flight)};
+    return {wasFlight,flight:Boolean(state.flight),projection:JSON.stringify(state.viewportCut)===JSON.stringify(viewportCamera())};
   });
   check(escaped.wasFlight,'Escape regression requires an active flight');
   check(!escaped.flight,'Escape did not cancel the active flight');
+  check(escaped.projection,'Escape left the temporary flight projection');
   await page.waitForTimeout(400);
   check(await page.evaluate(()=>state.selection===null&&document.getElementById('details').hidden),
     'A completed obsolete flight reopened inspection after Escape');
@@ -146,6 +148,28 @@ async page=>{
   });
   check(projected.flight,'Projection regression requires an active flight');
   check(projected.nodes>0,'Flight start projected an empty scene');
+  await page.waitForFunction(()=>!state.flight);
+  await page.evaluate(()=>renderDetails(null));
+
+  const deep=await page.evaluate(()=>{
+    const cy=state.cy,level=worldZoom(),width=cy.width(),height=cy.height();
+    const center={x:(width/2-cy.pan('x'))/level,y:(height/2-cy.pan('y'))/level};
+    const destinationLevel=Math.min(cy.maxZoom(),level*4);
+    const destination={level:destinationLevel,pan:{x:width/2-center.x*destinationLevel,
+      y:height/2-center.y*destinationLevel}};
+    startNavigationFlight(destination);
+    return {flight:Boolean(state.flight),duration:state.flight?.duration||0};
+  });
+  check(deep.flight,'Deep-zoom projection regression requires an active flight');
+  await page.waitForFunction(()=>state.flight&&state.flight.started!==null);
+  await page.waitForTimeout(Math.max(40,Math.min(120,deep.duration/2)));
+  const coverage=await page.evaluate(()=>{
+    const cut=state.viewportCut,current=viewportCamera(0);
+    return {flight:Boolean(state.flight),inside:Boolean(cut&&current&&
+      current.x1>=cut.x1&&current.y1>=cut.y1&&current.x2<=cut.x2&&current.y2<=cut.y2),cut,current};
+  });
+  check(coverage.flight,'Deep-zoom flight completed before its intermediate frame');
+  check(coverage.inside,'Intermediate camera left the pre-projected region');
   await page.waitForFunction(()=>!state.flight);
   await page.evaluate(()=>renderDetails(null));
 

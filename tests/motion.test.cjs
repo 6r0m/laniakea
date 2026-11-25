@@ -42,6 +42,17 @@ test('a flight blocks live adoption for its whole lifetime and commits once at t
   assert.deepEqual(final.pan,{x:100,y:50});
 });
 
+test('a flight interpolates the world-space centre with logarithmic zoom',()=>{
+  const {run}=motionViewer();
+  // Start centred at (400,300), then move to zoom 4 around the same centre.
+  run(`startNavigationFlight({level:4,pan:{x:-1200,y:-900}});frameQueue.shift()(0);
+    globalThis.midflight=frameQueue.shift();midflight(state.flight.duration/2);`);
+  const mid=run(`cameraCalls[cameraCalls.length-1]`);
+  assert.ok(Math.abs(mid.level-2)<1e-9,'Halfway zoom must be logarithmic');
+  assert.ok(Math.abs(mid.pan.x+400)<1e-6,'Halfway pan must preserve the world-space centre');
+  assert.ok(Math.abs(mid.pan.y+300)<1e-6,'Halfway pan must preserve the world-space centre');
+});
+
 test('cancelling a flight releases the blocker and never commits the obsolete destination',()=>{
   const {run}=motionViewer();
   run(`startNavigationFlight({level:2,pan:{x:100,y:50}});frameQueue.shift()(0);cancelNavigationFlight({remember:true});`);
@@ -53,6 +64,15 @@ test('cancelling a flight releases the blocker and never commits the obsolete de
   assert.ok(stopped.calls.every(call=>call.level!==2||call.pan.x!==100),
     'Cancellation must not apply the obsolete destination');
   assert.equal(run('liveBlockReason()'),'');
+});
+
+test('cancelling a flight restores the ordinary projection once',()=>{
+  const {run}=motionViewer();
+  run(`startNavigationFlight({level:4,pan:{x:-1200,y:-900}});`);
+  const result=run(`cancelNavigationFlight();({refreshes,flight:Boolean(state.flight),framing:state.framing})`);
+  assert.equal(result.flight,false);
+  assert.equal(result.framing,false);
+  assert.equal(result.refreshes,2,'Pre-projection plus one ordinary restoration');
 });
 
 test('a stale renderer instance cancels the flight instead of moving the new scene',()=>{

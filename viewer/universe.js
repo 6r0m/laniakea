@@ -192,7 +192,9 @@ class Universe {
       const p=this.positions.get(id),margin=50/camera.zoom;
       return p.x>=camera.x1-margin&&p.x<=camera.x2+margin&&p.y>=camera.y1-margin&&p.y<=camera.y2+margin;
     };
-    const seeds = new Set([...near,...endpoints].filter(id=>this.representative(id,expanded)===id && (endpoints.has(id)||inWindow(id))));
+    const focus=camera.focus ? new Set(camera.focus) : null;
+    const seeds = new Set([...near,...endpoints].filter(id=>(!focus||focus.has(id)) &&
+      this.representative(id,expanded)===id && (endpoints.has(id)||inWindow(id))));
     const references = new Set();
     for (const id of seeds) {
       if(!inWindow(id))continue;
@@ -222,7 +224,8 @@ class Universe {
   }
 
   project(hiddenTypes = new Set(), boundary = true, camera = null) {
-    const internal = new Map(), bundles = new Map(), edges = [];
+    const internal = new Map(), bundles = new Map();
+    let edges = [];
     const cut = camera && this.spatial ? this.viewportCut(camera) : null;
     const expanded = cut ? cut.expanded : new Set([...this.expanded,...this.regions]);
     const shown = new Map(), representative = id => {
@@ -274,8 +277,18 @@ class Universe {
     const present=new Set(nodes.map(n=>n.id)),forcedFiles=new Set(camera?.force||[]);
     nodes=nodes.filter(n=>!this.fileCovers.has(n.id)||endpoints.has(n.id)||internal.has(n.id)||forcedFiles.has(n.id)||
       ![...this.fileCovers.get(n.id)].every(context=>present.has(context)));
-    const total=[...this.typeCounts.values()].reduce((a,b)=>a+b,0);
-    const visible=new Set(nodes.map(n=>n.id)),configurationMarks=new Map();
+    // A flight may bound its staging projection to the visible start scene and the
+    // destination path. This prevents a large world-space flight rectangle from
+    // pulling every sibling source region into the renderer.
+    let visible;
+    if(camera?.focus){
+      const keep=new Set(camera.focus);
+      for(const id of [...keep])for(const parent of this.paths.get(id)||[])keep.add(parent);
+      nodes=nodes.filter(n=>keep.has(n.id));
+      visible=new Set(nodes.map(n=>n.id));
+      edges=edges.filter(e=>visible.has(e.source)&&visible.has(e.target));
+    } else visible=new Set(nodes.map(n=>n.id));
+    const total=[...this.typeCounts.values()].reduce((a,b)=>a+b,0),configurationMarks=new Map();
     for(const target of this.configurationTargets) {
       const id=representative(target);
       if(!visible.has(id))continue;
