@@ -51,6 +51,25 @@ test('static Cytoscape appearance has one owner loaded before map.js',()=>{
   assert.ok(supportAppearance>=0&&supportMap>supportAppearance,'Node fixtures must load appearance.js before map.js');
 });
 
+test('wire pulse admits visible active findings with priority for violations',()=>{
+  const edges=new Map(),links=new Map();
+  function add(id,severity,{acknowledged=false,visible=true,box={x1:-30,x2:130,y1:45,y2:55}}={}){
+    edges.set('view:'+id,{id,length:1,visible:()=>visible,renderedBoundingBox:()=>box,
+      hasClass:kind=>kind==='review-'+severity});
+    links.set(id,new Map([[id,{severity,acknowledged}]]));
+  }
+  add('acknowledged','violation',{acknowledged:true});
+  add('hidden','violation',{visible:false});
+  add('offscreen','violation',{box:{x1:110,x2:140,y1:45,y2:55}});
+  for(let i=0;i<16;i++)add('candidate-'+i,'candidate');
+  add('crossing','violation');
+  const context={state:{universe:{renderPrefix:'view:'},review:{links}}};
+  vm.createContext(context);
+  vm.runInContext(appearanceSource,context);
+  const targets=context.reviewWireTargets({width:()=>100,height:()=>100,getElementById:id=>edges.get(id)});
+  assert.deepEqual(Array.from(targets,edge=>edge.id),['crossing',...Array.from({length:15},(_,i)=>'candidate-'+i)]);
+});
+
 test('light and dark themes define atmosphere and distinct warning/selection roles',()=>{
   const [light,dark]=themeBlocks().map(tokens);
   for(const [theme,values] of [['light',light],['dark',dark]]){

@@ -1,0 +1,14 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "Sample Standings",
+	"Description": "Places accepted relay results and preserves ties.",
+	"Category": "Sample",
+	"Modules": [
+		{"Name": "SampleStandings", "Type": "Runtime", "LoadingPhase": "Default"}
+	],
+	"Plugins": [
+		{"Name": "SampleMatch", "Enabled": true}
+	]
+}

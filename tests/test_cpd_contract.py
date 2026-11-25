@@ -208,6 +208,9 @@ class CliThreshold(unittest.TestCase):
     setUp=fixture.Pipeline.setUp
     tearDown=fixture.Pipeline.tearDown
 
+    def snippet_groups(self,data,names):
+        return [g for g in data['groups'] if any(Path(o['path']).name in names for o in g['occurrences'])]
+
     def test_ordinary_build_collects_and_reviews_short_clones_without_health_flags(self):
         from laniakea import map_index
         from laniakea.review_store import Review
@@ -238,14 +241,16 @@ class CliThreshold(unittest.TestCase):
         data=health.load(run,manifest)
         self.assertIsNotNone(data,'Ordinary build did not collect installed CPD evidence')
         self.assertEqual(data['minimum_tokens'],50)
-        self.assertEqual(len(data['groups']),1)
-        self.assertEqual(data['groups'][0]['tokens'],50)
-        self.assertEqual({Path(o['path']).name for o in data['groups'][0]['occurrences']},{'First.cpp','Second.cpp'})
-        self.assertEqual(len({data['files'][o['path']]['owner'] for o in data['groups'][0]['occurrences']}),2)
+        groups=self.snippet_groups(data,{'First.cpp','Second.cpp','Renamed.cpp','Different.cpp'})
+        self.assertEqual(len(groups),1)
+        self.assertEqual(groups[0]['tokens'],50)
+        self.assertEqual({Path(o['path']).name for o in groups[0]['occurrences']},{'First.cpp','Second.cpp'})
+        self.assertEqual(len({data['files'][o['path']]['owner'] for o in groups[0]['occurrences']}),2)
         graph=json.loads((run/'graph.json').read_text())
         destination=run/'map-index';map_index.build(graph,destination)
         report=Review(self.workspace,'sample',run,map_index.MapIndex(destination)).page({})
-        self.assertTrue(any(f['kind']=='duplication' for f in report['items']))
+        self.assertTrue(any(f['kind']=='duplication' and f['subjects']==['module:SampleGameplay','module:SampleProject']
+                            for f in report['items']))
         with recorded_ubt(self.project,self.engine),patch.object(cpd_tools,'load',return_value=tool), \
                 patch.object(cpd.subprocess,'run',side_effect=AssertionError('unchanged ordinary build launched Java')), \
                 contextlib.redirect_stdout(io.StringIO()):
@@ -272,7 +277,7 @@ class CliThreshold(unittest.TestCase):
             run=self.workspace.latest('sample');manifest=json.loads((run/'manifest.json').read_text())
             data=health.load(run,manifest)
             self.assertEqual(data['minimum_tokens'],expected)
-            self.assertEqual(bool(data['groups']),explicit is None)
+            self.assertEqual(bool(self.snippet_groups(data,{'First.cpp','Second.cpp'})),explicit is None)
             recipe=self.workspace.request('sample')['recipe']['health']
             self.assertEqual((recipe['minimum_tokens'],recipe['heap_mib']),(expected,512))
 

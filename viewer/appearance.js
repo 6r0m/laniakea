@@ -8,6 +8,10 @@ const branchColors = new WeakMap();
 const appearanceMotion = new WeakMap();
 const STAR_PULSE_PERIOD = 4400;
 const WIRE_FOCUS_DWELL = 360;
+const REVIEW_WIRE_GLOW = {
+  candidate:{idle:0.17,peak:0.29},
+  violation:{idle:0.22,peak:0.39},
+};
 let nodePalette = null;
 
 function starFamily(node, map) {
@@ -98,8 +102,10 @@ function style() {
     { selector:'edge.arranging',style:{display:'none'} },
     { selector: '.faded', style: { opacity: 0.3 } },
     { selector: 'edge:selected', style: { 'target-arrow-color':css('--selection') } },
-    {selector:'edge.review-candidate',style:{'underlay-color':css('--review-candidate'),'underlay-opacity':0.28}},
-    {selector:'edge.review-violation',style:{'underlay-color':css('--review-violation'),'underlay-opacity':0.38}},
+    {selector:'edge.review-candidate',style:{'underlay-color':css('--review-candidate'),
+      'underlay-opacity':REVIEW_WIRE_GLOW.candidate.idle}},
+    {selector:'edge.review-violation',style:{'underlay-color':css('--review-violation'),
+      'underlay-opacity':REVIEW_WIRE_GLOW.violation.idle}},
     { selector: 'edge.focus', style: { width: 1.35, opacity: 1, 'line-opacity':edge=>wireOpacity(edge,0.72),
       'z-index': 5,'target-arrow-shape':'triangle' } },
     ...['outgoing','incoming','within'].map(role=>({selector:'edge.trace-'+role,style:{
@@ -158,6 +164,19 @@ function appearanceTargets(cy) {
   const stars=cy.nodes('[reviewMark $= ":false"]').not('.expanded').filter(node=>onScreen(node.renderedPosition())).toArray();
   stars.sort((a,b)=>Number(b.data('reviewMark').startsWith('violation:'))-Number(a.data('reviewMark').startsWith('violation:')));
   return stars.slice(0,16);
+}
+
+function reviewWireTargets(cy) {
+  const width=cy.width(),height=cy.height(),wires=[];
+  for(const [id,findings] of state.review?.links||[]){
+    if(![...findings.values()].some(finding=>!finding.acknowledged))continue;
+    const edge=cy.getElementById(state.universe.renderPrefix+id);
+    if(!edge.length||!edge.visible())continue;
+    const {x1,y1,x2,y2}=edge.renderedBoundingBox({includeLabels:false,includeOverlays:false});
+    if(x2>=0&&x1<=width&&y2>=0&&y1<=height)wires.push(edge);
+  }
+  wires.sort((a,b)=>Number(b.hasClass('review-violation'))-Number(a.hasClass('review-violation')));
+  return wires.slice(0,16);
 }
 
 function blendLight(tint,light,amount) {
@@ -269,13 +288,15 @@ function updateWireFlow(cy,motion,now,palette){
   return false;
 }
 
-function updateAppearanceTargets(cy,motion,stars=[]) {
+function updateAppearanceTargets(cy,motion,stars=[],wires=[]) {
   const palette=starPalette(),zoom=cy.zoom();
-  const nextStars=new Set(stars);
+  const nextStars=new Set(stars),nextWires=new Set(wires);
   cy.batch(()=>{
     for(const node of motion.stars)if(!nextStars.has(node))NodeIcons.shine(node,0,zoom,palette);
+    for(const edge of motion.wires)if(!nextWires.has(edge))edge.removeStyle('underlay-opacity');
   });
   motion.stars=stars;
+  motion.wires=wires;
 }
 
 function syncAppearanceMotion() {
@@ -292,7 +313,7 @@ function syncAppearanceMotion() {
     return;
   }
   if(existing?.timer!=null)return;
-  const motion=existing||{stars:[],view:null,focus:null,timer:null};
+  const motion=existing||{stars:[],wires:[],view:null,focus:null,timer:null};
   if(!existing)appearanceMotion.set(cy,motion);
   motion.timer=setTimeout(frame,64);
 
@@ -305,6 +326,7 @@ function syncAppearanceMotion() {
     }
     if(state.framing||state.gestureActive||state.wheel||state.flight||state.drag){
       clearWireFlow(motion);
+      motion.view=null;
       motion.timer=setTimeout(frame,120);
       return;
     }
@@ -314,20 +336,25 @@ function syncAppearanceMotion() {
     const view=[...viewport,state.shard,review];
     if(!motion.view||view.some((value,i)=>value!==motion.view[i])){
       if(motion.view&&(motion.review!==review||viewport.some((value,i)=>value!==motion.view[i])))clearWireFlow(motion);
-      updateAppearanceTargets(cy,motion,appearanceTargets(cy));
+      updateAppearanceTargets(cy,motion,appearanceTargets(cy),reviewWireTargets(cy));
       motion.view=view;motion.review=review;
     }
     const now=performance.now(),palette=starPalette(),phase=now/STAR_PULSE_PERIOD*Math.PI*2;
+    const intensity=i=>(1-Math.cos(phase+i*0.71))/2;
     let glowing;
     cy.batch(()=>{
       motion.stars.forEach((node,i)=>{
         if(!node.removed()&&!node.hasClass('expanded')&&node.data('reviewMark')?.endsWith(':false')){
-          const intensity=(1-Math.cos(phase+i*0.71))/2;
-          NodeIcons.shine(node,0.08+0.02*Math.round(41*intensity),zoom,palette);
+          NodeIcons.shine(node,0.08+0.02*Math.round(41*intensity(i)),zoom,palette);
         }
+      });
+      motion.wires.forEach((edge,i)=>{
+        if(edge.removed())return;
+        const {idle,peak}=REVIEW_WIRE_GLOW[edge.hasClass('review-violation')?'violation':'candidate'];
+        edge.style('underlay-opacity',idle+(peak-idle)*intensity(i));
       });
       glowing=updateWireFlow(cy,motion,now,palette);
     });
-    if(motion.stars.length||glowing)motion.timer=setTimeout(frame,64);
+    if(motion.stars.length||motion.wires.length||glowing)motion.timer=setTimeout(frame,64);
   }
 }

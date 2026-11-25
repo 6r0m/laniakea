@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 using UnrealBuildTool;
 
@@ -9,6 +9,7 @@ public class SampleEditor : ModuleRules
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject" });
 		PrivateDependencyModuleNames.AddRange(new string[] { "Engine", "UnrealEd", "EditorScriptingUtilities", "SampleGameplay", "SampleCore" });
+		PrivateDependencyModuleNames.Add("SampleExperiment");
 		PrivateIncludePathModuleNames.Add("AssetTools");
 		DynamicallyLoadedModuleNames.Add("Settings");
 	}

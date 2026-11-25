@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
-from support import ROOT
+from support import ROOT, sample_files
 
 
 def _prose(path):
@@ -63,9 +63,11 @@ def _anchors(path):
     return result
 
 
-def _issues(root):
+def _issues(root, sample_docs=None):
     root = root.resolve()
-    files = sorted([*root.glob("*.md"), *(root / "docs").rglob("*.md"), *(root / "todo").rglob("*.md")])
+    if sample_docs is None:
+        sample_docs = (root / "sample").rglob("*.md")
+    files = sorted([*root.glob("*.md"), *(root / "docs").rglob("*.md"), *(root / "todo").rglob("*.md"), *sample_docs])
     issues = []
     for path in files:
         source = path.relative_to(root)
@@ -94,6 +96,14 @@ def _issues(root):
 
 
 class Documentation(unittest.TestCase):
+    def test_sample_owned_markdown_is_checked(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            document = root / "sample/SampleProject/docs/walkthrough.md"
+            document.parent.mkdir(parents=True)
+            document.write_text("![missing demo capture](overview.png)\n", encoding="ascii")
+            self.assertEqual(_issues(root), [("sample/SampleProject/docs/walkthrough.md", "overview.png", "missing target")])
+
     def test_private_execution_evidence_is_not_a_shipped_dependency(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);(root/'todo').mkdir();(root/'docs').mkdir()
@@ -103,7 +113,8 @@ class Documentation(unittest.TestCase):
             self.assertIn('temporary dependency',{issue[2] for issue in _issues(root)})
 
     def test_local_links_resolve_without_durable_dependencies_on_todos(self):
-        self.assertEqual(_issues(ROOT), [])
+        documents = [*(ROOT / "sample").glob("*.md"), *(path for path in sample_files() if path.suffix == ".md")]
+        self.assertEqual(_issues(ROOT, documents), [])
 
     def test_checker_rejects_invalid_links_and_allows_tasks_to_disappear(self):
         with tempfile.TemporaryDirectory() as temporary:

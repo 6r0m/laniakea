@@ -1,0 +1,12 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "Sample Legacy",
+	"Description": "Compatibility helpers for archived relay rounds.",
+	"Category": "Sample",
+	"Modules": [
+		{"Name": "SampleLegacySession", "Type": "Runtime", "LoadingPhase": "Default"},
+		{"Name": "SampleLegacyStats", "Type": "Runtime", "LoadingPhase": "Default"}
+	]
+}

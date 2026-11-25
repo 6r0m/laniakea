@@ -1,11 +1,12 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 #include "Modules/ModuleManager.h"
+#include "Relay/SampleRelayInput.h"
 #include "SampleCoreTypes.h"
 
 int32 SampleNormalize(int32 Value)
 {
-	return FMath::Max(Value, 0);
+	return SampleRelay::Contracts::NormalizeInput(Value);
 }
 
 int32 FSampleProcessor::Process(const FSampleId& Id) const

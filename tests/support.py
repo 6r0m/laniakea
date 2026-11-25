@@ -2,13 +2,17 @@
 """Shared test setup: the sample project, its recorded UBT fixture, and a stand-in engine tree."""
 
 import json
-import shutil
+import sys
 from contextlib import contextmanager
 from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
-SAMPLE = ROOT / "sample" / "SampleProject"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from sample.copy_sample import SAMPLE, copy_sample, sample_files, tracked_ignored_files  # noqa: E402
+
 FIXTURES = ROOT / "fixtures"
 
 
@@ -24,12 +28,6 @@ def fake_engine(base):
         (root / path).parent.mkdir(parents=True, exist_ok=True)
         (root / path).write_text(text, encoding="utf-8")
     return root
-
-
-def copy_sample(base):
-    copy = Path(base) / "SampleProject"
-    shutil.copytree(SAMPLE, copy)
-    return copy
 
 
 def recorded(project_dir, engine_root):

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 using UnrealBuildTool;
 
@@ -8,5 +8,6 @@ public class SampleGameplay : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "SampleCore" });
+		PrivateDependencyModuleNames.Add("SampleHUD");
 	}
 }

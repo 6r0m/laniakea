@@ -31,13 +31,52 @@ class UnrealScopes(unittest.TestCase):
 
     def test_project_scope_shows_folders_and_the_engine_as_one_node(self):
         entry = self.shards[shards.ENTRY]
-        self.assertEqual(entry["members"], ["folder:Experimental", "folder:Sample", "module:SampleProject"])
+        self.assertEqual(entry["members"], ["folder:Compatibility", "folder:Experimental", "folder:Match",
+                                             "folder:Presentation", "folder:Results", "folder:Sample", "folder:Session",
+                                             "folder:Standings", "folder:Telemetry", "module:SampleProject"])
         self.assertEqual({n["id"] for n in entry["nodes"]}, set(entry["members"]) | {"engine"})
         self.assertEqual(edge_ids(entry), {
             "depends.rollup:module:SampleProject->engine",
+            "depends.rollup:module:SampleProject->folder:Experimental",
+            "depends.rollup:module:SampleProject->folder:Match",
+            "depends.rollup:module:SampleProject->folder:Results",
             "depends.rollup:module:SampleProject->folder:Sample",
+            "depends.rollup:folder:Compatibility->engine",
+            "depends.rollup:folder:Experimental->engine",
+            "depends.rollup:folder:Experimental->folder:Match",
+            "depends.rollup:folder:Experimental->folder:Sample",
+            "depends.rollup:folder:Experimental->folder:Telemetry",
+            "depends.rollup:folder:Match->engine",
+            "depends.rollup:folder:Match->folder:Sample",
+            "depends.rollup:folder:Match->folder:Telemetry",
+            "depends.rollup:folder:Presentation->engine",
+            "depends.rollup:folder:Presentation->folder:Sample",
+            "depends.rollup:folder:Results->engine",
+            "depends.rollup:folder:Results->folder:Session",
+            "depends.rollup:folder:Results->folder:Standings",
             "depends.rollup:folder:Sample->engine",
+            "depends.rollup:folder:Sample->folder:Experimental",
+            "depends.rollup:folder:Sample->folder:Presentation",
+            "depends.rollup:folder:Session->engine",
+            "depends.rollup:folder:Session->folder:Match",
+            "depends.rollup:folder:Standings->engine",
+            "depends.rollup:folder:Standings->folder:Match",
+            "depends.rollup:folder:Telemetry->engine",
+            "depends.rollup:folder:Telemetry->folder:Sample",
+            "requires.rollup:folder:Experimental->folder:Match",
+            "requires.rollup:folder:Experimental->folder:Sample",
+            "requires.rollup:folder:Experimental->folder:Telemetry",
+            "requires.rollup:folder:Match->folder:Sample",
+            "requires.rollup:folder:Match->folder:Telemetry",
+            "requires.rollup:folder:Presentation->folder:Sample",
+            "requires.rollup:folder:Results->folder:Session",
+            "requires.rollup:folder:Results->folder:Standings",
             "requires.rollup:folder:Sample->engine",
+            "requires.rollup:folder:Sample->folder:Experimental",
+            "requires.rollup:folder:Sample->folder:Presentation",
+            "requires.rollup:folder:Session->folder:Match",
+            "requires.rollup:folder:Standings->folder:Match",
+            "requires.rollup:folder:Telemetry->folder:Sample",
         })
 
     def test_summary_names_what_it_stands_for(self):

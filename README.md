@@ -17,10 +17,11 @@ The viewer opens at **http://127.0.0.1:8737/**.
 | commands and options | [CLI](laniakea/cli.py) (`python laniakea.py --help`) |
 | optional Make shortcuts: build, up, down | [Makefile](Makefile) (`make help`) |
 | exploration, setup and architecture | [documentation](docs/README.md) |
+| hands-on exploration with fictional Unreal data | [sample projects](sample/README.md) |
 | checks and browser acceptance | [verification](tests/README.md) |
 | contributions welcome, first steps | [contribution guide](CONTRIBUTING.md) |
 | repository and privacy rules | [AGENTS.md](AGENTS.md) |
-| license | [AGPL-3.0-or-later](LICENSE) |
+| Laniakea license | [AGPL-3.0-or-later](LICENSE) |
 | dependency licenses and provenance | [third-party notices](THIRD_PARTY.md) |
 
 Copyright (C) 2026 6r0m.

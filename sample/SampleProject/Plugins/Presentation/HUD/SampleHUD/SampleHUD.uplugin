@@ -1,0 +1,14 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "Sample HUD",
+	"Description": "Presentation of relay scores using the shared round data.",
+	"Category": "Sample",
+	"Modules": [
+		{"Name": "SampleHUD", "Type": "Runtime", "LoadingPhase": "Default"}
+	],
+	"Plugins": [
+		{"Name": "SampleCore", "Enabled": true}
+	]
+}

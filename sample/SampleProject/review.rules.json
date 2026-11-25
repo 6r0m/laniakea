@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "gameplay-independent-of-presentation",
+      "kind": "forbidden",
+      "reason": "Relay scoring must be usable without any presentation module.",
+      "source": {"ids": ["module:SampleGameplay"]},
+      "target": {"ids": ["module:SampleHUD"]},
+      "context": {"name": "SampleProjectEditor", "platform": "Win64", "configuration": "Development"}
+    },
+    {
+      "id": "acyclic-legacy-modules",
+      "kind": "cycles",
+      "acyclic": true,
+      "reason": "Archived session and statistics should have a single build-dependency direction.",
+      "scope": {"ids": ["module:SampleLegacySession", "module:SampleLegacyStats"]},
+      "context": {"name": "SampleProjectEditor", "platform": "Win64", "configuration": "Development"}
+    },
+    {"id": "native-access", "kind": "native"},
+    {"id": "relay-source-duplication", "kind": "duplication", "minimum_tokens": 100}
+  ]
+}

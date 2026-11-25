@@ -5,12 +5,6 @@ __pycache__/
 # Temp
 tmp/
 
-# Written by Unreal tools if the sample is opened in place; tests always work on a copy.
-/sample/*/Binaries/
-/sample/*/Intermediate/
-/sample/*/Saved/
-/sample/*/DerivedDataCache/
-
 # playwright
 .playwright-cli/
 .playwright/

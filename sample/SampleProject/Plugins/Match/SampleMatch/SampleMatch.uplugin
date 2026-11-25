@@ -1,0 +1,20 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "Sample Match",
+	"Description": "Validates relay rounds, coordinates scoring and replays, and defines the result ordering.",
+	"Category": "Sample",
+	"Modules": [
+		{"Name": "SampleMatch", "Type": "Runtime", "LoadingPhase": "Default"},
+		{"Name": "SampleMatchRules", "Type": "Runtime", "LoadingPhase": "Default"},
+		{"Name": "SampleMatchReplay", "Type": "Runtime", "LoadingPhase": "Default"},
+		{"Name": "SampleMatchResult", "Type": "Runtime", "LoadingPhase": "Default"},
+		{"Name": "SampleMatchValidation", "Type": "Runtime", "LoadingPhase": "Default"}
+	],
+	"Plugins": [
+		{"Name": "SampleCore", "Enabled": true},
+		{"Name": "SampleGameplay", "Enabled": true},
+		{"Name": "SampleTelemetry", "Enabled": true}
+	]
+}

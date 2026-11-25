@@ -9,7 +9,6 @@ fixture holds no machine path and no engine data beyond module names and locatio
 
 import argparse
 import json
-import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -18,8 +17,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from laniakea.unreal import engine, ubt  # noqa: E402
+from sample.copy_sample import copy_sample  # noqa: E402
 
-SAMPLE = ROOT / "sample" / "SampleProject"
 FIXTURE = ROOT / "fixtures" / "sample.ubt.json"
 TARGET = "SampleProjectEditor"
 
@@ -56,8 +55,7 @@ def main():
     options.add_argument("--engine")
     args = options.parse_args()
     with tempfile.TemporaryDirectory() as temporary:
-        copy = Path(temporary) / "SampleProject"
-        shutil.copytree(SAMPLE, copy)
+        copy = copy_sample(temporary)
         project_file = copy / "SampleProject.uproject"
         root = engine.resolve(project_file, args.engine)
         out = Path(temporary) / "out"

@@ -2,7 +2,7 @@
 	"FileVersion": 3,
 	"EngineAssociation": "5.8",
 	"Category": "",
-	"Description": "Synthetic project for Laniakea tests. It contains no engine code.",
+	"Description": "A synthetic relay scoring project for the Laniakea architecture walkthrough.",
 	"Modules": [
 		{
 			"Name": "SampleProject",
@@ -21,6 +21,30 @@
 		},
 		{
 			"Name": "SampleEditor",
+			"Enabled": true
+		},
+		{
+			"Name": "SampleHUD",
+			"Enabled": true
+		},
+		{
+			"Name": "SampleLegacy",
+			"Enabled": true
+		},
+		{
+			"Name": "SampleMatch",
+			"Enabled": true
+		},
+		{
+			"Name": "SampleTelemetry",
+			"Enabled": true
+		},
+		{
+			"Name": "SampleExperiment",
+			"Enabled": true
+		},
+		{
+			"Name": "SampleResults",
 			"Enabled": true
 		}
 	]

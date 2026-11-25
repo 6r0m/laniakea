@@ -66,7 +66,8 @@
      "UnrealEd",
      "EditorScriptingUtilities",
      "SampleGameplay",
-     "SampleCore"
+     "SampleCore",
+     "SampleExperiment"
     ],
     "PrivateIncludePathModules": [
      "AssetTools"
@@ -82,13 +83,37 @@
     "Rules": "<project>/Plugins/Sample/SampleEditor/Source/SampleEditor/SampleEditor.Build.cs",
     "Type": "CPlusPlus"
    },
+   "SampleExperiment": {
+    "CircularlyReferencedModules": [],
+    "Directory": "<project>/Plugins/Experimental/SampleExperiment/Source/SampleExperiment",
+    "DynamicallyLoadedModules": [],
+    "Name": "SampleExperiment",
+    "PCHUsage": "UseExplicitOrSharedPCHs",
+    "PrivateDependencyModules": [
+     "SampleCore",
+     "SampleGameplay",
+     "SampleMatch",
+     "SampleTelemetry"
+    ],
+    "PrivateIncludePathModules": [],
+    "PublicDependencyModules": [
+     "Core"
+    ],
+    "PublicIncludePathModules": [
+     "Core"
+    ],
+    "Rules": "<project>/Plugins/Experimental/SampleExperiment/Source/SampleExperiment/SampleExperiment.Build.cs",
+    "Type": "CPlusPlus"
+   },
    "SampleGameplay": {
     "CircularlyReferencedModules": [],
     "Directory": "<project>/Plugins/Sample/SampleGameplay/Source/SampleGameplay",
     "DynamicallyLoadedModules": [],
     "Name": "SampleGameplay",
     "PCHUsage": "UseExplicitOrSharedPCHs",
-    "PrivateDependencyModules": [],
+    "PrivateDependencyModules": [
+     "SampleHUD"
+    ],
     "PrivateIncludePathModules": [],
     "PublicDependencyModules": [
      "Core",
@@ -105,6 +130,168 @@
     "Rules": "<project>/Plugins/Sample/SampleGameplay/Source/SampleGameplay/SampleGameplay.Build.cs",
     "Type": "CPlusPlus"
    },
+   "SampleHUD": {
+    "CircularlyReferencedModules": [],
+    "Directory": "<project>/Plugins/Presentation/HUD/SampleHUD/Source/SampleHUD",
+    "DynamicallyLoadedModules": [],
+    "Name": "SampleHUD",
+    "PCHUsage": "UseExplicitOrSharedPCHs",
+    "PrivateDependencyModules": [],
+    "PrivateIncludePathModules": [],
+    "PublicDependencyModules": [
+     "Core",
+     "SampleCore"
+    ],
+    "PublicIncludePathModules": [
+     "Core",
+     "SampleCore"
+    ],
+    "Rules": "<project>/Plugins/Presentation/HUD/SampleHUD/Source/SampleHUD/SampleHUD.Build.cs",
+    "Type": "CPlusPlus"
+   },
+   "SampleLegacySession": {
+    "CircularlyReferencedModules": [
+     "SampleLegacyStats"
+    ],
+    "Directory": "<project>/Plugins/Compatibility/Legacy/SampleLegacy/Source/SampleLegacySession",
+    "DynamicallyLoadedModules": [],
+    "Name": "SampleLegacySession",
+    "PCHUsage": "UseExplicitOrSharedPCHs",
+    "PrivateDependencyModules": [
+     "SampleLegacyStats"
+    ],
+    "PrivateIncludePathModules": [],
+    "PublicDependencyModules": [
+     "Core"
+    ],
+    "PublicIncludePathModules": [
+     "Core"
+    ],
+    "Rules": "<project>/Plugins/Compatibility/Legacy/SampleLegacy/Source/SampleLegacySession/SampleLegacySession.Build.cs",
+    "Type": "CPlusPlus"
+   },
+   "SampleLegacyStats": {
+    "CircularlyReferencedModules": [
+     "SampleLegacySession"
+    ],
+    "Directory": "<project>/Plugins/Compatibility/Legacy/SampleLegacy/Source/SampleLegacyStats",
+    "DynamicallyLoadedModules": [],
+    "Name": "SampleLegacyStats",
+    "PCHUsage": "UseExplicitOrSharedPCHs",
+    "PrivateDependencyModules": [
+     "SampleLegacySession"
+    ],
+    "PrivateIncludePathModules": [],
+    "PublicDependencyModules": [
+     "Core"
+    ],
+    "PublicIncludePathModules": [
+     "Core"
+    ],
+    "Rules": "<project>/Plugins/Compatibility/Legacy/SampleLegacy/Source/SampleLegacyStats/SampleLegacyStats.Build.cs",
+    "Type": "CPlusPlus"
+   },
+   "SampleMatch": {
+    "CircularlyReferencedModules": [],
+    "Directory": "<project>/Plugins/Match/SampleMatch/Source/SampleMatch",
+    "DynamicallyLoadedModules": [],
+    "Name": "SampleMatch",
+    "PCHUsage": "UseExplicitOrSharedPCHs",
+    "PrivateDependencyModules": [
+     "SampleCore",
+     "SampleGameplay",
+     "SampleMatchRules",
+     "SampleMatchReplay",
+     "SampleMatchValidation"
+    ],
+    "PrivateIncludePathModules": [],
+    "PublicDependencyModules": [
+     "Core",
+     "SampleMatchResult"
+    ],
+    "PublicIncludePathModules": [
+     "Core",
+     "SampleMatchResult"
+    ],
+    "Rules": "<project>/Plugins/Match/SampleMatch/Source/SampleMatch/SampleMatch.Build.cs",
+    "Type": "CPlusPlus"
+   },
+   "SampleMatchReplay": {
+    "CircularlyReferencedModules": [],
+    "Directory": "<project>/Plugins/Match/SampleMatch/Source/SampleMatchReplay",
+    "DynamicallyLoadedModules": [],
+    "Name": "SampleMatchReplay",
+    "PCHUsage": "UseExplicitOrSharedPCHs",
+    "PrivateDependencyModules": [
+     "SampleTelemetry"
+    ],
+    "PrivateIncludePathModules": [],
+    "PublicDependencyModules": [
+     "Core",
+     "SampleCore"
+    ],
+    "PublicIncludePathModules": [
+     "Core",
+     "SampleCore"
+    ],
+    "Rules": "<project>/Plugins/Match/SampleMatch/Source/SampleMatchReplay/SampleMatchReplay.Build.cs",
+    "Type": "CPlusPlus"
+   },
+   "SampleMatchResult": {
+    "CircularlyReferencedModules": [],
+    "Directory": "<project>/Plugins/Match/SampleMatch/Source/SampleMatchResult",
+    "DynamicallyLoadedModules": [],
+    "Name": "SampleMatchResult",
+    "PCHUsage": "UseExplicitOrSharedPCHs",
+    "PrivateDependencyModules": [],
+    "PrivateIncludePathModules": [],
+    "PublicDependencyModules": [
+     "Core"
+    ],
+    "PublicIncludePathModules": [
+     "Core"
+    ],
+    "Rules": "<project>/Plugins/Match/SampleMatch/Source/SampleMatchResult/SampleMatchResult.Build.cs",
+    "Type": "CPlusPlus"
+   },
+   "SampleMatchRules": {
+    "CircularlyReferencedModules": [],
+    "Directory": "<project>/Plugins/Match/SampleMatch/Source/SampleMatchRules",
+    "DynamicallyLoadedModules": [],
+    "Name": "SampleMatchRules",
+    "PCHUsage": "UseExplicitOrSharedPCHs",
+    "PrivateDependencyModules": [],
+    "PrivateIncludePathModules": [],
+    "PublicDependencyModules": [
+     "Core",
+     "SampleCore"
+    ],
+    "PublicIncludePathModules": [
+     "Core",
+     "SampleCore"
+    ],
+    "Rules": "<project>/Plugins/Match/SampleMatch/Source/SampleMatchRules/SampleMatchRules.Build.cs",
+    "Type": "CPlusPlus"
+   },
+   "SampleMatchValidation": {
+    "CircularlyReferencedModules": [],
+    "Directory": "<project>/Plugins/Match/SampleMatch/Source/SampleMatchValidation",
+    "DynamicallyLoadedModules": [],
+    "Name": "SampleMatchValidation",
+    "PCHUsage": "UseExplicitOrSharedPCHs",
+    "PrivateDependencyModules": [],
+    "PrivateIncludePathModules": [],
+    "PublicDependencyModules": [
+     "Core",
+     "SampleCore"
+    ],
+    "PublicIncludePathModules": [
+     "Core",
+     "SampleCore"
+    ],
+    "Rules": "<project>/Plugins/Match/SampleMatch/Source/SampleMatchValidation/SampleMatchValidation.Build.cs",
+    "Type": "CPlusPlus"
+   },
    "SampleProject": {
     "CircularlyReferencedModules": [],
     "Directory": "<project>/Source/SampleProject",
@@ -112,7 +299,10 @@
     "Name": "SampleProject",
     "PCHUsage": "UseExplicitOrSharedPCHs",
     "PrivateDependencyModules": [
-     "SampleGameplay"
+     "SampleGameplay",
+     "SampleMatch",
+     "SampleExperiment",
+     "SampleResults"
     ],
     "PrivateIncludePathModules": [],
     "PublicDependencyModules": [
@@ -126,6 +316,86 @@
      "Engine"
     ],
     "Rules": "<project>/Source/SampleProject/SampleProject.Build.cs",
+    "Type": "CPlusPlus"
+   },
+   "SampleResults": {
+    "CircularlyReferencedModules": [],
+    "Directory": "<project>/Plugins/Results/SampleResults/Source/SampleResults",
+    "DynamicallyLoadedModules": [],
+    "Name": "SampleResults",
+    "PCHUsage": "UseExplicitOrSharedPCHs",
+    "PrivateDependencyModules": [],
+    "PrivateIncludePathModules": [],
+    "PublicDependencyModules": [
+     "Core",
+     "SampleSession",
+     "SampleStandings"
+    ],
+    "PublicIncludePathModules": [
+     "Core",
+     "SampleSession",
+     "SampleStandings"
+    ],
+    "Rules": "<project>/Plugins/Results/SampleResults/Source/SampleResults/SampleResults.Build.cs",
+    "Type": "CPlusPlus"
+   },
+   "SampleSession": {
+    "CircularlyReferencedModules": [],
+    "Directory": "<project>/Plugins/Session/SampleSession/Source/SampleSession",
+    "DynamicallyLoadedModules": [],
+    "Name": "SampleSession",
+    "PCHUsage": "UseExplicitOrSharedPCHs",
+    "PrivateDependencyModules": [
+     "SampleMatch"
+    ],
+    "PrivateIncludePathModules": [],
+    "PublicDependencyModules": [
+     "Core",
+     "SampleMatchResult"
+    ],
+    "PublicIncludePathModules": [
+     "Core",
+     "SampleMatchResult"
+    ],
+    "Rules": "<project>/Plugins/Session/SampleSession/Source/SampleSession/SampleSession.Build.cs",
+    "Type": "CPlusPlus"
+   },
+   "SampleStandings": {
+    "CircularlyReferencedModules": [],
+    "Directory": "<project>/Plugins/Standings/SampleStandings/Source/SampleStandings",
+    "DynamicallyLoadedModules": [],
+    "Name": "SampleStandings",
+    "PCHUsage": "UseExplicitOrSharedPCHs",
+    "PrivateDependencyModules": [],
+    "PrivateIncludePathModules": [],
+    "PublicDependencyModules": [
+     "Core",
+     "SampleMatchResult"
+    ],
+    "PublicIncludePathModules": [
+     "Core",
+     "SampleMatchResult"
+    ],
+    "Rules": "<project>/Plugins/Standings/SampleStandings/Source/SampleStandings/SampleStandings.Build.cs",
+    "Type": "CPlusPlus"
+   },
+   "SampleTelemetry": {
+    "CircularlyReferencedModules": [],
+    "Directory": "<project>/Plugins/Telemetry/SampleTelemetry/Source/SampleTelemetry",
+    "DynamicallyLoadedModules": [],
+    "Name": "SampleTelemetry",
+    "PCHUsage": "UseExplicitOrSharedPCHs",
+    "PrivateDependencyModules": [],
+    "PrivateIncludePathModules": [],
+    "PublicDependencyModules": [
+     "Core",
+     "SampleCore"
+    ],
+    "PublicIncludePathModules": [
+     "Core",
+     "SampleCore"
+    ],
+    "Rules": "<project>/Plugins/Telemetry/SampleTelemetry/Source/SampleTelemetry/SampleTelemetry.Build.cs",
     "Type": "CPlusPlus"
    },
    "Settings": {

@@ -16,6 +16,10 @@
 		{
 			"Name": "SampleCore",
 			"Enabled": true
+		},
+		{
+			"Name": "SampleHUD",
+			"Enabled": true
 		}
 	]
 }

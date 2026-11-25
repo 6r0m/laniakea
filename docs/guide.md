@@ -114,8 +114,8 @@ Public and implementation bands after confirmation; other scopes and layout mode
 
 ## Trace a dependency to its cause
 
-Open the [synthetic sample](../sample/SampleProject/SampleProject.uproject) with
-`make build PROJECT=sample/SampleProject/SampleProject.uproject`, then `make up`, when its Engine resolves.
+Open the synthetic project with the [Unreal sample walkthrough](../sample/SampleProject/docs/walkthrough.md). It also shows cross-branch
+dependencies, review policy and duplicate source.
 
 1. Open the `SampleGameplay` module and hover its connection toward `SampleCore`. Read the direction and reference types.
 2. Inspect the public module dependency. Open its `Build.cs` link and check the evaluated declaration.

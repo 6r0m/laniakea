@@ -2,6 +2,7 @@
 :root {
   --bg: #edf2f7;
   --panel: #f9fbfd;
+  --hover-backdrop: blur(4px) invert(1) brightness(.32) invert(1);
   --fg: #172e43;
   --muted: #50677c;
   --line: #cfdae5;
@@ -53,6 +54,7 @@
   :root {
     --bg: #101923;
     --panel: #17232f;
+    --hover-backdrop: blur(4px) brightness(.53);
     --fg: #e0eaf4;
     --muted: #a2b6c9;
     --line: #2b3c4c;
@@ -276,6 +278,11 @@ main { flex: 1; min-height: 280px; display: flex; position: relative; }
   max-height: calc(100% - var(--legend-height) - var(--trace-height) - 16px); overflow: hidden;
   padding: 12px 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel);
   color: var(--fg); font-size: 12px; line-height: 1.45; box-shadow: 0 10px 30px var(--shadow); }
+@media (prefers-reduced-transparency: no-preference) and (forced-colors: none) {
+  @supports (backdrop-filter: blur(4px)) {
+    #hover-card { background: color-mix(in srgb, var(--panel) 70%, transparent); backdrop-filter: var(--hover-backdrop); }
+  }
+}
 #hover-card .hover-name { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
   overflow: hidden; font-size: 15px; overflow-wrap: anywhere; }
 #hover-card .hover-context { color: var(--muted); display: block; margin-top: 3px; font-size: 12px; overflow-wrap: anywhere; }

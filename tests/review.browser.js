@@ -32,10 +32,12 @@ async page=>{
     const node=state.cy.nodes().find(n=>n.data('reviewMark')),edge=state.cy.edges('.review-candidate,.review-violation')[0];
     return{images:(node.style('background-image').match(/data:image\/svg\+xml/g)||[]).length,
       badge:parseFloat(node.style('background-width').split(/\s+/).at(-1))*state.cy.zoom(),
-      label:edge.style('label'),size:parseFloat(edge.style('font-size'))*state.cy.zoom()};
+      wire:edge.id(),label:edge.style('label'),size:parseFloat(edge.style('font-size'))*state.cy.zoom(),
+      glowWidth:2*edge.numericStyle('underlay-padding')*state.cy.zoom()};
   });
   check([3,4].includes(marked.images)&&Math.abs(marked.badge-16)<.1,'Warning icon is not independently readable: '+JSON.stringify(marked));
   check(['?','!'].includes(marked.label)&&marked.size>=12,'Idle wire hides its review symbol');
+  check(marked.glowWidth>1.5&&marked.glowWidth<=3,'Review wire glow must read as a thin stroke');
   const paint=await badgePixels();check(paint.count>30,'Warning badge pixels: '+JSON.stringify(paint));
   await page.evaluate(()=>{
     const trace=ConnectionTrace.pair(state.shard,'A','B');
@@ -53,6 +55,14 @@ async page=>{
   await page.evaluate(()=>unfocus());
   const pulseBadge=await page.evaluate(()=>state.cy.nodes().find(n=>!n.hasClass('expanded')&&
     n.data('reviewMark')?.endsWith(':false')).id());
+  const wireSample=id=>{
+    const edge=state.cy.getElementById(id);
+    return {glow:Number(edge.style('underlay-opacity')),width:edge.renderedWidth(),label:edge.style('label')};
+  };
+  const staticGlow=marked.label==='!'?.22:.17;
+  await page.waitForFunction(({id,base})=>Number(state.cy.getElementById(id).style('underlay-opacity'))>base+.07,
+    {id:marked.wire,base:staticGlow},{timeout:5500});
+  const brightWire=await page.evaluate(wireSample,marked.wire);
   const pulseSample=id=>{
     const n=state.cy.getElementById(id),layers=n.style('background-image-opacity').split(/\s+/).map(Number);
     const images=n.style('background-image').split(' ');
@@ -74,10 +84,16 @@ async page=>{
     const alpha=state.cy.getElementById(id).style('background-image-opacity').split(/\s+/).map(Number);
     return alpha.length===4&&Math.abs(alpha[0]-glow)>.05;
   },{id:pulseBadge,glow:ongoing.glow});
+  const ongoingWire=await page.evaluate(wireSample,marked.wire);
+  await page.waitForFunction(({id,glow})=>Math.abs(Number(state.cy.getElementById(id).style('underlay-opacity'))-glow)>.05,
+    {id:marked.wire,glow:ongoingWire.glow},{timeout:5500});
   await page.emulateMedia({reducedMotion:'reduce'});
   await page.waitForFunction(id=>state.cy.getElementById(id).style('background-image-opacity').split(/\s+/).length===3,
     pulseBadge,{timeout:2000});
   const still=await page.evaluate(pulseSample,pulseBadge);
+  const stillWire=await page.evaluate(wireSample,marked.wire);
+  check(stillWire.glow===staticGlow&&brightWire.width===stillWire.width&&brightWire.label===stillWire.label,
+    'Review pulse changed wire geometry or its badge, or reduced motion did not restore static lighting');
   check(bright.glow>still.glow&&still.badge===1&&bright.badge===1&&bright.width===still.width&&
     bright.position.x===still.position.x&&bright.position.y===still.position.y,'Review glow moved or faded the badge or star');
   await page.emulateMedia({reducedMotion:'no-preference'});

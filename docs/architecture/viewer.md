@@ -479,9 +479,9 @@ reopening revalidates their files. No editor dependency or source write is added
 Exact reference-group associations also mark existing projected connections and their revealed endpoints. Amber/red
 halos identify candidates/violations independently of direction colors. Fixed-size amber triangle and red stop-sign
 badges remain separate from type icons; counts belong to hover and inspection. Visible stars with active findings
-pulse continuously in their family color, with priority for violations on crowded maps. The badge stays steady.
-Star pulses hold their current light during camera gestures. Connection motion clears as the camera moves. Reduced
-motion uses static lighting throughout.
+pulse in their family color, and visible connections with active findings pulse in their Review color at the same
+cadence. Both prioritize violations on crowded maps. Badges stay steady. The pulse holds its current brightness
+during camera gestures, and directional flow clears as the camera moves. Reduced motion uses static lighting throughout.
 Native wire labels show a compact
 `?` candidate or `!` violation symbol while idle. The map key explains both, without adding hit targets.
 Warnings follow file, class and callable projection,

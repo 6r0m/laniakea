@@ -1,0 +1,12 @@
+# Generated Unreal output at project and plugin level.
+Binaries/
+Intermediate/
+Saved/
+DerivedDataCache/
+
+# Local Visual Studio and build diagnostics.
+.vs/
+*.sln
+*.VC.db
+*.VC.opendb
+*.log

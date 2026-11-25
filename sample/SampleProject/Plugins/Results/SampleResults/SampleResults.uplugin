@@ -1,0 +1,15 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "Sample Results",
+	"Description": "Closes a relay heat and publishes its placement.",
+	"Category": "Sample",
+	"Modules": [
+		{"Name": "SampleResults", "Type": "Runtime", "LoadingPhase": "Default"}
+	],
+	"Plugins": [
+		{"Name": "SampleSession", "Enabled": true},
+		{"Name": "SampleStandings", "Enabled": true}
+	]
+}
