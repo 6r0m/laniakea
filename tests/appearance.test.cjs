@@ -54,20 +54,36 @@ test('static Cytoscape appearance has one owner loaded before map.js',()=>{
 test('wire pulse admits visible active findings with priority for violations',()=>{
   const edges=new Map(),links=new Map();
   function add(id,severity,{acknowledged=false,visible=true,box={x1:-30,x2:130,y1:45,y2:55}}={}){
-    edges.set('view:'+id,{id,length:1,visible:()=>visible,renderedBoundingBox:()=>box,
-      hasClass:kind=>kind==='review-'+severity});
+    const styles=new Map();
+    edges.set('view:'+id,{id,length:1,visible:()=>visible,renderedBoundingBox:()=>box,styles,
+      hasClass:kind=>kind==='review-'+severity,
+      style:(name,value)=>styles.set(name,value),
+      removeStyle:names=>names.split(' ').forEach(name=>styles.delete(name))});
     links.set(id,new Map([[id,{severity,acknowledged}]]));
   }
   add('acknowledged','violation',{acknowledged:true});
   add('hidden','violation',{visible:false});
   add('offscreen','violation',{box:{x1:110,x2:140,y1:45,y2:55}});
+  add('mixed','violation',{acknowledged:true});
+  links.get('mixed').set('active-candidate',{severity:'candidate',acknowledged:false});
   for(let i=0;i<16;i++)add('candidate-'+i,'candidate');
   add('crossing','violation');
-  const context={state:{universe:{renderPrefix:'view:'},review:{links}}};
+  const context={css:name=>name==='--review-candidate'?'#ffbd72':'#ffffff',
+    state:{universe:{renderPrefix:'view:'},review:{links}}};
   vm.createContext(context);
   vm.runInContext(appearanceSource,context);
-  const targets=context.reviewWireTargets({width:()=>100,height:()=>100,getElementById:id=>edges.get(id)});
-  assert.deepEqual(Array.from(targets,edge=>edge.id),['crossing',...Array.from({length:15},(_,i)=>'candidate-'+i)]);
+  const cy={width:()=>100,height:()=>100,zoom:()=>1,batch:callback=>callback(),getElementById:id=>edges.get(id)};
+  const targets=context.reviewWireTargets(cy);
+  assert.deepEqual(Array.from(targets,target=>[target.edge?.id??target.id,target.severity]),[
+    ['crossing','violation'],['mixed','candidate'],...Array.from({length:14},(_,i)=>['candidate-'+i,'candidate']),
+  ]);
+  const motion={stars:[],wires:[]},mixed=edges.get('view:mixed');
+  context.updateAppearanceTargets(cy,motion,[],targets);
+  assert.equal(mixed.styles.get('underlay-color'),'#ffbd72');
+  assert.ok(mixed.hasClass('review-violation'));
+  mixed.style('underlay-opacity',0.26);
+  context.updateAppearanceTargets(cy,motion);
+  assert.equal(mixed.styles.size,0,'Stopping the pulse must release both style overrides');
 });
 
 test('light and dark themes define atmosphere and distinct warning/selection roles',()=>{

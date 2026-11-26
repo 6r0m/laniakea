@@ -38,7 +38,7 @@ class Privacy(unittest.TestCase):
     def test_no_ignored_sample_outputs_are_tracked(self):
         self.assertEqual(tracked_ignored_files(), set())
 
-    def test_sample_copy_skips_ignored_plugin_outputs(self):
+    def test_sample_copy_includes_only_tracked_authored_files(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
             subprocess.run(["git", "init", "-q", str(root)], check=True)
@@ -46,17 +46,26 @@ class Privacy(unittest.TestCase):
             sample = root / "sample/SampleProject"
             generated = Path("Plugins/Match/Intermediate/Build.rules")
             authored = Path("Plugins/Match/Source/Match.Build.cs")
+            untracked = Path("Plugins/Match/Source/LocalNotes.h")
             for relative, content in [(Path(".gitignore"), "Intermediate/\n"),
                                       (Path("SampleProject.uproject"), "{}\n"),
-                                      (generated, "ignored generated artifact"), (authored, "authored rules")]:
+                                      (generated, "ignored generated artifact"), (authored, "authored rules"),
+                                      (untracked, "untracked local file")]:
                 path = sample / relative
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(content, encoding="ascii")
+            subprocess.run(["git", "add", "--", "sample/SampleProject/.gitignore",
+                            "sample/SampleProject/SampleProject.uproject",
+                            (sample / authored).relative_to(root).as_posix()], cwd=root, check=True)
+            (sample / authored).write_text("edited authored rules", encoding="ascii")
             with patch.multiple("sample.copy_sample", ROOT=root, SAMPLE=sample):
                 copied = copy_sample(root / "disposable")
+                self.assertFalse((copied / untracked).exists())
+                with self.assertRaises(FileExistsError):
+                    copy_sample(root / "disposable")
                 with self.assertRaisesRegex(ValueError, "ignored directory"):
                     copy_sample(root / "visible")
-            self.assertTrue((copied / authored).is_file())
+            self.assertEqual((copied / authored).read_text(encoding="ascii"), "edited authored rules")
             self.assertFalse((copied / generated).exists())
             self.assertFalse((root / "visible").exists())
 

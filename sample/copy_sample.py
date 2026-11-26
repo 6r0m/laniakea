@@ -22,11 +22,12 @@ def tracked_ignored_files():
 
 
 def sample_files():
-    candidates = _git_files("--cached", "--others", "--exclude-standard") - tracked_ignored_files()
+    candidates = _git_files("--cached") - tracked_ignored_files()
     files = []
     for path in sorted(candidates):
         if path.is_file():
-            path.resolve().relative_to(SAMPLE)
+            if path.resolve() != path:
+                raise ValueError(f"Sample file must be local to its tracked path: {path.relative_to(SAMPLE)}")
             files.append(path)
     if SAMPLE / "SampleProject.uproject" not in files:
         raise FileNotFoundError("The authored sample project descriptor is missing")
@@ -35,7 +36,7 @@ def sample_files():
 
 def copy_sample(base):
     files = sample_files()
-    copy = (Path(base) / SAMPLE.name).resolve()
+    copy = Path(base).resolve() / SAMPLE.name
     if ROOT in copy.parents:
         relative = copy.relative_to(ROOT).as_posix() + "/"
         ignored = subprocess.run(["git", "check-ignore", "-q", "--", relative], cwd=ROOT)

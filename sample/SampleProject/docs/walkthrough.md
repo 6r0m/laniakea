@@ -7,8 +7,8 @@ paths to see which findings come from build rules, static calls, and matching so
 
 ## Open the sample with default checks
 
-Run these commands in PowerShell from the root of the Laniakea Git checkout. The copy command uses the checkout's ignore
-rules and copies the authored sample files into an isolated workspace. Use Windows, Git, Python 3.9+, and the Unreal 5.8
+Run these commands in PowerShell from the root of the Laniakea Git checkout. The copy command uses the working-tree
+contents of tracked sample files and creates a new project directory. Use Windows, Git, Python 3.9+, and the Unreal 5.8
 installation associated with the sample. Add `--engine <engine-root>` to Laniakea's `build` if the association does not resolve.
 
 ```powershell
@@ -113,9 +113,24 @@ Presentation. The duplicate normalization remains a separate problem.
 Reopen **Compare matches** in the saved run before rebuilding. The edited Gameplay range is marked stale, while the
 unchanged HUD range still matches its recorded source hash.
 
-Keep the normal viewer open and inspect the changed inputs in Checks. Rebuild the Editor target to refresh native build evidence and run
-**Recheck enabled checks**. The Gameplay-to-HUD witness disappears, the legacy findings and source match stay, and the
+Keep the normal viewer open and inspect the changed inputs in Checks. Rebuild the Editor target to refresh native build
+evidence. Open **Checks**, expand **Check settings**, and choose **Recheck current settings**.
+The Gameplay-to-HUD witness disappears, the legacy findings and source match stay, and the
 camera and surviving pins can be compared across the two published runs.
+
+## Repair the duplicate scoring rule
+
+Start with a fresh disposable copy and wait for the duplicate scoring and display ranges to appear in **Compare matches**.
+Return to the overview, close the side panels, and drag **Telemetry** to pin it. Keep the viewer tab open.
+
+1. Move one `NormalizeRelayScore` definition to `SampleCore`, in a new `Public/Relay/SampleRelayScoreNormalization.h`
+   under the module. Include `Math/UnrealMathUtility.h` and make the function `inline` in `SampleRelay::Contracts`.
+2. Remove both private copies. Include the new header in the scoring and display source files and call
+   `Contracts::NormalizeRelayScore` from both. The existing Gameplay and HUD dependencies already provide access to Core.
+3. Open **Compare matches** on the saved run. Both edited ranges report that the source changed. Rebuild the Editor
+   target, return to the map, and choose **Recheck current settings** in **Check settings** from the same tab.
+4. After the new map arrives, check that Telemetry is still pinned in place. Review no longer lists the matching pair.
+   The Gameplay-to-HUD violation and the legacy findings still have their own evidence.
 
 ## Compare with the Game target
 

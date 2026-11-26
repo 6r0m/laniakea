@@ -63,7 +63,8 @@ calling down first.
 | `LANIAKEA_TEST_CPD=<workspace>/tools/health/cpd` | Real pinned CPD matches/ranges, token identity, scope, corpus edits, reuse and refusal; offline reinstall also runs when the registered JDK compiler is available |
 
 `python tests/record_fixture.py [--engine <engine root>]` regenerates the sample's recorded UBT export when the sample
-changes. Review the tokenized fixture before publishing; analysed-project data never belongs in tracked tests.
+changes. It uses the [sample copy command](../sample/copy_sample.py), so track new sample files before recording.
+Review the tokenized fixture before publishing. Tracked tests use only synthetic project data.
 
 ## Browser acceptance
 

@@ -376,3 +376,29 @@ target. Any later rollback should restore the matched source and fixture togethe
 - Real Editor and Game exports confirmed the target difference, a viewer restart exposed both maps, and the fixture recorder
   reproduced the existing export byte for byte. All 359 Python tests and 232 viewer tests passed. Standalone documentation
   and privacy checks passed with the updated test support imports.
+
+### 2026-11-25 - Expanded sample closeout review
+
+- The expanded topology reached 11 overview stars and 284 visible references. Chrome verified Results hover, wheel
+  navigation to the five Match modules, and search for the native `CloseRound` declaration. The current sample's 71
+  Unreal inputs match the successful Win64 Development Game build byte for byte. The Editor target was rebuilt on
+  a fresh disposable copy for the repair exercise.
+- The copy regression reproduced an untracked header entering the sample. The copy now selects tracked authored
+  paths, retains edits to those files, and refuses redirected source paths. Fixture recording and the public guide
+  share this boundary.
+- The wire regression covers an acknowledged violation and an active candidate on the same projected edge. Chrome
+  verified the amber pulse in both themes, the steady violation badge, and restoration of the red static underlay
+  with reduced motion.
+- On the disposable Editor project, Compare showed the 147-token clone across two 18-line ranges. After moving the
+  normalizer to Core, both panes reported stale source while the original map was displayed. Editor rebuilt, and
+  Recheck published a run with both native calls to the shared rule and no CPD match for the pair. The same browser tab
+  adopted it without reloading and retained Telemetry's saved world position. Review retained the cycle, forbidden
+  dependency, and native-access findings.
+- A Chrome idle probe used the public sample with a synthetic overlay for 251 nodes and 812 rendered edges, including
+  720 marked edges. In two alternating pairs of 3.6 second windows, main-thread task time increased by 19-23 ms with 16 wires
+  pulsing compared with the same scene with wire pulses disabled. No long tasks were observed in those windows.
+  This measures idle paint and scripting on one machine.
+- The refreshed overview shows the thin warning strokes. The overview and Match images were visually inspected
+  for sample-only content and contain no PNG text or EXIF chunks. Operator visual acceptance remains open.
+- All 233 viewer tests passed. The Python discovery run passed 356 cases. The three real-engine tests ran separately
+  and passed, including export parity. The remaining default-heap CPD test passed on its isolated rerun.

@@ -8,6 +8,7 @@ const branchColors = new WeakMap();
 const appearanceMotion = new WeakMap();
 const STAR_PULSE_PERIOD = 4400;
 const WIRE_FOCUS_DWELL = 360;
+const REVIEW_WIRE_LIMIT = 16;
 const REVIEW_WIRE_GLOW = {
   candidate:{idle:0.17,peak:0.29},
   violation:{idle:0.22,peak:0.39},
@@ -167,16 +168,24 @@ function appearanceTargets(cy) {
 }
 
 function reviewWireTargets(cy) {
-  const width=cy.width(),height=cy.height(),wires=[];
+  const width=cy.width(),height=cy.height(),violations=[],candidates=[];
   for(const [id,findings] of state.review?.links||[]){
-    if(![...findings.values()].some(finding=>!finding.acknowledged))continue;
+    let severity;
+    for(const finding of findings.values()){
+      if(finding.acknowledged)continue;
+      severity=finding.severity;
+      if(severity==='violation')break;
+    }
+    if(!severity)continue;
+    const targets=severity==='violation'?violations:candidates;
+    if(targets.length===REVIEW_WIRE_LIMIT)continue;
     const edge=cy.getElementById(state.universe.renderPrefix+id);
     if(!edge.length||!edge.visible())continue;
     const {x1,y1,x2,y2}=edge.renderedBoundingBox({includeLabels:false,includeOverlays:false});
-    if(x2>=0&&x1<=width&&y2>=0&&y1<=height)wires.push(edge);
+    if(x2>=0&&x1<=width&&y2>=0&&y1<=height)targets.push({edge,severity});
+    if(violations.length===REVIEW_WIRE_LIMIT)break;
   }
-  wires.sort((a,b)=>Number(b.hasClass('review-violation'))-Number(a.hasClass('review-violation')));
-  return wires.slice(0,16);
+  return violations.concat(candidates).slice(0,REVIEW_WIRE_LIMIT);
 }
 
 function blendLight(tint,light,amount) {
@@ -290,10 +299,14 @@ function updateWireFlow(cy,motion,now,palette){
 
 function updateAppearanceTargets(cy,motion,stars=[],wires=[]) {
   const palette=starPalette(),zoom=cy.zoom();
-  const nextStars=new Set(stars),nextWires=new Set(wires);
+  const nextStars=new Set(stars),nextWires=new Set(wires.map(({edge})=>edge));
   cy.batch(()=>{
     for(const node of motion.stars)if(!nextStars.has(node))NodeIcons.shine(node,0,zoom,palette);
-    for(const edge of motion.wires)if(!nextWires.has(edge))edge.removeStyle('underlay-opacity');
+    for(const {edge} of motion.wires)if(!nextWires.has(edge))edge.removeStyle('underlay-opacity underlay-color');
+    for(const {edge,severity} of wires){
+      if(edge.hasClass('review-'+severity))edge.removeStyle('underlay-color');
+      else edge.style('underlay-color',palette[severity]);
+    }
   });
   motion.stars=stars;
   motion.wires=wires;
@@ -333,13 +346,13 @@ function syncAppearanceMotion() {
     const zoom=cy.zoom(),{x,y}=cy.pan();
     const viewport=[zoom,x,y,cy.width(),cy.height()];
     const review=state.review?.enabled?state.review.data:null;
-    const view=[...viewport,state.shard,review];
+    const palette=starPalette(),view=[...viewport,state.shard,review,palette];
     if(!motion.view||view.some((value,i)=>value!==motion.view[i])){
       if(motion.view&&(motion.review!==review||viewport.some((value,i)=>value!==motion.view[i])))clearWireFlow(motion);
       updateAppearanceTargets(cy,motion,appearanceTargets(cy),reviewWireTargets(cy));
       motion.view=view;motion.review=review;
     }
-    const now=performance.now(),palette=starPalette(),phase=now/STAR_PULSE_PERIOD*Math.PI*2;
+    const now=performance.now(),phase=now/STAR_PULSE_PERIOD*Math.PI*2;
     const intensity=i=>(1-Math.cos(phase+i*0.71))/2;
     let glowing;
     cy.batch(()=>{
@@ -348,9 +361,9 @@ function syncAppearanceMotion() {
           NodeIcons.shine(node,0.08+0.02*Math.round(41*intensity(i)),zoom,palette);
         }
       });
-      motion.wires.forEach((edge,i)=>{
+      motion.wires.forEach(({edge,severity},i)=>{
         if(edge.removed())return;
-        const {idle,peak}=REVIEW_WIRE_GLOW[edge.hasClass('review-violation')?'violation':'candidate'];
+        const {idle,peak}=REVIEW_WIRE_GLOW[severity];
         edge.style('underlay-opacity',idle+(peak-idle)*intensity(i));
       });
       glowing=updateWireFlow(cy,motion,now,palette);
