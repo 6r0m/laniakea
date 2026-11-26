@@ -45,7 +45,7 @@ async page=>{
     check(!(await page.locator('#details').innerText()).includes('Could not load'),'Region queried an unknown canonical node');
     await page.locator('#details .connections li button').first().click();await settle();
     check(await page.evaluate(()=>Boolean(state.selection&&!$('details').hidden)),'Following a region reference lost its exact record');
-    await page.locator('#view-summary').click();await page.locator('#clear').click();
+    await page.locator('#clear').click();
     await page.evaluate(id=>{state.universe.expanded.delete(id);flyToNode(id,false);},group);await settle();
     for(let step=0;step<30&&!await page.evaluate(id=>state.universe.expanded.has(id),group);step++){
       p=await point(group);await page.mouse.move(p.x,p.y);await page.mouse.wheel(0,-120);await settle();

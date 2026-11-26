@@ -5,20 +5,29 @@ async(page,{change,screenshot=async()=>{}})=>{
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.method()==='POST')writes.push(r.url());if(r.url().includes('/source?'))reads.push(r.url());});
  await page.waitForFunction(()=>state.cy&&state.review?.data&&!state.review.loading);
  if(await page.locator('#analysis').isVisible())await page.locator('#analysis-close').click();
- await page.locator('#toggle-review').click();await page.locator('#review-items [data-finding]').first().click();
+ await page.locator('#toggle-review').click();
+ const duplicate=page.locator('#review-items [data-finding]').first();
+ check(await duplicate.locator('strong').innerText()==='Duplicated code','The finding title is hidden behind module names');
+ await duplicate.click();
  const review=page.locator('#inspector-page-architecture'),compare=review.getByRole('button',{name:'Compare matches',exact:true});
  await compare.first().waitFor({state:'visible'});
  check(await compare.count()===1,'Selected duplication has no direct Compare matches action');
  await review.getByText('Locations 1-50 of 51',{exact:true}).waitFor();
  check(await review.locator('.source-evidence details').count()===0,'Source evidence still uses nested spoilers');
  check(reads.length===0,'Listing finding ranges read source bodies');
+ await review.getByText('Review decision',{exact:true}).click();
  const draft=review.getByLabel('Decision reason (optional)');await draft.fill('Synthetic decision draft');
  const camera=()=>page.evaluate(()=>{const c=state.cy,p=c.pan(),z=worldZoom();return JSON.stringify([
   [(c.width()/2-p.x)/z,(c.height()/2-p.y)/z].map(v=>Math.round(v*1e6)/1e6),z,[...state.universe.expanded],state.selection.id]);});
  const before=await camera(),pins=await page.evaluate(()=>JSON.stringify(state.positionCache.layouts));
+ const graphBefore=await page.locator('#graph').boundingBox();
  await compare.click();
  const view=page.locator('.source-comparison'),panes=view.locator('.source-pane');
  await view.waitFor();await view.locator('.source-code').nth(1).waitFor();
+ const workspace=await page.locator('main').boundingBox(),comparison=await view.boundingBox();
+ check(comparison.width===workspace.width&&comparison.height===workspace.height,'Comparison leaves part of the workspace uncovered');
+ check(JSON.stringify(await page.locator('#graph').boundingBox())===JSON.stringify(graphBefore),'Comparison resized the underlying graph');
+ check(await page.locator('#details').evaluate(n=>n.inert),'Inspector remains interactive beneath comparison');
  check(await panes.count()===2,'Compare does not open two ranges directly');
  await view.getByText('Showing matches 1 and 2 of 51',{exact:true}).waitFor();
  await panes.nth(1).getByRole('button',{name:'Next match',exact:true}).click();
@@ -33,14 +42,17 @@ async(page,{change,screenshot=async()=>{}})=>{
  check(await view.locator('script,textarea,[contenteditable="true"]').count()===0,'Source is executable or editable');
  check(await panes.first().locator('.source-line.matched').count()===20,'Match highlight missing');
  check(await page.locator('#graph').evaluate(n=>n.inert),'Graph is interactive beneath comparison');
+ check(await page.locator('#map-actions').evaluate(n=>n.inert),'Filters and Fit are interactive beneath comparison');
  check(await page.evaluate(()=>liveBlockReason().includes('Comparing')),'Live adoption can replace compared evidence');
  await view.focus();for(const key of ['Backspace','/','Enter','ArrowLeft','+'])await view.press(key);
  check(await camera()===before,'Comparison keys moved the hidden galaxy');
  await panes.nth(1).getByRole('combobox').selectOption('2');await panes.nth(1).locator('.source-code').waitFor();
  check(reads.some(u=>u.endsWith('occurrence=2')),'Changing a range lost its occurrence identity');
- await panes.nth(1).getByRole('button',{name:'Next ranges',exact:true}).click();
+ await panes.nth(1).getByRole('button',{name:'Next ranges',exact:true}).focus();await page.keyboard.press('Enter');
  await panes.nth(1).getByText('51-51 of 51 ranges',{exact:true}).waitFor();
  await panes.nth(1).locator('.source-code').waitFor();
+ check(await panes.nth(1).getByRole('combobox').evaluate(control=>control===document.activeElement),
+   'Keyboard focus was lost across a range page');
  await panes.nth(1).getByRole('button',{name:'Previous match',exact:true}).click();
  await panes.nth(1).getByText('Match 50 of 51',{exact:true}).waitFor();
  await panes.nth(1).locator('.source-code').waitFor();
@@ -73,6 +85,7 @@ async(page,{change,screenshot=async()=>{}})=>{
  check(await compare.evaluate(n=>n===document.activeElement),'Back lost invoking focus');
  check(await draft.inputValue()==='Synthetic decision draft','Comparison replaced triage draft');
  check(!await page.locator('#graph').evaluate(n=>n.inert),'Graph remains inert after Back');
+ check(!await page.locator('#map-actions').evaluate(n=>n.inert),'Map actions remain inert after Back');
  await review.getByRole('button',{name:'Next source ranges',exact:true}).click();
  await review.getByText('Locations 51-51 of 51',{exact:true}).waitFor();
  await compare.click();await view.locator('.source-code').first().waitFor();
@@ -94,9 +107,9 @@ async(page,{change,screenshot=async()=>{}})=>{
  await compare.click();await arrived;await view.getByRole('button',{name:'Back to map',exact:true}).click();release();await page.waitForFunction(()=>!state.review.requests.size);
  check(await view.count()===0,'Late source response reopened comparison');await page.unroute('**/source?*');
  await compare.click();await view.locator('.source-code').nth(1).waitFor();
- await page.locator('#inspector-tab-details').click();check(await view.count()===0,'Changing Inspector tab keeps obsolete comparison');
+ await page.evaluate(()=>state.inspector.select('details'));check(await view.count()===0,'Changing Inspector tab keeps obsolete comparison');
  await page.locator('#inspector-tab-architecture').click();await compare.click();await view.locator('.source-code').nth(1).waitFor();
- await page.getByRole('button',{name:'Close inspector',exact:true}).click();check(await view.count()===0,'Closing Inspector keeps comparison');
+ await page.evaluate(()=>renderDetails(null));check(await view.count()===0,'Closing Inspector keeps comparison');
  check(await page.evaluate(p=>JSON.stringify(state.positionCache.layouts)===p,pins),'Comparison changed saved pins');
  check(writes.length===0,'Comparison wrote state');check(errors.length===0,errors.join('; '));
  return{directComparison:true,noSpoilers:true,twoPanes:true,singlePreview:true,paging:true,readOnly:true,hashDrift:true,

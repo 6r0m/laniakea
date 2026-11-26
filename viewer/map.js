@@ -302,6 +302,7 @@ function refreshMap(cut = null, projection = undefined) {
   state.review?.project();
   readableLabels(state.gestureActive);
   updateScopeSummary();
+  renderBrowse();
   renderFilters();
   // Staging can temporarily omit the inspected target. Revalidate it at the settled camera.
   if (state.selection && !state.flight && !state.wheel?.portal) renderDetails(state.selection,{reopen:false});
@@ -636,7 +637,8 @@ function showTooltip(title, text) {
   const tip = $('map-tooltip');
   if(tip.firstElementChild?.textContent!==title||tip.lastElementChild?.textContent!==text)
     tip.replaceChildren(el('strong', title), el('span', text));
-  tip.hidden = false;
+  tip.tabIndex = 0;
+  renderSelectionActions();
 }
 
 function clearTrace() {
@@ -648,9 +650,11 @@ function clearTrace() {
   if(state.cy)state.cy.elements('.faded,.focus,'+TRACE_SELECTOR).removeClass('faded focus '+TRACE_CLASSES);
   state.trace=null;
   clearWireFlow();
-  $('map-tooltip').hidden=false;
-  $('map-tooltip').textContent=analysisHint(state.universe?.nodes.get(state.scopeShard?.scope))||
-    'Hover a star or connection to trace references in this view.';
+  const tip=$('map-tooltip'),hint=analysisHint(state.universe?.nodes.get(state.scopeShard?.scope));
+  tip.textContent=hint||'';
+  tip.tabIndex=hint?0:-1;
+  renderSelectionActions();
+  if(!hint&&document.activeElement===tip)$('graph').focus({preventScroll:true});
 }
 
 function unfocus(clearReadout = false) {
@@ -940,10 +944,11 @@ function updateScopeSummary() {
     `${internal} within owners/groups${view.outside ? ` / ${view.outside} beyond view` : ''}`+
     (state.universe.configurationCount?` / ${state.universe.configurationCount} project configuration`:'')+
     (view.hidden>state.universe.configurationCount?` / ${view.hidden-state.universe.configurationCount} filtered`:'');
+  $('scope-summary').title=$('scope-summary').textContent;
   renderConfiguration();
   $('arrange-files').hidden=!sourceArrangementOwner();
   $('map-empty').hidden = view.nodes.length > 0;
-  $('map-empty').textContent = 'No stars in this area. Use Fit map to return to the overview.';
+  $('map-empty').textContent = 'No stars in this area. Use Fit overview to return to the overview.';
 }
 
 function worldZoom() { return state.cy.zoom() * (state.renderScale || 1); }
@@ -1089,22 +1094,66 @@ function frameNode(id) {
   if(state.cy)refreshMap();
 }
 
+function layoutProjection(map) {
+  const expanded=map.expanded;
+  map.expanded=new Set([map.root]);
+  try {return map.project();}
+  finally {map.expanded=expanded;}
+}
+
+function nativeLayoutPositions(elements,options) {
+  const temp=cytoscape({headless:true,elements,...(options.name==='cose'?{layout:{name:'preset'}}:{})});
+  try {
+    temp.layout(options).run();
+    return new Map(temp.nodes().map(node=>[node.id(),{...node.position()}]));
+  } finally {temp.destroy();}
+}
+
+function connectionPositions(map,topCount,width,height) {
+  const tooLarge='By connection uses Orbit on larger maps.';
+  if(topCount>64||map.graph.edges.length>20000)return {notice:tooLarge};
+  const view=layoutProjection(map),pairs=new Map();
+  if(view.nodes.length>64)return {notice:tooLarge};
+  for(const {source,target} of view.edges){
+    if(source===target)continue;
+    const key=JSON.stringify([source,target].sort());
+    if(!pairs.has(key))pairs.set(key,{data:{id:map.renderPrefix+key,source,target}});
+    if(pairs.size>256)return {notice:tooLarge};
+  }
+  if(!pairs.size)return {notice:'By connection uses Orbit when there are no connections between stars.'};
+  const nodes=view.nodes.map((node,index)=>{
+    const angle=index*2*Math.PI/view.nodes.length;
+    return {data:{id:node.id},position:{x:65*Math.cos(angle),y:65*Math.sin(angle)}};
+  });
+  const radius=Math.max(320,24*nodes.length);
+  const aspect=Math.max(.75,Math.min(1.6,width/Math.max(height,1)));
+  // CoSE's synchronous path uses the bounding box rather than spacingFactor.
+  const boundingBox={x1:-radius*aspect,y1:-radius,w:2*radius*aspect,h:2*radius};
+  return {positions:nativeLayoutPositions([...nodes,...pairs.values()],{
+    name:'cose',animate:false,fit:false,randomize:false,boundingBox,gravity:0,
+    initialTemp:40,coolingFactor:.97,numIter:96
+  })};
+}
+
 function layout({fit=true}={}) {
   if (!state.cy) return;
   stopCameraMotion();
   const map = state.universe, mode = $('layout').value;
   const top = [...map.childIds(map.root), ...map.childIds(null).filter(id => id !== map.root)];
   const fake = top.map(id => ({id:()=>id,hasClass:()=>!map.nodes.get(id).boundary}));
-  let positions = galaxyPositions(fake, state.cy.width(), state.cy.height(),mode==='galaxy'?map.overview?.anchor:null);
-  if (mode !== 'auto' && mode !== 'galaxy') {
-    const expanded = map.expanded;
-    map.expanded = new Set([map.root]);
-    const rootView = map.project();
-    map.expanded = expanded;
-    const temp = cytoscape({headless:true,elements:[...rootView.nodes.map(n=>({data:{id:n.id}})),
-      ...rootView.edges.map(e=>({data:{id:map.renderPrefix+e.id,source:e.source,target:e.target}}))]});
-    temp.layout({name:mode,animate:false,randomize:false,spacingFactor:5}).run();
-    positions = new Map(temp.nodes().map(n=>[n.id(),{...n.position()}])); temp.destroy();
+  const width=state.cy.width(),height=state.cy.height();
+  const anchor=mode==='galaxy'||mode==='cose'?map.overview?.anchor:null;
+  let positions=galaxyPositions(fake,width,height,anchor);
+  state.connectionLayoutNotice='';
+  if(mode==='cose'){
+    const arrangement=connectionPositions(map,top.length,width,height);
+    positions=arrangement.positions||positions;
+    state.connectionLayoutNotice=arrangement.notice||'';
+  } else if (mode!=='auto'&&mode!=='galaxy') {
+    const rootView=layoutProjection(map);
+    positions=nativeLayoutPositions([...rootView.nodes.map(n=>({data:{id:n.id}})),
+      ...rootView.edges.map(e=>({data:{id:map.renderPrefix+e.id,source:e.source,target:e.target}}))],
+      {name:mode,animate:false,randomize:false,spacingFactor:5});
   }
   map.place(state.positionCache.layouts, mode, positions);
   state.cy.maxZoom(map.zoomLimit);

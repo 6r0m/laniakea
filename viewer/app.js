@@ -5,6 +5,7 @@
 const state = { targets: [], target: null, manifest: null, shard: null, file: null, cy: null,
   hidden: new Set(), boundary: true, configuration: {}, navigation: 0, selection: null };
 const $ = (id) => document.getElementById(id);
+const mapPanels = ['browse', 'filters'];
 
 function el(tag, text, attrs) {
   const node = document.createElement(tag);
@@ -48,24 +49,34 @@ async function start() {
   if (!state.targets.length) {
     $('graph').append(el('p', 'No saved map yet. Run: python laniakea.py build <path to .uproject>, then python laniakea.py up', { class: 'empty' }));
     for (const id of ['target', 'layout', 'find', 'inspect-project']) $(id).disabled = true;
-    document.querySelector('.scope-bar').hidden = true;
+    for(const id of ['workspace-status','map-navigation','map-context','input-change-status','coverage-details'])$(id).hidden=true;
     $('coverage').textContent = 'No analysis loaded';
     return;
   }
   const select = $('target');
   state.review = new ArchitectureReview();
   state.analysis = new AnalysisControls();
-  for (const target of state.targets) select.add(new Option(`${target.project} (${target.id})`, target.id));
+  for (const target of state.targets) {
+    const sharedName=state.targets.some(other=>other!==target&&other.project===target.project);
+    select.add(new Option(sharedName?`${target.project} (${target.id})`:target.project,target.id));
+  }
   select.onchange = () => show(select.value, null, 'push');
   const saved = recall('layout');
-  $('layout').value = [...$('layout').options].some(option => option.value === saved) ? saved : 'auto';
-  $('layout').onchange = () => { remember('layout', $('layout').value); layout(); };
-  for (const name of ['filters', 'details']) {
+  $('layout').value = saved || '';
+  $('layout-orbit').onclick = () => chooseLayout(orbitLayout());
+  $('layout-connections').onclick = () => chooseLayout('cose');
+  for (const name of mapPanels) {
+    const close = $(`${name}-close`);
+    close.onclick = () => togglePanel(name, false);
     $(`toggle-${name}`).onclick = () => {
-      if(name==='details'&&!$('details').hidden){cancelNavigationFlight();renderDetails(null);}
-      else togglePanel(name);
+      togglePanel(name);
+      if(!$(name).hidden)close.focus({preventScroll:true});
     };
   }
+  $('toggle-details').onclick = () => {
+    togglePanel('details',true);
+    $('details').querySelector('.details-close')?.focus({preventScroll:true});
+  };
   $('fit').onclick = fitOverview;
   $('inspect-project').onclick = () => {
     cancelNavigationFlight();
@@ -73,7 +84,7 @@ async function start() {
   };
   $('reset-layout').onclick = resetPositions;
   $('arrange-files').onclick = arrangeSourceFiles;
-  $('toggle-configuration').onclick = () => { setConfiguration(!configurationVisible()); applyFilters(); };
+  $('toggle-configuration').onchange = event => { setConfiguration(event.target.checked); applyFilters(); };
   $('clear').onclick = () => { const cancelled=cancelNavigationFlight(); unfocus(true); renderDetails(null);
     if(cancelled)refreshMap(); };
   $('up').onclick = up;
@@ -97,14 +108,14 @@ async function start() {
     if (state.target && r.target === state.target.id && r.file === state.file) restoreView(history.state && history.state.scene);
   });
   window.addEventListener('beforeunload', event => {
-    if (unsavedPositionCaches.size||state.review?.saving||liveBlockReason().includes('decision')) {
+    if (unsavedPositionCaches.size||state.review?.saving||state.review?.hasInspectionDraft()||liveBlockReason().includes('decision')) {
       event.preventDefault();
       event.returnValue = '';
     }
   });
   new ResizeObserver(resizeMap).observe($('graph'));
   window.addEventListener('resize',()=>{
-    if(innerWidth<=1000&&!$('details').hidden){state.review.panel(false);togglePanel('filters',false);}
+    if(innerWidth<=1000&&!$('details').hidden){state.review.panel(false);closeMapPanels();}
   });
   $('graph').addEventListener('wheel', zoomWithWheel, {capture:true,passive:false});
   $('graph').addEventListener('mousedown',grabConstellationLabel,{capture:true});
@@ -127,16 +138,21 @@ async function start() {
   const id = known(state.targets.some(target => target.id === wanted.target) ? wanted.target : state.startup.target);
   await show(id, wanted.target === id ? wanted.file : null, 'replace');
   state.live=new LiveUpdates();state.live.start();
-  const positionView=()=>{if($('view-controls').open){
+  const positionView=()=>{
     const box=$('view-summary').getBoundingClientRect(),style=$('view-controls').style;
+    renderViewOptions();
     style.setProperty('--view-top',(box.bottom+8)+'px');
     style.setProperty('--view-left',Math.max(12,Math.min(box.left,innerWidth-292))+'px');
-  }};
-  $('view-controls').addEventListener('toggle',positionView);window.addEventListener('resize',positionView);
+  };
+  $('view-summary').addEventListener('click',()=>{if(!$('view-controls').open)positionView();});
+  window.addEventListener('resize',()=>{if($('view-controls').open)positionView();});
   document.querySelector('.view-options').addEventListener('click',event=>{
     if(event.target.closest('button')){$('view-controls').open=false;$('view-summary').focus();}
   });
-  document.addEventListener('pointerdown',event=>{if(!event.target.closest('#view-controls'))$('view-controls').open=false;});
+  document.addEventListener('pointerdown',event=>{
+    if(!event.target.closest('#view-controls'))$('view-controls').open=false;
+    if(!event.target.closest('#type-key'))$('type-key').open=false;
+  });
   document.addEventListener('visibilitychange',()=>{
     syncAppearanceMotion();
     state.live.tick();
@@ -216,11 +232,13 @@ async function show(id, file, mode) {
     Object.assign(state, { target, manifest, shard, scopeShard: shard, universe, file: wanted,
       elsewhere: null, selection: null, positionCache, index, referencePages,
       indexLookup:new Map(index.nodes.map(n=>[n.id,n])) });
+    if(!$('layout').value)$('layout').value=orbitLayout();
     if(changed)state.review?.reset(target);
     universe.reveal(shard.scope);
     if (shard.scope !== universe.root && universe.isGroup(shard.scope)) universe.expanded.add(shard.scope);
     remember('target', id);
     $('target').value = id;
+    $('target').title = $('target').selectedOptions[0]?.textContent || target.project;
     $('error').hidden = true;
     $('find').value = '';
     $('find-hint').textContent = '';
@@ -229,6 +247,7 @@ async function show(id, file, mode) {
     if (mode !== 'push' && location.hash !== hash) history.replaceState(null, '', hash);
     document.title = `${shard.title} - Laniakea`;
     renderBanner();
+    renderBuildContext();
     renderCoverage();
     renderCrumbs();
     if (fresh) renderGraph();
@@ -255,16 +274,36 @@ function reportError(error) {
 }
 
 function togglePanel(name, open = $(name).hidden) {
-  $(name).hidden = !open;
-  $(`toggle-${name}`).setAttribute('aria-expanded', String(open));
-  if (open && innerWidth <= 1000) {
-    const other = name === 'details' ? 'filters' : 'details';
-    $(other).hidden = true;
-    $(`toggle-${other}`).setAttribute('aria-expanded', 'false');
-    if(name==='details')state.review?.panel(false);
+  const panel=$(name),returnFocus=!open&&panel.contains(document.activeElement);
+  panel.hidden = !open;
+  if(name==='details')renderSelectionActions();
+  else $(`toggle-${name}`).setAttribute('aria-expanded', String(open));
+  if(returnFocus)$(name==='details'?'view-summary':`toggle-${name}`).focus({preventScroll:true});
+  if (!open) return;
+  if (name === 'details') {
+    if (innerWidth <= 1000) {
+      closeMapPanels();
+      state.review?.panel(false);
+      state.analysis?.panel(false);
+    }
+  } else {
+    closeMapPanels(name);
+    if(innerWidth<=1000)togglePanel('details',false);
+    state.review?.panel(false);
+    state.analysis?.panel(false);
   }
-  if(open&&name==='filters'){state.review?.panel(false);state.analysis?.panel(false);}
-  if(open&&name==='details'&&innerWidth<=1000)state.analysis?.panel(false);
+}
+
+function closeMapPanels(except) {
+  for(const name of mapPanels)if(name!==except)togglePanel(name,false);
+}
+
+function renderSelectionActions() {
+  $('toggle-details').hidden=!state.selection||!$('details').hidden;
+  const clear=$('clear');
+  const focused=document.activeElement===clear;
+  clear.hidden=!(state.selection||$('map-tooltip').firstElementChild);
+  if(clear.hidden&&focused)$('graph').focus({preventScroll:true});
 }
 
 function openScope(file) { return show(state.target.id, file, 'push'); }
@@ -290,14 +329,26 @@ function onKey(event) {
     return;
   }
   const typing = event.target.closest && event.target.closest('input, select, textarea');
-  if(event.key==='Escape'&&$('view-controls').open){$('view-controls').open=false;$('view-summary').focus();return;}
+  if(event.key==='Escape'){
+    if(state.analysis?.dismissCheckHelp?.()){event.preventDefault();return;}
+    const disclosure=['view-controls','type-key'].map($).find(item=>item.open)||
+      event.target.closest?.('#coverage-details[open], .crumb-ancestors[open]');
+    if(disclosure){disclosure.open=false;disclosure.querySelector('summary').focus();return;}
+  }
+  if(event.key==='Escape'){
+    const panel=mapPanels.find(name=>$(name).contains(event.target));
+    if(panel){togglePanel(panel,false);return;}
+  }
+  if(event.key==='Escape'&&$('review').contains(event.target)){state.review.panel(false);return;}
   if(event.key==='Escape'&&!$('analysis').hidden&&!$('details').contains(event.target)){
     state.analysis?.panel(false);$('toggle-analysis').focus();return;
   }
   if (typing || event.altKey || event.ctrlKey || event.metaKey) return;
   if (event.key === 'Backspace') { event.preventDefault(); up(); }
   if (event.key === '/') { event.preventDefault(); $('find').focus(); }
-  if (event.key === 'Escape') { const cancelled=cancelNavigationFlight(); $('type-key').open=false;unfocus(true); renderDetails(null);
+  if (event.key === 'Escape') { const cancelled=cancelNavigationFlight(),insideInspector=$('details').contains(event.target);
+    unfocus(true);renderDetails(null);
+    if(insideInspector)$('view-summary').focus();
     if(cancelled)refreshMap(); }
   if (event.target === $('graph') && state.cy && ['+', '=', '-'].includes(event.key)) {
     event.preventDefault();
@@ -345,12 +396,14 @@ function renderCrumbs() {
   crumbs.replaceChildren();
   const append=(container,parent)=>{
     const level = parent.id?state.universe.nodes.get(parent.id)?.level:(state.index.nodes.find(n => n.file === parent.file) || {}).level;
-    const link = el('a', null, { href: hashFor(state.target.id, parent.file), title: `Open ${parent.title}` });
-    link.append(el('span',parent.title,{class:'crumb-name'}));
+    const root=parent.file===state.manifest.entry;
+    const label=root?'Overview':parent.title;
+    const link = el('a', null, { href: hashFor(state.target.id, parent.file), title: `Open ${label}` });
+    link.append(el('span',label,{class:'crumb-name'}));
     if(parent.id&&state.universe.nodes.get(parent.id)?.attrs?.presentation_group)link.onclick=event=>{
       if(!event.ctrlKey&&!event.metaKey&&!event.shiftKey&&!event.altKey){event.preventDefault();flyToNode(parent.id,false);}
     };
-    if (level) link.append(el('small', level));
+    if (level&&!root) link.append(el('small', level));
     container.append(link);
   };
   let parents=state.shard.parents;
@@ -363,66 +416,63 @@ function renderCrumbs() {
   for (const parent of parents) {
     append(crumbs,parent);crumbs.append(el('span', '/', { 'aria-hidden': 'true' }));
   }
-  const current = el('strong', null, { 'aria-current': 'page',title:state.shard.title });
-  current.append(el('span',state.shard.title,{class:'crumb-name'}));
+  const root=state.shard.scope===state.universe.root,title=root?'Overview':state.shard.title;
+  const current = el('strong', null, { 'aria-current': 'page',title });
+  current.append(el('span',title,{class:'crumb-name'}));
   const scope = state.index.nodes.find(n => n.id === state.shard.scope);
-  if (scope) current.append(el('small', scope.level));
+  if (scope&&!root) current.append(el('small', scope.level));
   crumbs.append(current);
-  $('up').disabled = !state.shard.parents.length;
+  const upButton=$('up'),atTop=!state.shard.parents.length;
+  if(atTop&&document.activeElement===upButton){
+    current.tabIndex=-1;
+    current.focus({preventScroll:true});
+  }
+  upButton.hidden=upButton.disabled=atTop;
+}
+
+function renderBrowse() {
+  const list = $('browse-list');
+  const focused = list.contains(document.activeElement) && document.activeElement.dataset.node;
+  const members = new Set(state.shard.members);
+  const rows = document.createDocumentFragment();
+  let active;
+  for (const node of state.shard.nodes) {
+    if(!members.has(node.id))continue;
+    const button = el('button', node.label, { type: 'button', 'data-node': node.id });
+    button.append(el('small', nodeDescription(node)));
+    button.onclick = () => { cancelNavigationFlight(); selectNode(node.id); };
+    rows.append(button);
+    if(node.id===focused)active=button;
+  }
+  if(!rows.firstChild)rows.append(el('p', 'This scope has no stars or constellations.', {class:'muted'}));
+  list.replaceChildren(rows);
+  if(focused)(active||$('browse-close')).focus({preventScroll:true});
 }
 
 function renderFilters() {
-  const panel = $('filters');
-  const focused = [...panel.querySelectorAll('input')].indexOf(document.activeElement);
-  panel.replaceChildren(el('h2', 'Visible stars & constellations'));
-  const members = el('div', null, { class: 'node-list' });
-  for (const node of state.shard.nodes.filter(n => state.shard.members.includes(n.id))) {
-    const button = el('button', node.label, { type: 'button', title: `Trace ${node.label}`, 'data-node': node.id });
-    button.append(el('small', nodeDescription(node)));
-    button.onclick = () => { cancelNavigationFlight(); selectNode(node.id); };
-    members.append(button);
-  }
-  panel.append(members, el('h2', 'Connections'));
+  const options = $('filter-options');
+  const focused = options.contains(document.activeElement) && document.activeElement.id;
+  const controls = [el('h3', 'Connections')];
   const present = state.universe.typeCounts;
   for (const type of state.manifest.edge_types) {
     if (!present.has(type.id)) continue;
     const count = present.get(type.id);
-    const box = el('input', null, { type: 'checkbox' });
+    const box = el('input', null, { type: 'checkbox', id:`filter-type-${type.id}` });
     box.checked = !state.hidden.has(type.id);
-    box.disabled = !present.has(type.id);
     box.onchange = () => { box.checked ? state.hidden.delete(type.id) : state.hidden.add(type.id); applyFilters(); };
     const label = el('label', null, { class: 'filter', title: `${type.status}` });
     label.append(box, el('span', `${type.label} (${count})`));
-    panel.append(label);
+    controls.push(label);
   }
-  panel.append(el('h2', 'Nodes'));
-  const boundary = el('input', null, { type: 'checkbox' });
+  if(controls.length===1)controls.push(el('p','No recorded connection types.', {class:'muted'}));
+  controls.push(el('h3', 'Nodes'));
+  const boundary = el('input', null, { type: 'checkbox', id:'filter-boundary' });
   boundary.checked = state.boundary;
   boundary.onchange = () => { state.boundary = boundary.checked; applyFilters(); };
   const label = el('label', null, { class: 'filter' });
   label.append(boundary, el('span', 'outside the project (boundary)'));
-  panel.append(label, el('h2', 'Keys'));
-  const keys = el('dl', null, { class: 'keys' });
-  attributes(keys, {
-    'hover': 'emphasize direct connections',
-    'wheel': 'reveal or fold constellations around the pointer',
-    'drag space': 'fly through the map, including inside open constellations',
-    'drag a star or name': 'arrange it; an open constellation moves by its name',
-    'click': 'inspect a star or connection',
-    '/': 'find any recorded node; Enter flies to it',
-    'double-click, Enter': 'expand or collapse a constellation',
-    '+, -': 'zoom when the map has focus',
-    'arrow keys': 'browse stars when the map has focus',
-    'Backspace, Up': 'one level up',
-    'Alt+Left': 'back, as in any page',
-    'Esc': 'clear the highlight',
-    'connection': 'references; hover for direction, type and count',
-    'dashed star': 'outside the analysed target',
-    'source box': 'recorded source grouping; compiler ownership is unchanged',
-    'diamond': 'outside the project',
-  });
-  panel.append(keys);
-  if (focused >= 0) panel.querySelectorAll('input')[focused]?.focus({preventScroll:true});
+  options.replaceChildren(...controls,label);
+  if(focused)($(focused)||$('filters-close')).focus({preventScroll:true});
 }
 
 function configurationVisible() {
@@ -434,15 +484,49 @@ function setConfiguration(visible) {
   state.configuration[$('layout').value] = visible;
 }
 
+function orbitLayout() {
+  const layouts=state.positionCache.layouts;
+  if(Object.keys(layouts.galaxy||{}).length)return 'galaxy';
+  if(Object.keys(layouts.auto||{}).length)return 'auto';
+  return state.universe.overview?.anchor?'galaxy':'auto';
+}
+
+function chooseLayout(mode) {
+  const select=$('layout');
+  if(select.value===mode)return;
+  select.value=mode;
+  remember('layout',mode);
+  layout();
+}
+
+function renderViewOptions() {
+  const select=$('layout'),mode=select.value,orbit=orbitLayout();
+  $('layout-orbit').setAttribute('aria-pressed',String(mode===orbit));
+  $('layout-connections').setAttribute('aria-pressed',String(mode==='cose'));
+  const saved=$('saved-layouts'),options=$('saved-layout-options'),rows=[];
+  const current=select.selectedOptions[0];
+  $('saved-layout-current').textContent=mode!==orbit&&mode!=='cose'?`: ${current.textContent}`:'';
+  for(const option of select.options){
+    if(option.value===orbit||option.value==='cose')continue;
+    if(option.value!==mode&&!Object.keys(state.positionCache.layouts[option.value]||{}).length)continue;
+    const button=el('button',option.textContent,{type:'button','aria-pressed':String(option.value===mode)});
+    button.onclick=()=>chooseLayout(option.value);
+    rows.push(button);
+  }
+  saved.hidden=!rows.length;
+  options.replaceChildren(...rows);
+}
+
 function renderConfiguration() {
   const count=state.universe.configurationCount,button=$('toggle-configuration');
-  button.hidden=!count;
-  button.textContent=`Config marks ${configurationVisible()?'on':'off'} (${state.universe.configurationTargets.size} targets)`;
-  button.setAttribute('aria-pressed',String(configurationVisible()));
-  button.title=`${configurationVisible()?'Hide':'Show'} outlines for explicitly listed targets; configuration references stay in Project details`;
+  $('configuration-option').hidden=!count;
+  button.checked=configurationVisible();
   $('configuration-legend').hidden=!count||!configurationVisible();
-  $('layout-hint').hidden=$('layout').value!=='galaxy'||Boolean(state.universe.overview);
-  $('layout-hint').textContent='No center hint in this run; using orbits. Extract again to get profile presentation hints.';
+  const mode=$('layout').value,hint=$('layout-hint');
+  const message=mode==='cose'?state.connectionLayoutNotice:mode==='galaxy'&&!state.universe.overview?
+    'No center hint in this run; using orbits. Extract again to get profile presentation hints.':'';
+  hint.hidden=!message;
+  hint.textContent=hint.title=message||'';
 }
 
 function findHits() {
@@ -609,8 +693,8 @@ function renderDetails(item,{reopen=true}={}) {
   if (!item) {
     togglePanel('details', false);
     const close=el('button','\u00d7',{type:'button',class:'details-close','aria-label':'Close inspector',title:'Close inspector (Esc)'});
-    close.onclick=()=>{cancelNavigationFlight();renderDetails(null);$('toggle-details').focus();};
-    const header=el('div',null,{class:'inspector-header'});header.append(el('h2','Inspector'),close);
+    close.onclick=()=>{cancelNavigationFlight();renderDetails(null);$('view-summary').focus();};
+    const header=el('div',null,{class:'panel-heading inspector-header'});header.append(el('h2','Inspector'),close);
     panel.append(header,el('p', 'Hover to trace. Click a star or connection to inspect it.',{class:'inspector-page'}));
     return;
   }
@@ -619,8 +703,9 @@ function renderDetails(item,{reopen=true}={}) {
     item.pairInspection?'Connections in this view':typeLabel(item.type,item.refs));
   let detailsLoaded=false;
   state.inspector=new InspectorTabs(panel,el,{title,
+    subtitle:item.level!==undefined?nodeDescription(item):undefined,
     tabs:[{id:'architecture',label:'Review'},{id:'details',label:'Details'}],
-    onClose:()=>{cancelNavigationFlight();renderDetails(null);$('toggle-details').focus();},
+    onClose:()=>{cancelNavigationFlight();renderDetails(null);$('view-summary').focus();},
     onSelect:name=>{
       if(name!=='architecture')state.review?.closeComparison?.();
       if(name==='details'&&!detailsLoaded){detailsLoaded=true;
@@ -642,13 +727,23 @@ function renderSelectionDetails(panel,item,projectContext,configurationInspectio
   if(item.pairInspection) { renderPairDetails(panel,item);return; }
   const list = el('dl');
   if (item.level !== undefined) {
-    panel.append(el('p', nodeDescription(item), {class:'muted'}));
     const context=DeclarationContext.describe(item,state.universe);
     if(context.path)panel.append(el('p',context.path,{class:'declaration-owner'}));
     if(context.signature)panel.append(el('code',context.signature,{class:'declaration-signature'}));
+    const actions=el('div',null,{class:'inspection-actions','aria-label':'Selection actions',role:'group'});
+    const source=item.source&&sourceLink(item.source);
+    if(source){source.title=source.textContent;source.textContent='Open source';actions.append(source);}
+    if ((state.universe.isGroup(item.id)||state.universe.navigationTarget(item.id)) && !item.attrs?.source_region && item.id !== state.universe.root) {
+      const button = el('button', null, {type:'button','data-action':'toggle-group'});
+      updateGroupControl(button, item.id);
+      button.onclick = () => toggleGroup(item.id);
+      actions.append(button);
+    }
+    const fly = el('button', 'Fly to star', {type:'button'});
+    fly.onclick = () => flyToNode(item.id);actions.append(fly);panel.append(actions);
     for(const note of context.context)panel.append(el('p',note,{class:'muted declaration-context'}));
     const hint=analysisHint(item);if(hint)panel.append(el('p',hint,{class:'muted'}));
-    attributes(list, {status:item.status, parent:item.parent ? label(item.parent) : 'root'});
+    attributes(list, {status:item.status,...(!context.path?{parent:item.parent?label(item.parent):'root'}:{})});
     if (item.boundary) panel.append(el('p', 'Only recorded references are shown. Further external dependencies were not analysed.', {class:'muted'}));
     if (item.source) {
       const link = sourceLink(item.source);
@@ -659,15 +754,8 @@ function renderSelectionDetails(panel,item,projectContext,configurationInspectio
     attributes(list, Object.fromEntries(entries.filter(isAnalysis)));
     panel.append(list);
     if(item.attrs?.source_file)renderFileSymbols(panel,item);
-    if ((state.universe.isGroup(item.id)||state.universe.navigationTarget(item.id)) && !item.attrs?.source_region && item.id !== state.universe.root) {
-      const button = el('button', null, {type:'button','data-action':'toggle-group'});
-      updateGroupControl(button, item.id);
-      button.onclick = () => toggleGroup(item.id);
-      panel.append(button);
-    }
-    const fly = el('button', 'Fly to star', {type:'button'});
-    fly.onclick = () => flyToNode(item.id);
-    panel.append(fly);
+    panel.append(el('h3','Relationships',{class:'inspection-section-title'}));
+    renderConnections(panel, item);
     const primary=new Set(['signature','type_signature','qualified','declaration','definition_location','declaration_kind',
       'access','static','virtual','const','member_counts','declaration_origin','source_partition','source_sections',
       'presentation_group','source_owner','source_context','source_file','source_private','source_region',
@@ -677,7 +765,6 @@ function renderSelectionDetails(panel,item,projectContext,configurationInspectio
       const metadata = el('details', null, {class:'node-metadata'}), fields = el('dl');
       attributes(fields, secondary); metadata.append(el('summary', 'Metadata'), fields); panel.append(metadata);
     }
-    renderConnections(panel, item);
     return;
   }
   if(configurationInspection)panel.append(el('p','Project configuration declaration; shown as context, not an architecture wire.',{class:'muted'}));
@@ -689,6 +776,7 @@ function renderSelectionDetails(panel,item,projectContext,configurationInspectio
     endpoints.append(button);
   }
   panel.append(endpoints);
+  panel.append(el('h3','Recorded references',{class:'inspection-section-title'}));
   if (item.status==='derived') panel.append(el('p','References of descendants, grouped for this view. The rows name the original owners.',{class:'muted'}));
   if (state.universe.paged && !item.referenceGroup) {
     appendReferencePage(panel,{groups:item.refs.map(r=>r.group)},referenceTotal(item.refs));
@@ -953,19 +1041,21 @@ function label(id) {
   return node ? node.label : id;
 }
 
+function renderBuildContext() {
+  const {name,platform,configuration}=state.manifest.target;
+  const context=`${name} \u00b7 ${platform} ${configuration}`;
+  $('build-context').textContent=context;
+  $('build-context').title=context;
+}
+
 function renderCoverage() {
   const m = state.manifest;
-  const footer = $('coverage');
-  const freshness = state.target.freshness === 'unknown' ? ' / freshness not checked' : '';
-  footer.replaceChildren(el('span', `${m.project} / ${m.target.name} / ${m.target.platform} ${m.target.configuration}${freshness}`));
-  const coverage = el('details');
-  coverage.append(el('summary', `Analysis coverage / ${m.coverage.not_analysed.length} limitations`),
-    el('p', `Run ${m.run} / ${m.tool.name} ${m.tool.version}`));
+  const count=m.coverage.not_analysed.length;
+  $('coverage-summary').textContent=`Coverage \u00b7 ${count} limitation${count===1?'':'s'}`;
   const missing = el('ul');
   for (const line of m.coverage.analysed) missing.append(el('li', `Analysed: ${line}`));
   for (const line of m.coverage.not_analysed) missing.append(el('li', `not analysed: ${line}`));
-  coverage.append(missing);
-  footer.append(coverage);
+  $('coverage-record').replaceChildren(el('p', `Run ${m.run} / ${m.tool.name} ${m.tool.version}`),missing);
 }
 
 start().catch((error) => {

@@ -24,6 +24,7 @@ async page=>{
   await review.getByRole('button',{name:'Accept risk',exact:true}).click();
   await page.waitForFunction(()=>state.review.data.counts.candidate===0&&state.review.data.counts.acknowledged===1);
   check(await page.evaluate(()=>state.cy.edges('.review-candidate,.review-violation').length===0),'Source observation created warning wires');
+  await page.locator('#review-settings > summary').click();
   await page.locator('#review-ack').check();
   await page.locator('#review-items button[data-finding]').click();
   await review.getByRole('button',{name:'Reopen',exact:true}).click();

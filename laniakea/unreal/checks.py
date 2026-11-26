@@ -9,6 +9,22 @@ from ..workspace import read_json,write_json
 from . import builds,tools,source_health
 
 
+CHECK_HELP = {
+    'foundation': {
+        'why': 'See what depends on what. Review can flag forbidden dependencies and module cycles.',
+        'method': "Laniakea reads Unreal Build Tool's evaluated module rules for the selected target and uses plugin descriptors for project context.",
+    },
+    'native': {
+        'why': 'Follow a call or type to its source. Review can flag calls with no recorded module-access path.',
+        'method': 'Clang indexes C++ with the selected build context. Laniakea looks for a supporting module-access path for calls between modules.',
+    },
+    'duplication': {
+        'why': 'Find copies of code that might need the same fix.',
+        'method': 'PMD CPD compares exact sequences of C++ tokens in project source and records the line ranges when a match meets the length threshold.',
+    },
+}
+
+
 def modes(recipe):
     return dict(recipe.get('checks') or {'native':'on' if recipe['symbols'] else 'off',
                 'duplication':{'required':'on','auto':'auto','off':'off'}[recipe['health']['mode']]})
@@ -28,6 +44,7 @@ def rows(manifest,recipe):
     acquired=manifest['coverage'].get('acquisition',{})
     result=[{'id':'foundation','label':'Module architecture','optional':False,'status':'completed','code':'recorded',
              'description':'The map foundation: modules, plugins and declared build dependencies.',
+             'help':CHECK_HELP['foundation'].copy(),
              'detail':'Always collected for the selected build context.'}]
     for key,label,description,setup in [
         ('native','C++ usage and references','Records classes, functions and static calls. Does not prove runtime behavior.',
@@ -46,6 +63,7 @@ def rows(manifest,recipe):
             'partial_corpus':'Incomplete: the analyzer did not process the whole requested corpus. Inspect diagnostics before retrying.',
         }.get(outcome.get('code')) if key=='duplication' else None
         result.append({'id':key,'label':label,'optional':True,'mode':choices[key],'description':description,
+                       'help':CHECK_HELP[key].copy(),
                        'setup':setup,'status':status,'code':outcome.get('code','not_recorded'),
                        'detail': 'Recorded in this snapshot.' if status=='completed' else
                            'Off in the saved settings.' if status=='disabled' else reason or 'Not recorded in the displayed map.'})

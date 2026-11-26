@@ -80,10 +80,13 @@ class PositionCache {
   status() {
     if (state.positionCache !== this) return;
     const mode = $('layout').value;
+    const hasPins = Object.keys(this.layouts[mode] || {}).length > 0;
+    $('reset-layout').hidden = !hasPins;
     const failed = [...this.errors].some(key => key.startsWith(`${mode}/`));
     const status = $('position-status');
     status.textContent = this.pending ? 'Saving positions...' : failed ? 'Positions not saved. Drag again or reset to retry.' :
-      Object.keys(this.layouts[mode] || {}).length ? 'Positions saved' : 'Drag stars to arrange';
+      hasPins ? 'Positions saved' : '';
+    status.setAttribute('data-failed',String(failed));
     status.title = failed ? this.lastError : '';
   }
 }
@@ -104,8 +107,9 @@ async function resetPositions() {
   const cache = state.positionCache, cy = state.cy, mode = $('layout').value;
   if (!cache || !cy) return;
   const count = Object.keys(cache.layouts[mode] || {}).length;
+  if(!count)return;
   const name = $('layout').selectedOptions?.[0]?.textContent || mode;
-  if (count && !confirm(`Reset ${count} saved position${count === 1 ? '' : 's'} for ${state.target.project} (${name})?`)) return;
+  if (!confirm(`Reset ${count} saved position${count === 1 ? '' : 's'} for ${state.target.project} (${name})?`)) return;
   $('reset-layout').disabled = true;
   cy.autoungrabify(true);
   try {

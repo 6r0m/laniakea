@@ -2,8 +2,12 @@
 // A monitored Sample target, with controllable owned-work timing supplied by the harness.
 async (page,{hold=async()=>{},guidance=false,activity=false,screenshot=async()=>{}}={})=>{
   const check=(value,message)=>{if(!value)throw Error(message);};
-  const settings=async(p=page)=>{if(!await p.locator('#analysis-settings').evaluate(node=>node.open))
-    await p.locator('#analysis-settings > summary').click();};
+  const settings=async(p=page)=>{
+    for(const id of ['native','duplication']){
+      const row=p.locator(`[data-check="${id}"]`);
+      if(!await row.evaluate(node=>node.open))await row.locator(':scope > summary').click();
+    }
+  };
   if(guidance||activity){
     const browser=page.context().browser(),url=page.url(),errors=[];
     const settle=async p=>{await p.waitForFunction(()=>!state.flight);await p.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));};
@@ -41,6 +45,7 @@ async (page,{hold=async()=>{},guidance=false,activity=false,screenshot=async()=>
           await p.locator('header h1').click();await p.evaluate(()=>state.live.tick());
           await p.waitForFunction(()=>!$('analysis').hidden);
           await p.locator('#analysis-explore').click();
+          check(await p.evaluate(()=>document.activeElement===$('graph')),'Back to map did not return graph focus');
           await p.locator('#toggle-analysis').click();
           check(await p.locator('#analysis').isVisible(),'Graph focus blocked explicit Checks');
         }else {
@@ -53,7 +58,9 @@ async (page,{hold=async()=>{},guidance=false,activity=false,screenshot=async()=>
         check(controls===0,`${mode} started analysis without an explicit request`);
       }finally{release();await context.close();}
     }
-    for(const width of (activity?[]:[1440,390]))for(const panel of ['review','details','filters','view']){
+    const readingPanels=['review','details','browse','filters','view'];
+    const readingWidths=activity?[]:[1440,390];
+    for(const width of readingWidths)for(const panel of readingPanels){
       const context=await browser.newContext({viewport:{width,height:900}}),p=await context.newPage();
       p.on('pageerror',e=>errors.push(e.message));
       let release;const gate=new Promise(r=>release=r);let controls=0;
@@ -62,9 +69,11 @@ async (page,{hold=async()=>{},guidance=false,activity=false,screenshot=async()=>
       try{
         await p.goto(url);await p.waitForFunction(()=>typeof state!=='undefined'&&state.cy&&state.analysis);
         await p.waitForFunction(()=>!liveBlockReason());
-        if(panel==='review'){await p.locator('#toggle-review').click();await p.locator('#review-ack').focus();}
+        if(panel==='review'){await p.locator('#toggle-review').click();await p.locator('#review-settings > summary').click();
+          await p.locator('#review-ack').focus();}
         if(panel==='details'){await p.locator('#inspect-project').click();await p.locator('.details-close').focus();}
-        if(panel==='filters'){await p.locator('#view-summary').click();await p.locator('#toggle-filters').click();
+        if(panel==='browse')await p.locator('#toggle-browse').click();
+        if(panel==='filters'){await p.locator('#toggle-filters').click();
           await p.locator('#filters input').first().focus();}
         if(panel==='view'){await p.locator('#view-summary').click();await p.locator('#fit').focus();}
         const selector=panel==='view'?'#view-controls':'#'+panel;
@@ -90,10 +99,12 @@ async (page,{hold=async()=>{},guidance=false,activity=false,screenshot=async()=>
         check(controls===0,'Opening or deferring guidance started analysis');
         await p.locator('#toggle-analysis').click();
         check(await p.locator('#analysis').isVisible(),'Manual Checks failed');
-        check(await p.locator('#review').isHidden()&&await p.locator('#filters').isHidden(),'Manual panel coordination changed');
+        check(await p.locator('#review').isHidden()&&await p.locator('#browse').isHidden()&&
+          await p.locator('#filters').isHidden(),'Manual panel coordination changed');
         if(width===390)check(await p.locator('#details').isHidden(),'Manual narrow Checks did not close Inspector');
-        await p.locator('#analysis-explore').click();await settle(p);
-        check(await p.evaluate(()=>document.activeElement===$('graph')),'Explore did not return graph focus');
+        check(await p.locator('#analysis-explore').isHidden(),'Manual Checks shows a second close action');
+        await p.locator('#analysis-close').click();await settle(p);
+        check(await p.evaluate(()=>document.activeElement===$('toggle-analysis')),'Closing Checks lost toolbar focus');
         check(await camera(p)===before,'Guidance changed the camera');
         await p.reload();await p.waitForFunction(()=>state.live?.status);await settle(p);
         check(await p.locator('#analysis').isHidden(),'Handled guide reopened after reload');
@@ -115,9 +126,11 @@ async (page,{hold=async()=>{},guidance=false,activity=false,screenshot=async()=>
     p.on('request',r=>{if(r.url().endsWith('/monitor/control'))controls++;});
     try{
       await p.goto(url);await p.waitForFunction(()=>state.live?.status&&!$('analysis').hidden);
-      check(await p.locator('#analysis-overview-checks [data-status="disabled"]').count()===2,'Off coverage is not explicit');
-      check(/do not install tools, build the project or guarantee completion/.test(await p.locator('#analysis-recommendation').innerText()),
-        'Recommended action overpromises');
+      check(await p.locator('#analysis-checks summary [data-status="disabled"]').count()===2,'Off coverage is not explicit');
+      check(await p.locator('#analysis-checks > details').count()===3&&
+        await p.locator('#analysis-checks > details[open]').count()===0,'Checks do not start as one compact list');
+      check(/Sets optional checks to Auto/.test(await p.locator('#analysis-recommendation').innerText()),
+        'Recommended action hides the change to Off modes');
       check(await p.locator('#analysis-recommended').isEnabled(),'Recommended checks are unavailable for an idle Off project');
       const before=await camera(p);
       await p.evaluate(()=>{window.progressStatus=state.live.status;state.live.stop();
@@ -126,7 +139,7 @@ async (page,{hold=async()=>{},guidance=false,activity=false,screenshot=async()=>
         state.analysis.render(s);});
       check(await p.locator('#analysis-meter').getAttribute('value')==='2'&&
         await p.locator('#analysis-meter').getAttribute('max')==='8','Native progress lacks real unit counts');
-      check(/Off/.test(await p.locator('#analysis-overview-checks').innerText()),'Running progress replaced displayed evidence');
+      check(await p.locator('#check-native-status').innerText()==='Off','Running progress replaced displayed evidence');
       await screenshot(p,'native-progress');
       await p.locator('#analysis-close').click();await settle(p);
       const top=await p.locator('#graph').evaluate(node=>node.getBoundingClientRect().top);
@@ -151,7 +164,7 @@ async (page,{hold=async()=>{},guidance=false,activity=false,screenshot=async()=>
       await p.evaluate(()=>{state.analysis.render(progressStatus);state.live.start();delete window.progressStatus;});
       for(const colorScheme of ['light','dark'])for(const width of [1440,1080,390]){
         await p.emulateMedia({colorScheme});await p.setViewportSize({width,height:1000});await settle(p);
-        check(await p.evaluate(()=>['toggle-analysis','toggle-review','view-controls','toggle-details'].every(id=>{
+        check(await p.evaluate(()=>['toggle-analysis','toggle-review','toggle-filters','fit','view-controls'].every(id=>{
           const b=$(id).getBoundingClientRect();return b.left>=0&&b.right<=innerWidth&&b.width>20;
         })),'Primary actions need horizontal scrolling');
         check(await p.evaluate(()=>$('analysis').scrollWidth<=$('analysis').clientWidth+1),'Guidance overflows the panel');
@@ -172,7 +185,7 @@ async (page,{hold=async()=>{},guidance=false,activity=false,screenshot=async()=>
       check(await p.locator('#analysis').isHidden(),'Escape did not dismiss guidance');
       await p.evaluate(()=>{const s=structuredClone(state.live.status),t=s.targets.find(t=>t.id===state.target.id);
         t.state='failed';t.error='Synthetic compiler failure after dismissal';state.analysis.render(s);});
-      check((await p.locator('#toggle-analysis').innerText()).includes('failed'),'Handled guide hid a later failure');
+      check(/failed/i.test(await p.locator('#toggle-analysis').innerText()),'Handled guide hid a later failure');
       check(await p.locator('#analysis').isHidden(),'Later failure reopened the introduction');
       await p.locator('#toggle-analysis').click();
       check((await p.locator('#analysis-error').innerText()).includes('Synthetic compiler failure'),'Later failure has no explanation');
@@ -189,7 +202,7 @@ async (page,{hold=async()=>{},guidance=false,activity=false,screenshot=async()=>
       check(await camera(p)===before,'Recommended/Stop changed exploration state');
     }finally{await hold(false);await context.close();}
     check(!errors.length,errors.join('; '));
-    return {firstOpening:!activity,phaseProgress:true,closedPanelProgress:true,hiddenVisibilityInput:!activity,graphKeyboardFocus:!activity,readingPanels:activity?0:8,reload:!activity,focus:true,themes:true,widths:[390,1080,1440],
+    return {firstOpening:!activity,phaseProgress:true,closedPanelProgress:true,hiddenVisibilityInput:!activity,graphKeyboardFocus:!activity,readingPanels:readingWidths.length*readingPanels.length,reload:!activity,focus:true,themes:true,widths:[390,1080,1440],
       noImplicitRequests:true,draftSafety:true,laterFailure:true,storageRefusal:true,recommendedAuto:true,stop:true,errors};
   }
   check(await page.locator('#toggle-analysis').count()===1,'Checks has no persistent primary control');
@@ -204,7 +217,7 @@ async (page,{hold=async()=>{},guidance=false,activity=false,screenshot=async()=>
   check(await page.evaluate(()=>document.activeElement===$('toggle-analysis')),'Analysis close loses focus');
   for(const width of [1080,390]){
     await page.setViewportSize({width,height:844});
-    check(await page.evaluate(()=>['toggle-analysis','toggle-review','view-controls','toggle-details'].every(id=>{
+    check(await page.evaluate(()=>['toggle-analysis','toggle-review','toggle-filters','fit','view-controls'].every(id=>{
       const b=$(id).getBoundingClientRect();return b.left>=0&&b.right<=innerWidth;
     })),'A primary action requires horizontal scrolling');
   }
@@ -274,6 +287,7 @@ async (page,{hold=async()=>{},guidance=false,activity=false,screenshot=async()=>
       await page.waitForFunction(id=>state.target.id===id&&state.analysis.target===id,id);
     }
     if(await page.locator('#analysis').isHidden())await page.locator('#toggle-analysis').click();
+    await settings();
     await page.locator('[name="check-duplication"]').selectOption('off');
     release();await page.waitForResponse(r=>r.url().endsWith('/monitor/control')&&r.request().postDataJSON().action==='checks');
     await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));

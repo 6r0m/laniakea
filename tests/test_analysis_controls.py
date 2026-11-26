@@ -80,6 +80,10 @@ class AnalysisControls(unittest.TestCase):
         self.assertEqual(native.get('status'),'unavailable')
         self.assertEqual(native.get('code'),'tools_missing')
         self.assertFalse(result['recipe']['symbols'])
+        for row in result['checks']:
+            with self.subTest(check=row['id']):
+                self.assertTrue(row['help']['why'])
+                self.assertTrue(row['help']['method'])
 
     def test_coverage_rejects_unproved_completion_and_explains_resource_refusal(self):
         from laniakea.unreal import checks

@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <defs>
+    <radialGradient id="tile" cx="56%" cy="52%" r="72%">
+      <stop stop-color="#10265b"/>
+      <stop offset=".66" stop-color="#09143d"/>
+      <stop offset="1" stop-color="#152c6c"/>
+    </radialGradient>
+    <linearGradient id="orbit" x1="3" y1="22" x2="29" y2="10" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#29edfa"/>
+      <stop offset=".46" stop-color="#3885ff"/>
+      <stop offset="1" stop-color="#c16dff"/>
+    </linearGradient>
+    <radialGradient id="core">
+      <stop stop-color="#35d9ff" stop-opacity=".7"/>
+      <stop offset="1" stop-color="#298aff" stop-opacity="0"/>
+    </radialGradient>
+    <path id="star" d="M0-8C.5-2.2 2.2-.5 8 0C2.2.5.5 2.2 0 8C-.5 2.2-2.2.5-8 0C-2.2-.5-.5-2.2 0-8Z"/>
+    <path id="sweep" d="M29 11C30 15.4 21.8 21.7 14.4 24C8 26 2 25.8 3.1 21.5"/>
+  </defs>
+  <rect x=".5" y=".5" width="31" height="31" rx="8" fill="url(#tile)" stroke="#253e83"/>
+  <circle cx="16" cy="16" r="9" fill="url(#core)"/>
+  <path d="M3.1 21.5C3.8 17 14.7 10 22.5 8.2C26.7 7.3 29 8.6 29 11" fill="none" stroke="url(#orbit)" stroke-width="1.2" opacity=".77"/>
+  <use href="#sweep" fill="none" stroke="url(#orbit)" stroke-width="3" opacity=".24"/>
+  <use href="#sweep" fill="none" stroke="url(#orbit)" stroke-width="1.5"/>
+  <path d="M24.5 8C23 11.6 19.1 13.9 16 15.8C16.5 18.9 18.7 21.1 22.2 22.9" fill="none" stroke="#62baff" stroke-width=".8" opacity=".8"/>
+  <use href="#star" transform="translate(7 14.5) scale(.39)" fill="#91faff"/>
+  <use href="#star" transform="translate(24.5 8) scale(.45)" fill="#efd7ff"/>
+  <use href="#star" transform="translate(22.2 22.9) scale(.34)" fill="#b9e7ff"/>
+  <use href="#star" transform="translate(16 15.8)" fill="#f5fdff"/>
+</svg>

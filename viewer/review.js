@@ -2,6 +2,12 @@
 // Findings decorate the current frontier; report data never participates in graph or camera ownership.
 'use strict';
 
+const REVIEW_SEVERITY_LABELS={violation:'Error',candidate:'Warning'};
+
+function reviewCount(count,severity) {
+  return `${count} ${REVIEW_SEVERITY_LABELS[severity].toLowerCase()}${count===1?'':'s'}`;
+}
+
 function ReviewProjection(affected,map,view) {
   const visible=new Set(view.nodes.map(n=>n.id)),badges=new Map();
   const files=new Map();
@@ -71,6 +77,7 @@ class ArchitectureReview {
     this.closeComparison();
     this.epoch++;for(const controller of this.requests)controller.abort();this.requests.clear();this.pages.clear();
     this.target=target;this.data=null;this.badges.clear();this.enabled=Boolean(target?.review_url);this.pendingFinding=null;
+    this.inspectionView=null;
     this.loading=false;this.error=null;
     this.referenceIndex.clear();this.findingIndex.clear();this.links.clear();this.nodeLinks.clear();this.ownerBadges.clear();
     this.panel(false);this.status();
@@ -81,28 +88,35 @@ class ArchitectureReview {
   }
   panel(open=$('review').hidden) {
     $('review').hidden=!open;$('toggle-review').setAttribute('aria-expanded',String(open));
-    if(open){togglePanel('filters',false);if(typeof state!=='undefined')state.analysis?.panel(false);
+    if(open){closeMapPanels();if(typeof state!=='undefined')state.analysis?.panel(false);
       if(typeof innerWidth!=='undefined'&&innerWidth<=1000)togglePanel('details',false);}
     else if(typeof document!=='undefined'&&$('review').contains(document.activeElement))$('toggle-review').focus();
   }
   status() {
     const button=$('toggle-review'),counts=this.data?.counts;
-    const label=!this.target?.review_url?'unavailable':!this.enabled?'off':this.loading?'checking...':this.error?'failed':
-      counts?[[counts.violation,'violation'],[counts.candidate,'candidate']].filter(([n])=>n)
-        .map(([n,label])=>`${n} ${label}${n===1?'':'s'}`).join(' / ')||'0 recorded findings':'checking...';
+    const phase=!this.target?.review_url?'Unavailable':!this.enabled?'Off':this.error?'Failed':
+      this.loading||!counts?'Checking...':'';
+    const visible=[];
+    for(const severity of ['violation','candidate']){
+      const count=$(`review-${severity}-count`),n=phase?0:counts[severity];
+      count.hidden=!n;
+      count.textContent=n?reviewCount(n,severity):'';
+      if(n)visible.push(count.textContent);
+    }
+    const empty=$('review-phase');
+    empty.hidden=visible.length>0;
+    empty.textContent=phase||(!visible.length?'0 recorded findings':'');
+    const label=visible.join(' / ')||empty.textContent;
     const coverage=['incomplete','failed','unavailable','disabled'].map(status=>{
       const count=(this.data?.checks||[]).filter(check=>check.status===status).length;
       return count?`${count} ${status}`:null;
     }).filter(Boolean);
-    const phase=!this.target?.review_url?'unavailable':!this.enabled?'off':this.error?'failed':this.loading?'checking...':null;
-    const total=counts?counts.violation+counts.candidate:null;
-    $('review-label-wide').textContent='Review: '+(phase||(total!==null?`${total} recorded findings`:'checking...'));
-    $('review-label-compact').textContent='Review: '+(phase||(total!==null?`${total} findings`:'checking...'));
     button.disabled=!this.target?.review_url;
     button.title=this.error||[label,...coverage].join(' / ')+'. Findings use recorded evidence; source checks are in Analysis.';
     button.setAttribute('aria-label','Review: '+[label,...coverage].join(' / '));
-    button.setAttribute('data-severity',counts?.violation?'violation':counts?.candidate?'candidate':'');
+    button.setAttribute('data-phase',phase);
     $('review-enabled').checked=this.enabled;$('review-enabled').disabled=button.disabled;
+    $('review-recheck').disabled=!this.enabled;
     $('review-legend').hidden=!this.enabled||!this.data;
     if(typeof state!=='undefined'&&state.inspector&&state.selection)this.refreshInspection();
   }
@@ -110,7 +124,10 @@ class ArchitectureReview {
     this.enabled=enabled;this.error=null;this.loading=false;
     if(enabled)this.load();
     else {this.closeComparison();this.epoch++;for(const c of this.requests)c.abort();this.requests.clear();
-      this.data=null;this.pages.clear();this.referenceIndex.clear();this.findingIndex.clear();this.project();readableLabels();
+      this.data=null;this.pages.clear();this.referenceIndex.clear();this.findingIndex.clear();
+      for(const id of ['review-items','review-pager','review-checks'])$(id).replaceChildren();
+      $('review-status').textContent='Review is off.';$('review').setAttribute('aria-busy','false');
+      this.project();readableLabels();
       this.refreshInspection();}
     this.status();
   }
@@ -215,13 +232,14 @@ class ArchitectureReview {
   locations() {
     const visible=new Set();for(const badge of this.badges.values())for(const id of badge.ids)visible.add(id);
     for(const row of $('review-items').querySelectorAll('[data-review-location]')) {
-      const text=row.dataset.caption+(visible.has(row.dataset.reviewLocation)?'':' / off-view');
+      const text=[row.dataset.caption,visible.has(row.dataset.reviewLocation)?'':'Outside view'].filter(Boolean).join(' / ');
       if(row.textContent!==text)row.textContent=text;
+      row.hidden=!text;
     }
   }
   renderList(data,cursor) {
     const counts=data.counts,context=data.context.target;
-    $('review-status').textContent=`${counts.violation} active violations / ${counts.candidate} active candidates / ${counts.acknowledged} acknowledged`;
+    $('review-status').textContent=`${reviewCount(counts.violation,'violation')} / ${reviewCount(counts.candidate,'candidate')} / ${counts.acknowledged} acknowledged`;
     $('review-context').textContent=[context.name,context.platform,context.configuration].filter(Boolean).join(' / ');
     $('review-policy').textContent=`Policy: ${data.policy_path}`;
     const checks=$('review-checks');checks.replaceChildren();
@@ -234,28 +252,41 @@ class ArchitectureReview {
       checks.append(item);
     }
     const list=$('review-items');list.replaceChildren();
-    if(!data.items.length)list.append(el('p','No active findings in recorded scope. Check analysis availability above.',{class:'muted'}));
-    for(const finding of data.items) {
-      const row=el('article',null,{class:'review-finding'}),button=el('button',this.subjects(finding),
-        {type:'button','data-finding':finding.id,title:finding.title});
-      button.onclick=()=>{this.pendingFinding=finding.id;state.detailsKey=null;
-        const visible=[...this.badges].find(([,b])=>b.ids.has(finding.id));
-        if(visible){if(typeof cancelNavigationFlight==='function')cancelNavigationFlight();selectNode(visible[0]);}
-        else flyToNode(finding.subjects[0]);};
-      const caption=`${finding.severity==='violation'?'! Policy violation':'? Review candidate'} / ${finding.triage}`;
-      row.append(button,el('small',finding.evidence_type==='source'?
-        `Duplication / ${finding.token_count} tokens / ${finding.evidence_total} ranges`:finding.title));
-      const files=this.sourceFiles(finding);if(files.length)row.append(el('small',files.join(', ')));
-      row.append(el('small',caption,
-        {'data-review-location':finding.id,'data-caption':caption}));
-      list.append(row);
+    if(!data.items.length)list.append(el('p','No findings to show in this recorded scope. See Review settings for coverage.',{class:'muted'}));
+    for(const [severity,label] of Object.entries(REVIEW_SEVERITY_LABELS)){
+      const findings=data.items.filter(finding=>finding.severity===severity);
+      if(!findings.length)continue;
+      const group=el('section',null,{class:'review-group','aria-labelledby':`review-group-${severity}`});
+      group.append(el('h3',label+'s',{id:`review-group-${severity}`,class:`review-${severity}`}));
+      for(const finding of findings)group.append(this.findingButton(finding));
+      list.append(group);
     }
     this.locations();
     const pager=$('review-pager');pager.replaceChildren();
+    if(!cursor&&data.next_cursor===null)return;
     for(const [title,next] of [['Previous',Math.max(0,cursor-50)],['Next',data.next_cursor]]) {
       const button=el('button',title,{type:'button','aria-label':title+' findings'});button.disabled=title==='Previous'?!cursor:next===null;
       button.onclick=()=>this.load(next);pager.append(button);
     }
+  }
+  findingButton(finding) {
+    const source=finding.evidence_type==='source';
+    const button=el('button',null,{type:'button',class:'review-item','data-finding':finding.id});
+    button.append(el('strong',source?'Duplicated code':finding.title));
+    const files=this.sourceFiles(finding);
+    button.append(el('small',files.length?files.join(', '):this.subjects(finding)));
+    if(source)button.append(el('small',`${finding.token_count} tokens in ${finding.evidence_total} source ranges`));
+    const caption=finding.triage==='accepted'?'Risk accepted':finding.triage==='not-relevant'?'Not relevant':'';
+    button.append(el('small',caption,{'data-review-location':finding.id,'data-caption':caption}));
+    button.onclick=()=>{this.pendingFinding=finding.id;
+      const visible=[...this.badges].find(([,b])=>b.ids.has(finding.id));
+      if(visible&&state.selection?.id===visible[0]&&!state.selection.projectContext&&state.inspector){
+        this.refreshInspection();togglePanel('details',true);state.inspector.select('architecture',{focus:true});return;
+      }
+      state.detailsKey=null;
+      if(visible){if(typeof cancelNavigationFlight==='function')cancelNavigationFlight();selectNode(visible[0]);}
+      else flyToNode(finding.subjects[0]);};
+    return button;
   }
   subjects(finding) {
     return finding.subjects.slice(0,8).map(label).join(finding.kind==='duplication'?', ':' -> ')+
@@ -306,8 +337,8 @@ class ArchitectureReview {
     const context=node?.attrs?.source_file?' in this file':node?.attrs?.presentation_group?' inside this container':
       trace.kind==='node'?' for this owner':' in these references';
     const violations=records.filter(f=>f.severity==='violation').length,candidates=records.length-violations;
-    const summary=[violations&&`! ${violations} policy violation${violations===1?'':'s'}`,
-      candidates&&`? ${candidates} review candidate${candidates===1?'':'s'}`].filter(Boolean).join(' / ')+
+    const summary=[violations&&reviewCount(violations,'violation'),
+      candidates&&reviewCount(candidates,'candidate')].filter(Boolean).join(' / ')+
       context+
       (records.some(f=>f.acknowledged)?` (${records.filter(f=>f.acknowledged).length} acknowledged)`:'');
     return {summary,titles:[...new Set(records.map(f=>f.title))].slice(0,2)};
@@ -319,63 +350,130 @@ class ArchitectureReview {
       this.cancelPreviews();
       this.closeComparison();
       label(status.count,status.status);panel.replaceChildren(el('p',status.message,{class:'muted',role:status.status==='failed'?'alert':'status'}));
-      delete panel.dataset.reviewKey;delete panel.dataset.finding;return;
+      this.inspectionView=null;delete panel.dataset.reviewKey;
+      if(status.status!=='checking...')delete panel.dataset.finding;
+      return;
     }
-    const exact=status.exact,chosen=this.pendingFinding||panel.dataset.finding||exact?.[0];this.pendingFinding=null;
-    const query={report:this.data.report,...(chosen?{finding:chosen}:{node:node.id})};
-    const key=JSON.stringify([query,this.ack,this.data.revision]);
-    if(panel.dataset.reviewKey===key)return;
-    this.cancelPreviews();
+    const exact=status.exact,requested=this.pendingFinding,chosen=requested||panel.dataset.finding;
+    this.pendingFinding=null;
+    const report=this.data.report,key=JSON.stringify([report,this.data.revision,this.ack,node.id||node.key,exact]);
+    if(panel.dataset.reviewKey===key){if(requested)this.inspectionView.select(requested);return;}
     this.closeComparison();
-    label(chosen&&!exact?.length?1:status.count);
-    panel.dataset.reviewKey=key;panel.dataset.finding=chosen||'';panel.replaceChildren();
+    label(status.count);
+    const previous=this.inspectionView;
+    const drafts=previous?.panel===panel&&previous.report===report?previous.drafts:new Map();
+    panel.dataset.reviewKey=key;delete panel.dataset.finding;
     const section=el('section',null,{class:'review-details','aria-label':'Review findings'});
-    const body=el('div');
-    if(exact?.length>1){
-      const choose=el('select',null,{'aria-label':'Review finding',name:'review-finding'});
-      for(const id of exact){const finding=this.findingIndex.get(id);choose.add(new Option(this.subjects(finding)+' / '+finding.title,id));}
-      choose.value=chosen;choose.onchange=()=>{this.pendingFinding=choose.value;this.refreshInspection();
-        document.querySelector('#details select[name="review-finding"]')?.focus();};section.append(choose);
+    const rows=el('div',null,{class:'inspection-findings',role:'group','aria-label':'Select a finding'});
+    const statusLine=el('p','Loading findings...', {class:'muted',role:'status'});
+    const more=el('button','More findings',{type:'button',hidden:''}),body=el('div',null,{class:'inspection-finding-body'});
+    if(state.target.stale)section.append(el('p','Snapshot is stale. Source locations and findings may have changed.',{class:'inspection-caution',role:'status'}));
+    if(this.data.checks.some(check=>['failed','unavailable','incomplete'].includes(check.status))){
+      section.append(el('p','Some Review checks have limited evidence. See Review settings for coverage.',{class:'inspection-caution'}));
     }
-    body.append(el('p','Loading findings...',{role:'status'}));section.append(body);panel.append(section);
-    const epoch=state.referenceEpoch,reviewEpoch=this.epoch,report=this.data.report;
-    const loaded=this.pages.has(key)?Promise.resolve(this.pages.get(key).data):this.request(query);
-    loaded.then(data=>{
-      if(epoch!==state.referenceEpoch||reviewEpoch!==this.epoch||!section.isConnected||!this.enabled)return;
-      const bytes=new TextEncoder().encode(JSON.stringify(data)).byteLength;
-      if(bytes<=8*1024*1024) {
-        this.pages.delete(key);this.pages.set(key,{data,bytes});
-        while(this.pages.size>8||[...this.pages.values()].reduce((sum,p)=>sum+p.bytes,0)>8*1024*1024)
-          this.pages.delete(this.pages.keys().next().value);
-      }
-      label(exact?.length||data.total);body.replaceChildren();
-      const append=page=>{
-        for(const finding of page.items)this.card(body,finding,page.revision,page.report);
-        if(page.next_cursor!==null) {
-          const more=el('button','More findings',{type:'button'});body.append(more);
-          more.onclick=async()=>{more.disabled=true;try{const next=await this.request({...query,cursor:page.next_cursor});
-            if(epoch!==state.referenceEpoch||reviewEpoch!==this.epoch||!more.isConnected)return;
-            more.remove();append(next);}catch(error){if(error.name!=='AbortError'){more.disabled=false;more.textContent=error.message;}}};
-        }
-      };append(data);
-    }).catch(error=>{if(epoch===state.referenceEpoch&&reviewEpoch===this.epoch&&section.isConnected&&error.name!=='AbortError'){
-      label(null,'failed');body.replaceChildren(el('p',error.message,{role:'alert'}));}});
+    section.append(rows,statusLine,more,body);panel.replaceChildren(section);
+    const epoch=state.referenceEpoch,reviewEpoch=this.epoch,entries=new Map();
+    const recorded=new Map(this.data.items.map(finding=>[finding.id,finding]));
+    const current=()=>epoch===state.referenceEpoch&&reviewEpoch===this.epoch&&section.isConnected&&this.enabled;
+    let cursor=0;
+    const add=(finding,page)=>{
+      if(entries.has(finding.id))return;
+      const button=el('button',null,{type:'button',class:'inspection-finding-row','data-inspection-finding':finding.id,'aria-pressed':'false'});
+      this.findingSummary(button,finding);
+      button.onclick=()=>select(finding.id);
+      entries.set(finding.id,{button,finding,page});rows.append(button);
+    };
+    const select=async id=>{
+      if(!id||id===panel.dataset.finding)return;
+      const entry=entries.get(id),known=this.findingIndex.get(id);
+      if(!entry&&!known)return;
+      if(!entry)add(recorded.get(id)||known,recorded.has(id)?this.data:undefined);
+      this.closeComparison();panel.dataset.finding=id;
+      for(const [key,{button}] of entries)button.setAttribute('aria-pressed',String(key===id));
+      const loading=el('p','Loading finding...', {role:'status'});
+      body.replaceChildren(loading);
+      const active=()=>current()&&loading.isConnected;
+      try{
+        const selection=entries.get(id);
+        const data=selection.page||await this.inspectionPage({report,finding:id},true);
+        if(!active())return;
+        const finding=selection.page?selection.finding:data.items[0];
+        if(!finding){body.replaceChildren(el('p','This finding is no longer available.',{role:'status'}));return;}
+        this.findingSummary(entries.get(id).button,finding);
+        body.replaceChildren();this.card(body,finding,data.revision,data.report,drafts);
+      }catch(error){if(active()&&error.name!=='AbortError'){
+        const retry=el('button','Retry finding',{type:'button'});
+        retry.onclick=()=>{delete panel.dataset.finding;select(id);};
+        body.replaceChildren(el('p',error.message,{role:'alert'}),retry);
+      }}
+    };
+    this.inspectionView={panel,report,drafts,select};
+    const load=async(first=false)=>{
+      more.disabled=true;
+      try{
+        const data=exact?null:await this.inspectionPage({report,node:node.id,cursor});
+        if(!current())return;
+        const before=entries.size;
+        if(exact){for(const id of exact.slice(cursor,cursor+50)){
+          const finding=recorded.get(id)||this.findingIndex.get(id);
+          if(finding)add(finding,recorded.has(id)?this.data:undefined);
+        }}else for(const finding of data.items)add(finding,data);
+        const count=exact?.length??data.total;
+        label(count);
+        statusLine.textContent=count?'':'No recorded findings for this selection.';
+        const next=exact?(cursor+50<count?cursor+50:null):data.next_cursor;
+        more.hidden=next===null;more.textContent='More findings';cursor=next;
+        if(first)select(this.findingIndex.has(chosen)?chosen:entries.keys().next().value);
+        else [...entries.values()][before]?.button.focus();
+      }catch(error){if(current()&&error.name!=='AbortError'){
+        if(first)label(null,'failed');
+        statusLine.textContent=error.message;more.hidden=false;more.textContent='Retry findings';
+      }}finally{if(current())more.disabled=false;}
+    };
+    more.onclick=()=>load(!entries.size);
+    load(true);
   }
-  card(parent,finding,revision,report) {
+  async inspectionPage(query,preview=false){
+    const key=JSON.stringify([query,this.ack,this.data.revision]);
+    if(this.pages.has(key))return this.pages.get(key).data;
+    const data=await this.request(query,null,{preview});
+    const bytes=new TextEncoder().encode(JSON.stringify(data)).byteLength;
+    if(bytes<=8*1024*1024){
+      this.pages.set(key,{data,bytes});
+      while(this.pages.size>8||[...this.pages.values()].reduce((sum,p)=>sum+p.bytes,0)>8*1024*1024)
+        this.pages.delete(this.pages.keys().next().value);
+    }
+    return data;
+  }
+  findingSummary(button,finding){
+    const copy=el('span',null,{class:'inspection-finding-copy'});
+    const subjects=this.subjects(finding);
+    copy.append(el('strong',finding.title),el('small',subjects,{class:'inspection-subjects',title:subjects}));
+    const caption=finding.evidence_type==='source'?`${finding.token_count} tokens / ${finding.evidence_total} locations`:
+      finding.count>1?`${finding.count} recorded relations`:'';
+    const triage=finding.triage==='accepted'?'Risk accepted':finding.triage==='not-relevant'?'Not relevant':finding.acknowledged?'Acknowledged':'';
+    if(caption||triage)copy.append(el('small',[caption,triage].filter(Boolean).join(' / ')));
+    button.replaceChildren(el('span','',{class:`severity-mark review-${finding.severity}`,'aria-label':REVIEW_SEVERITY_LABELS[finding.severity],role:'img'}),copy);
+  }
+  hasInspectionDraft(){
+    const view=this.inspectionView;
+    return Boolean(view?.panel.isConnected&&view.drafts.size);
+  }
+  card(parent,finding,revision,report,drafts) {
     const article=el('article',null,{class:'review-finding','data-review-finding':finding.id});
-    article.append(el('p',this.subjects(finding),{class:'finding-subjects'}),el('h3',finding.title),
-      el('strong',finding.severity==='violation'?'! Policy violation':'? Review candidate'),el('p',`Rule: ${finding.rule}. ${finding.reason}`),
-      el('p',finding.evidence_type==='source'?`Duplication / ${finding.token_count} tokens / ${finding.evidence_total} matching ranges / ${finding.triage}`:
-        `Architecture / ${finding.count} recorded relations / ${finding.triage}`),el('p',finding.guidance));
-    if(finding.reopened)article.append(el('p',finding.reopened,{class:'muted'}));
-    for(const limit of finding.limits)article.append(el('small',limit));
-    const evidence=el(finding.evidence_type==='source'?'section':'details',null,
-      {class:finding.evidence_type==='source'?'source-evidence':''});
-    if(finding.evidence_type!=='source')evidence.append(el('summary','Exact evidence'));
+    article.append(el('p',REVIEW_SEVERITY_LABELS[finding.severity],{class:`inspection-severity review-${finding.severity}`}),
+      el('h3',finding.title));
+    if(finding.reopened)article.append(el('p',finding.reopened,{class:'inspection-caution',role:'status'}));
+    const check=this.data.checks.find(check=>check.id===finding.rule);
+    const incomplete=check?.status==='partial'&&check.kind!=='duplication'&&
+      (check.kind!=='native'||check.unverified_relations>0);
+    if(incomplete&&check.detail)article.append(el('p',check.detail,{class:'inspection-caution'}));
+    if(finding.guidance)article.append(el('p',finding.guidance));
+    const evidence=el('section',null,{class:finding.evidence_type==='source'?'source-evidence':'inspection-evidence'});
     if(finding.evidence_type==='source')this.sourceEvidence(evidence,finding,report);
     else {
-      evidence.append(
-      el('small',`Showing ${finding.witnesses.length} of ${finding.witness_total} recorded witness links.`));
+      evidence.append(el('h4','Exact evidence'),
+        el('small',`Showing ${finding.witnesses.length} of ${finding.witness_total} recorded witness links.`));
     for(const witness of finding.witnesses) {
       const row=el('div'),button=el('button','Inspect recorded reference',{type:'button'});row.append(button);evidence.append(row);
       button.onclick=async()=>{
@@ -385,13 +483,24 @@ class ArchitectureReview {
           const edge=page.items[0]?.reference;
           if(edge?.id!==witness.id)throw Error('Witness no longer matches this snapshot. Recheck review.');
           const list=el('ul');list.append(referenceRow(edge));row.replaceChildren(list);
-        } catch(error){if(error.name!=='AbortError'&&row.isConnected)row.append(el('p',error.message,{role:'alert'}));}
+        } catch(error){if(error.name!=='AbortError'&&row.isConnected){button.disabled=false;
+          row.querySelector('[role="alert"]')?.remove();row.append(el('p',error.message,{role:'alert'}));}}
       };
     }
     }
     article.append(evidence);
+    const rule=el('details',null,{class:'inspection-disclosure'});
+    rule.append(el('summary','Rule and analysis limits'),el('p',`Rule ${finding.rule}`));
+    if(finding.reason)rule.append(el('p',finding.reason));
+    if(!incomplete&&check?.detail)rule.append(el('p',check.detail));
+    for(const limit of finding.limits)rule.append(el('small',limit));
+    const decision=el('details',null,{class:'inspection-disclosure'});
+    const decisionLabel={active:'Review decision',accepted:'Review decision (risk accepted)','not-relevant':'Review decision (not relevant)'};
+    decision.append(el('summary',decisionLabel[finding.triage]||'Review decision'));
     const reasonLabel=el('label','Decision reason (optional)'),reason=el('input',null,{type:'text',name:'review-reason',
-      autocomplete:'off',maxlength:'2000',value:finding.reason_saved});reasonLabel.append(reason);article.append(reasonLabel);
+      autocomplete:'off',maxlength:'2000',value:finding.reason_saved});reasonLabel.append(reason);decision.append(reasonLabel);
+    if(drafts.has(finding.id)){reason.value=drafts.get(finding.id);decision.open=true;}
+    reason.oninput=()=>{if(reason.value===reason.defaultValue)drafts.delete(finding.id);else drafts.set(finding.id,reason.value);};
     const controls=el('div',null,{class:'review-actions'}),status=el('p','',{role:'status'});
     const choices=finding.triage==='active'?[['Accept risk','accepted'],['Not relevant','not-relevant']]:[['Reopen','active']];
     for(const [title,stateValue] of choices) {
@@ -401,14 +510,14 @@ class ArchitectureReview {
         this.saving=(this.saving||0)+1;
         for(const action of controls.children)action.disabled=true;status.textContent='Saving decision...';
         try {await this.request({}, {action:'triage',report,revision,finding:finding.id,state:stateValue,reason:reason.value});
-          this.pages.clear();await this.load();
+          drafts.delete(finding.id);this.pages.clear();await this.load();
           if(epoch===state.referenceEpoch&&returnFocus&&!button.isConnected&&document.activeElement===document.body)
             (state.inspector?.tabs.get('architecture')||$('review-recheck')).focus();
         } catch(error){if(error.name!=='AbortError'&&article.isConnected)status.textContent=error.message;}
         finally {this.saving--;for(const action of controls.children)action.disabled=false;}
       };
     }
-    article.append(controls,status);parent.append(article);
+    decision.append(controls,status);article.append(rule,decision);parent.append(article);
   }
   sourceEvidence(panel,finding,report) {
     const compare=el('button','Compare matches',{type:'button',class:'primary-action'}),body=el('div'),
@@ -421,7 +530,7 @@ class ArchitectureReview {
     const open=(selected,trigger,initial=page)=>{
       if(!current()||!page)return;this.closeComparison();
       const comparison=new SourceComparison({target:this.target,finding,report,initial,selected,trigger,
-        title:`${state.selection?.label||this.subjects(finding)} / duplicated code`,
+        title:selected.length===1?'Preview duplicated code':'Compare duplicated code',
         requests:this.requests,current,loadPage:cursor=>loadPage(cursor,true),onClose:()=>{
           if(this.comparison===comparison)this.comparison=null;this.cancelPreviews();
         }});
@@ -436,19 +545,32 @@ class ArchitectureReview {
       finally{if(current())compare.disabled=!page.items.length;}
     };
     const load=async(cursor=0)=>{
+      const focused=body.contains(document.activeElement)&&document.activeElement.getAttribute('aria-label');
       if(page)this.closeComparison();compare.disabled=true;
       body.replaceChildren(el('p','Loading source ranges...',{role:'status'}));
       try{
         const data=await loadPage(cursor);if(!current())return;
         page={...data,cursor};compare.disabled=!data.items.length;
-        body.replaceChildren(el('p',`Locations ${data.items.length?cursor+1:0}-${cursor+data.items.length} of ${data.total}`));
+        const heading=el('div',null,{class:'source-locations-heading'});
+        heading.append(el('h4','Source locations'),el('small',String(data.total)));
+        body.replaceChildren(heading);
+        if(data.total>50)body.append(el('p',`Locations ${data.items.length?cursor+1:0}-${cursor+data.items.length} of ${data.total}`));
         if(state.target.stale)body.append(el('p','Snapshot is stale. Current source locations may have moved.',{role:'status'}));
         const list=el('ul',null,{class:'source-evidence-list'});body.append(list);
         for(const [index,item] of data.items.entries())list.append(sourceOccurrenceRow(item,{target:this.target,current,
           preview:trigger=>open([cursor+index],trigger)}));
-        for(const [title,next] of [['Previous',Math.max(0,cursor-50)],['Next',data.next_cursor]]){
-          const button=el('button',title,{type:'button','aria-label':title+' source ranges'});
-          button.disabled=title==='Previous'?!cursor:next===null;button.onclick=()=>load(next);body.append(button);
+        if(cursor||data.next_cursor!==null){
+          const controls=el('div',null,{class:'review-actions'});
+          for(const [title,next] of [['Previous',Math.max(0,cursor-50)],['Next',data.next_cursor]]){
+            const button=el('button',title,{type:'button','aria-label':title+' source ranges'});
+            button.disabled=title==='Previous'?!cursor:next===null;button.onclick=()=>load(next);controls.append(button);
+          }
+          body.append(controls);
+          if(focused&&document.activeElement===document.body){
+            const buttons=[...controls.children];
+            (buttons.find(button=>!button.disabled&&button.getAttribute('aria-label')===focused)||
+              buttons.find(button=>!button.disabled))?.focus({preventScroll:true});
+          }
         }
       }catch(error){if(current()&&error.name!=='AbortError')body.replaceChildren(el('p',error.message,{role:'alert'}));}
     };

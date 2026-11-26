@@ -150,6 +150,17 @@ class SampleGraph(unittest.TestCase):
             for finding in scoped:
                 self.assertEqual({w["id"] for w in finding["witnesses"]}, expected[finding["kind"]])
 
+            cycle_rule = next(rule for rule in policy["rules"] if rule["id"] == "acyclic-legacy-modules")
+            cycle_rule["acyclic"] = False
+            write_json(target_dir / "review" / "rules.json", policy)
+            warnings = findings()
+            self.assertCountEqual([(f["kind"], f["severity"]) for f in warnings],
+                                  [("forbidden", "violation"), ("cycles", "candidate")])
+            for finding in warnings:
+                self.assertEqual({w["id"] for w in finding["witnesses"]}, expected[finding["kind"]])
+
+            cycle_rule["acyclic"] = True
+            write_json(target_dir / "review" / "rules.json", policy)
             manifest["target"]["name"] = "SampleProject"
             write_json(run / "manifest.json", manifest)
             self.assertEqual(findings(), [], "Editor policy also matched the Game context")

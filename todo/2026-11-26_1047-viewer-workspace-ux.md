@@ -1,6 +1,7 @@
 # Viewer workspace hierarchy
 
-**Status:** REVIEW REQUIRED  
+**Status:** AWAITING VISUAL ACCEPTANCE
+
 **Scope:** Viewer workspace controls, status presentation and panel layout  
 **Stable documentation owners:** [viewer architecture](../docs/architecture/viewer.md) and [user guide](../docs/guide.md)
 
@@ -32,18 +33,20 @@ that need attention, then explore a finding or symbol and return to the map.
   - Effect: The design preserves star badges, wire glow and on-demand evidence.
   - Reason: Reduce map clutter.
   - Date/source: 2026-11-26 operator follow-up.
+- **D4** Implement the reviewed workspace hierarchy and correct the Review descriptions.
+  - Effect: Establish readable typography, spacing and semantic emphasis. Use the synthetic sample for operator review.
+  - Date/source: 2026-11-26 operator implementation request.
 
 ### Operator gates
 
-- **Q1 [OPEN - BLOCKING]** Does the proposed workspace hierarchy and scope below have approval for implementation?
-  This gates production changes. The supplied design is reviewer input and no approved workspace redesign TODO was found.
+- **Q1 [CLOSED]** The operator requested implementation of the reviewed workspace hierarchy and the copy correction in D4.
 - **Q2 [OPEN - BLOCKING]** Does the implemented workspace meet the intended visual and interaction goal?
   This gates DONE after the candidate has been demonstrated.
 
 ### Working assumptions
 
-- **A1 [ACTIVE]** Repositioning existing actions and clarifying status is sufficient for the first pass.
-  Retain the quiet, explicit Inspector entry and its current selection-driven behavior.
+- **A1 [RESOLVED]** Use existing actions with a distinct project, status and exploration hierarchy as directed in D4.
+  Retain the explicit Inspector entry and its current selection-driven behavior.
 - **A2 [ACTIVE]** A fixed map guide disclosure and a compact readout can recover usable canvas area at narrow widths.
   Confirm with equivalent views before and after, including keyboard inspection.
 
@@ -163,14 +166,14 @@ Design references inform the organization and status vocabulary. The layouts and
 
 ## Implementation tasks
 
-- [ ] Close Q1. Record equivalent baseline views and the primary interaction route on the synthetic sample.
-- [ ] Adjust the masthead, map bar, footer and native controls in the existing markup and CSS. Reuse existing IDs and
+- [x] Close Q1. Record equivalent baseline views and the primary interaction route on the synthetic sample.
+- [x] Adjust the masthead, map bar, footer and native controls in the existing markup and CSS. Reuse existing IDs and
   handlers, and put the displayed manifest's target context on the normal render and adoption paths.
-- [ ] Adjust visible Checks and Review summaries inside their presentation owners. Reuse the existing progress,
+- [x] Adjust visible Checks and Review summaries inside their presentation owners. Reuse the existing progress,
   freshness and disclosure controls. Use the current phases and counts for keyboard and assistive-technology labels.
-- [ ] Fold guide copy and streamline trace readout and panel styling. Check focus order, panel coordination, selection,
+- [x] Fold guide copy and streamline trace readout and panel styling. Check focus order, panel coordination, selection,
   readout legibility, narrow wrapping and the comparison modal's inert boundary.
-- [ ] Extend the most relevant regression cases, verify the implemented interaction route, and update the stable owners.
+- [x] Extend the most relevant regression cases, verify the implemented interaction route, and update the stable owners.
   Demonstrate the candidate for Q2.
 
 ## Test-first and verification plan
@@ -219,3 +222,23 @@ the same snapshots and arrangements. Keep operator approval and review media sep
   exists, and narrow overflow was absent on the observed sample.
 - Baseline `node --test tests/analysis.test.cjs tests/review.test.cjs tests/live.test.cjs` passed all 42 tests.
 - The saved-only Chrome sample run verified the baseline controls and walkthrough in dark mode.
+
+### 2026-11-26 - Implementation candidate
+
+- The two changed status assertions failed before implementation because pending progress replaced the Checks coverage
+  label and Review lacked separate visible severity counts. Both passed with the new presentation. The command
+  `node --test tests/analysis.test.cjs tests/review.test.cjs tests/live.test.cjs` passed all 42 tests.
+- `node --test tests/*.test.cjs` passed all 234 tests. The four documentation checks passed with
+  `python -B -m unittest discover -s tests -p test_documentation.py`.
+- Disposable Chrome fixtures passed icons, traces, inspection, source comparison, wheel, explicit motion, Checks
+  activity and guidance, input changes, coverage adoption and live adoption. Injected live render failures exposed
+  a native stylesheet serialization error before rollback. The checkpoint now preserves the installed stylesheet.
+  Fault injection verified scene, build context, coverage and reader recovery.
+- The broader viewer fixture reached the workspace assertions and later stopped on its plugin hover assertion.
+  The same assertion failed when the fixture loaded the pre-change viewer and tests. The independent traces and
+  icons fixtures and the running sample covered pointer and keyboard tracing and inspection.
+- The running sample passed Checks, Review and exact evidence, search, keyboard Map guide and coverage disclosure,
+  Filters, and the return to Overview. Tested dark and light themes at 320-1440 CSS px and native Chrome 200%
+  zoom. Tested an empty target list, a long project and build name, reduced motion and unchanged bounds during
+  running, failed, and ready status. Canvas height went from 620 to 634 px at 1440 x 900, and 409 to 501 px
+  at 390 x 844. Review captures are outside the checkout. Q2 remains open for operator judgment.

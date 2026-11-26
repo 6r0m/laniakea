@@ -8,7 +8,7 @@ async page=>{
   await page.evaluate(()=>localStorage.setItem('target','other'));
   await page.goto(base+'?launch-test=start');await ready('sample');
   check(await page.evaluate(()=>state.startup.target==='sample'),'Launch selection was not handed to the browser');
-  check((await page.locator('#coverage').innerText()).includes('freshness not checked'),'Saved-only opening implied fresh source coverage');
+  check((await page.locator('#input-change-status').innerText()).includes('Changes: not checked'),'Saved-only opening implied fresh source coverage');
   await page.goto(base+'?launch-test=deep#/other/entry.json');await ready('other');
   let status=await page.evaluate(()=>fetch('/monitor/status').then(response=>response.json()));
   check(status.targets.find(target=>target.id==='sample').active,'Explicit browsing paused the launch target');

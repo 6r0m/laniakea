@@ -25,9 +25,14 @@ not automatically build your project or install tools. A saved run does not prov
 
 On first opening, **Checks** explains the displayed map's recorded coverage, optional checks that are Off and the next action.
 It waits while you read another panel or interact, and remembers presentation or dismissal for that project in this browser.
-**Current checks** shows the active phase, progress and elapsed job time above the displayed results. C++ unit counts measure
+**Recorded checks** lists coverage for the displayed map. Expand a check to see its mode, setup and diagnostics.
+Hover over or focus the question mark beside a description to open a popup about why the check matters and how it collects evidence.
+On a touchscreen, tap the question mark.
+During a run, the panel shows the active phase, progress and
+elapsed job time. C++ unit counts measure
 that phase only; duplication and validation use an indeterminate bar. The Checks control retains progress when the panel closes.
-**Explore current map** closes it without starting work. **Skip for now** or **Stop checks** pauses owned background work and
+Recorded coverage stays beside the attempt phase and describes the displayed map.
+The first-opening guide offers **Back to map**. **Skip for now** or **Stop checks** pauses owned background work and
 retains the previous map. These controls do not interrupt the earlier foreground build command.
 Choose **Recheck enabled checks** to resume when inputs have settled. Later source edits or build changes can still supersede a long
 scan. **Retry** retries a failed attempt; unchanged failures otherwise remain recorded.
@@ -35,25 +40,31 @@ Auto uses available prerequisites; On makes a check required; Off explicitly ski
 map publishes. Failed or cancelled attempts keep the previous saved settings. Existing projects retain their recorded
 choices; **Run recommended checks** explicitly applies Auto and requests checks using available prerequisites. It does not
 install tools, build the project or guarantee completion. Off checks have not verified their prerequisites.
-**Check settings** contains modes, setup details and **Recheck current settings**, which preserves Off choices.
-**Recheck enabled checks automatically** monitors enabled checks; it does not enable Off checks. The displayed-results action
-opens the existing Review findings. Recorded matches are candidates for inspection, not proof of a defect.
+In live mode, expand an optional check to change its mode. **Apply and run** submits edited choices.
+**Recheck enabled checks** keeps the current modes and appears below the recommended action when Auto is available.
+**Recheck enabled checks automatically** monitors enabled checks. A saved-only view shows recorded modes as text.
+Open **Review** from the toolbar to inspect recorded findings.
 
-Keep exploring the recorded map while editing. The change summary opens **Checks**, where **Changes since recorded analysis**
+Keep exploring the recorded map while editing. The footer change summary opens **Checks**, where live **Input changes**
 shows comparable inputs and **Show paths** lists added, modified and removed files. It also explains unmonitored or unavailable
 source coverage; **Changes: limited scope** does not mean all C++ files were checked. **Build evidence** can mean a rewritten
 receipt, not edited code or a successful build. These are recheck
 hints, not architecture findings. Recheck or Retry when ready; paging does not start checks or enable Off modes.
 
-**Review** inspects findings in recorded evidence. **View** contains layout, filters, configuration marks, fitting and
-arrangement. **Inspector** opens the current selection. Zero findings with missing checks does not certify the architecture.
+The project picker shows the active project's recorded build target, platform and configuration. The scope path starts at
+**Overview**. Use **Browse** to inspect stars and constellations in the current scope, **Filters** to choose which
+connections and outside nodes appear, and **Fit overview** to return to Overview.
+**Up** appears inside a scope. **View** groups map display and arrangement settings. Selecting a star or connection
+opens Inspector directly. The map readout offers **Inspect selection** when the selected item is still active and Inspector
+is closed. Use the readout's close button to clear the selection or trace.
+The footer opens input changes and coverage details.
 
 For duplicated code, choose **Compare matches** in the selected finding to read two ranges together. A file row's eye icon
-previews just that range; the editor and copy icons open VS Code or copy its path. Comparison temporarily covers the map,
-keeping the finding in Inspector. The total counts code locations; the comparison names the one or two matches currently
+previews just that range. The editor and copy icons open VS Code or copy its path. Comparison temporarily covers the central
+workspace, keeping the selected finding in Inspector. The comparison shows the total code locations and the matches currently
 displayed. Use **Previous match** / **Next match** or each pane's selector to reach other locations. **Back to map** or Escape
 returns to the same view. Code is read-only; matching lines are highlighted only when the current file matches its recorded
-hash. Changed or unavailable files explain why code cannot be shown. A duplication candidate is not proof of a defect.
+hash. Changed or unavailable files explain why code cannot be shown.
 
 Saved changes appear without fitting the camera or losing pins, filters or surviving focus. Updates wait during drags,
 position saves, Check edits and Review drafts. Other registered targets stay inactive until explicitly activated in Checks;
@@ -72,9 +83,10 @@ build for immediate required native extraction. Native work uses an isolated cop
 
 ## Read and navigate the map
 
-In **View**, choose **galaxy** for the Engine-centered overview. Rings are expandable groups, filled markers are leaves, boxes
-are source organization and diamonds are external boundaries. The **Type icons** key distinguishes modules, plugins,
-namespaces, classes and callables. Other layout modes keep separate saved arrangements.
+In **View**, choose **Orbit** for a ring arrangement or **By connection** to place related stars closer together. The map
+reports when By connection uses Orbit because the overview is too large or has no connections between stars. Orbit
+uses the project's declared center for a new arrangement when available. Existing modes keep separate saved positions,
+and **Saved layouts** offers any other saved arrangement. **Map guide** explains star shapes, type icons, trace colors and controls.
 
 | action | result |
 |---|---|
@@ -87,25 +99,26 @@ namespaces, classes and callables. Other layout modes keep separate saved arrang
 | Arrow keys with the map focused, then Enter | Navigate stars and open groups |
 | `+` or `-` with the map focused | Zoom; Ctrl+wheel remains browser zoom |
 | Breadcrumbs or Up | Return through navigation contexts; earlier ancestors have a disclosure |
-| Close inspector, Escape or Clear selection | Close inspection; the close button stays available while scrolling |
+| Close inspector, Escape or the map readout's close button | Close inspection; the inspector close button stays available while scrolling |
 | Drag a star or its name | Arrange it; a constellation moves its contents too |
-| Fit map | Return to the overview without moving stars |
-| Reset layout | Confirm before clearing the current mode's saved positions |
+| Fit overview | Return to the overview without moving stars |
+| Reset saved positions | Confirm before clearing the current layout's saved positions |
 
-Search results, Follow, Fit map and presentation-group breadcrumbs ease to the destination and can be interrupted by
-wheel, drag, Clear selection, Escape or a newer selection; wheel and drag themselves remain immediate. Ordinary scope
+Search results, Follow, Fit overview and presentation-group breadcrumbs ease to the destination and can be interrupted by
+wheel, drag, clearing the selection, Escape or a newer selection. Wheel and drag themselves remain immediate. Ordinary scope
 breadcrumbs open the target scope directly. With reduced motion enabled, navigation jumps directly.
 
 Hover colors are relative to the card's named focus: cyan outgoing, amber incoming, violet within/self. Wire focus
 can change near the opposite endpoint. Idle wires take the colors of the stars at their ends. Find reference types
-in **Browse & filters** and in the connection inspector. Crossings are
+in **Filters** and in the connection inspector. Crossings are
 not junctions; click overlapping wires to choose a named pair and inspect both directions.
 
-**Inspector** has two tabs: **Review** explains findings and decisions; **Details** shows source information and
-all references. Switching retains scroll, loaded pages and unfinished reasons. Use arrow keys, Home or End between tabs.
+**Inspector** has two tabs. **Review** lists related findings and opens the selected finding's evidence. Expand **Review
+decision** to record or reopen a decision. **Details** provides source actions, declaration context and recorded relationships.
+Switching tabs retains scroll, loaded pages and unfinished reasons. Use arrow keys, Home or End between tabs.
 On narrower windows, the findings list and inspector share the available space; reopening either retains the inspection.
 
-**Project** inspects source/configuration context. **Config marks** outlines explicitly listed targets, without
+**Project** inspects source/configuration context. **Outline project-listed targets** outlines explicitly listed targets, without
 implying compilation or runtime use. Plugin-to-plugin dependencies remain wires.
 Positions save in the workspace per project/layout mode and survive reload, extraction and restarts while IDs remain
 stable. Distant detail is released without losing arrangements. Exact references use Previous/Next pages.
@@ -152,8 +165,8 @@ High connection counts can reflect an intended integration point.
 
 Descriptor `kind` (Runtime/Editor) differs from UBT `type` (CPlusPlus/External). Check the descriptor if kind is missing;
 do not infer it from a name. Native exact-call rows explain recorded module access and public/include-only paths.
-Known supporting paths are ordinary context. A complete recorded access closure without a path can produce a candidate,
-not a violation. Incomplete or legacy evidence and include-only static linkage remain unverified; see Review's Policy &
+Known supporting paths are ordinary context. A complete recorded access closure without a path can produce a Review
+warning. Incomplete or legacy evidence and include-only static linkage remain unverified. See Review's Policy &
 availability. This does not prove binary linkage, runtime behavior or public API correctness. Runtime/editor and coupling
 judgements still require manual investigation.
 
@@ -163,20 +176,22 @@ Apply them to the project's intended boundaries and actual target conditions.
 
 ## Use architecture review
 
-1. Review runs automatically. Its button shows checking, failure or finding counts across the recorded project.
-   Open it for the list and coverage; closing the list keeps markers visible. Uncheck **Evaluate recorded evidence** to disable it.
-2. Follow amber triangle badges / `?` wires for candidates, or red stop signs / `!` wires for policy violations.
-   Hover explains the concern, including when the other endpoint is
+1. Review runs automatically. Its button shows active errors and warnings for the recorded project.
+   When findings are unavailable, the button identifies the Review state. Recorded Checks describe analysis coverage.
+   Open it for findings grouped by severity. Closing the list keeps markers visible. **Review settings** contains coverage
+   and the **Show Review findings** checkbox.
+2. Red stop signs on stars and red connection halos mark errors against configured rules. Amber triangles and
+   amber halos mark warnings to investigate. Hover explains the finding, including when the other endpoint is
    off-screen. Click the wire, a marked star or a finding in the Review list. The **Review** tab shows the rule, original
    affected modules, limits and guidance. Its count applies to the current inspection; Review shows the project total.
    Open **Exact evidence** for source links, or switch to **Details** for ordinary references and endpoint navigation.
 3. Use **Accept risk** or **Not relevant**, optionally recording a reason. The finding leaves active markers/list.
-   **Show acknowledged** retains inspection and **Reopen**; acknowledgement never means fixed.
-4. For project constraints, open **Policy & availability**, edit the shown local JSON path and use **Refresh findings**.
+   Open **Review settings** and turn on **Show acknowledged** to inspect or reopen the finding.
+4. For project constraints, find the local JSON path under **Review settings > Policy & availability**. Edit that file
+   and use **Refresh findings**.
    Adapt the [synthetic policy](../fixtures/review.rules.json); inspect its resolved modules before trusting results.
 
-Defaults produce yellow review candidates. Red violations need applicable configured constraints; the tool does not
-decide a project's intended architecture. See [rule meaning, coverage and saved decisions](architecture/review.md).
+See [rule meaning, coverage and saved decisions](architecture/review.md).
 
 ## Collect source duplication
 
@@ -198,7 +213,7 @@ The default `--health auto` publishes a valid architecture map even if duplicati
 the failed, incomplete, unavailable or disabled check instead of claiming zero findings. `--health off` skips collection.
 Narrow scope explicitly rather than silently ignoring a failed file.
 
-Yellow **Duplication** candidates mark recorded files or modules. Click a marked item or Review-list entry, then open
+Amber **Duplication** warnings mark recorded files or modules. Click a marked item or Review-list entry, then open
 **Exact evidence** for paged source ranges and editor links. These matches can be intentional or in inactive branches;
 inspect ownership before refactoring. A stale snapshot warns that current coordinates may have moved. No duplication
 wires are invented. Accept/reopen decisions use the existing Review workflow.

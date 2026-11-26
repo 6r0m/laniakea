@@ -11,7 +11,7 @@ function liveBlockReason() {
     state.wheel||state.zoomFrame||state.viewportFrame)return 'Finish moving the map';
   if(unsavedPositionCaches.size)return 'Waiting for positions to save';
   if(state.analysis?.dirty())return 'Finish or reload the check choices';
-  if(state.review?.saving||[...document.querySelectorAll('[name="review-reason"]')]
+  if(state.review?.saving||state.review?.hasInspectionDraft?.()||[...document.querySelectorAll('[name="review-reason"]')]
     .some(input=>input.value!==input.defaultValue))return 'Finish or clear the decision draft';
   if($('graph').getAttribute?.('aria-busy')==='true')return 'Waiting for navigation';
   return '';
@@ -40,15 +40,21 @@ function renderedOverrides(cy) {
 // Recovery deliberately does not call layout or refreshMap: either may be the failing operation.
 function adoptionCheckpoint() {
   const previous={...state},scene=state.cy.json(),overrides=renderedOverrides(state.cy);
+  // Adoption keeps the native stylesheet installed, including mappings that cannot round-trip through JSON.
+  delete scene.style;
   const url=location.href,entry=history.state,title=document.title;
   const focus=document.activeElement;
-  const roots=['details','review','filters','analysis','toggle-analysis','banner','coverage','crumbs','find-results','find-hint','scope-summary',
+  const roots=['details','review','browse','browse-list','filters','filter-options','toggle-browse','toggle-filters',
+    'analysis','analysis-explore','toggle-analysis','banner','build-context','coverage-summary','coverage-record',
+    'checks-coverage','checks-activity','checks-meter','review-phase','review-violation-count','review-candidate-count','crumbs',
+    'find-results','find-hint','scope-summary',
     'position-status','source-layout-status','layout-hint','map-tooltip','map-empty','hover-card','icon-key','review-legend',
-    'toggle-review','toggle-details','toggle-configuration','configuration-legend','up','arrange-files','find','graph','input-change-status'];
+    'toggle-review','toggle-details','clear','toggle-configuration','configuration-option','configuration-legend',
+    'up','arrange-files','reset-layout','find','graph','input-change-status'];
   const dom=roots.map(id=>{
     const node=$(id);
     return {node,children:id==='graph'?null:[...node.childNodes],attrs:[...node.attributes].map(a=>[a.name,a.value]),
-      scroll:[node.scrollLeft,node.scrollTop],onclick:node.onclick};
+      scroll:[node.scrollLeft,node.scrollTop],onclick:node.onclick,checked:node.checked};
   });
   return {
     previous,
@@ -71,11 +77,12 @@ function adoptionCheckpoint() {
         for(const [id,style] of overrides)state.cy.getElementById(id).style(style);
       });}
       finally{state.framing=previous.framing;}
-      for(const {node,children,attrs,scroll,onclick} of dom){
+      for(const {node,children,attrs,scroll,onclick,checked} of dom){
         if(children)node.replaceChildren(...children);
         for(const attr of [...node.attributes])node.removeAttribute(attr.name);
         for(const [name,value] of attrs)node.setAttribute(name,value);
         node.scrollLeft=scroll[0];node.scrollTop=scroll[1];node.onclick=onclick;
+        if(typeof checked==='boolean')node.checked=checked;
       }
       document.title=title;history.replaceState(entry,'',url);
       if(focus?.isConnected)focus.focus({preventScroll:true});
@@ -108,11 +115,7 @@ class LiveUpdates {
     return response.json();
   }
   render(){
-    const current=this.status?.targets.find(t=>t.id===state.target?.id);
     state.analysis?.render(this.status,this.message);
-    if(current?.state==='fresh'&&current.ready?.run===state.target.run&&state.target.freshness!=='checked'){
-      state.target.freshness='checked';renderCoverage();
-    }
   }
   async stage(target,signal){
     const [manifest,index]=await Promise.all([getJson(targetData(target,'manifest.json'),{signal}),
@@ -132,6 +135,7 @@ class LiveUpdates {
     if(universe===old&&!sameGeometry){universe=new Universe(old.graph,manifest);universe.paged=old.paged;}
     const pan={...state.cy.pan()},zoom=worldZoom(),scope=liveScope(universe,old,state.scopeShard.scope);
     const selection=state.selection,open=!$('details').hidden,tab=state.inspector?.active;
+    const finding=state.inspector?.pages.get('architecture')?.dataset.finding;
     const reviewOpen=!$('review').hidden,reviewEnabled=state.review?.enabled;
     const expanded=[...old.expanded];
     const checkpoint=adoptionCheckpoint();
@@ -156,14 +160,16 @@ class LiveUpdates {
       // Adoption preserves the displayed camera even when a projection refresh adjusts the viewport.
       setWorldViewport(zoom,pan);
       renderDetails(null);
-      renderBanner();renderCoverage();renderCrumbs();
+      renderBanner();renderBuildContext();renderCoverage();renderCrumbs();
       if(selection){
         const item=selection.projectContext?{...universe.nodes.get(universe.root),projectContext:true}:
           selection.level?universe.nodes.get(selection.id):selection.source&&selection.target?
             ConnectionTrace.pair(state.shard,selection.source,selection.target):null;
         if(item){
           const requested=item.kind==='pair'?{...item,signature:ConnectionTrace.signature(item),pairInspection:true}:item;
-          renderDetails(requested,{reopen:open});if(tab)state.inspector?.select(tab);
+          renderDetails(requested,{reopen:open});
+          if(finding&&state.inspector)state.inspector.pages.get('architecture').dataset.finding=finding;
+          if(tab)state.inspector?.select(tab);
         }
       }
       if(!open)togglePanel('details',false);

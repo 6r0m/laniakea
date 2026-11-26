@@ -53,11 +53,12 @@ function sourceActions(item,target,current){
 
 function sourceOccurrenceRow(item,{target,current,preview}){
   const row=el('li',null,{class:'source-evidence-range'}),
-    button=el('button',null,{type:'button',class:'source-open',title:'Preview code',
+    button=el('button',null,{type:'button',class:'source-open',title:item.path,
       'aria-label':`Preview code: ${item.path}, lines ${item.line}-${item.end_line}`});
-  button.append(sourceIcon('preview'),el('span',`${item.path.split('/').at(-1)}:${item.line}-${item.end_line}`,{translate:'no'}));
+  button.append(sourceIcon('preview'),el('span',item.path.split('/').at(-1),{translate:'no'}));
   button.onclick=()=>{if(current())preview(button);};
-  const name=el('div',null,{class:'source-occurrence-name'});name.append(button,el('small',item.path,{translate:'no'}));
+  const context=[item.owner&&label(item.owner),`Lines ${item.line}-${item.end_line}`].filter(Boolean).join(' / ');
+  const name=el('div',null,{class:'source-occurrence-name'});name.append(button,el('small',context,{translate:'no'}));
   row.append(name,sourceActions(item,target,current));return row;
 }
 
@@ -65,21 +66,19 @@ class SourceComparison{
   constructor(options){Object.assign(this,options);this.closed=false;this.slots=[];}
   active(){return !this.closed&&this.current()&&this.root?.isConnected;}
   mount(){
-    this.root=el('section',null,{class:'source-comparison',tabindex:'-1','aria-label':'Source comparison'});
+    this.root=el('section',null,{class:'source-comparison',tabindex:'-1',role:'dialog','aria-modal':'true','aria-label':'Source comparison'});
     const header=el('div',null,{class:'comparison-header'}),title=el('div'),back=el('button','Back to map',{type:'button'});
     this.summary=el('p',null,{class:'comparison-selection',role:'status'});
-    title.append(el('h2',this.title),el('small',`${this.finding.token_count} duplicated tokens found in ${this.initial.total} code locations`),
-      this.summary,el('small','Compare two locations at a time. Use Next match or choose a match in either pane.'));
-    back.onclick=()=>this.close(true);header.append(back,title);this.root.append(header);
+    title.append(el('h2',this.title),el('small',`${this.finding.token_count} matching tokens / ${this.initial.total} locations`));
+    back.onclick=()=>this.close(true);header.append(back,title,this.summary);this.root.append(header);
     this.root.onkeydown=event=>{event.stopPropagation();if(event.key==='Escape'){event.preventDefault();this.close(true);}};
-    const panes=el('div',null,{class:'source-panes'});this.root.append(panes);
-    const map=$('map');this.inert=[...map.children].map(node=>[node,node.inert]);
+    const panes=el('div',null,{class:'source-panes'});this.root.append(panes,
+      el('p','Highlights show recorded token matches.',{class:'comparison-footnote'}));
+    const workspace=document.querySelector('main'),map=$('map');
+    const chrome=document.querySelectorAll('body > :is(header,footer,.skip,#workspace-status,#map-navigation,#map-context)');
+    this.inert=[...workspace.children,...map.children,...chrome,$('map-actions')].map(node=>[node,node.inert]);
     for(const [node] of this.inert)node.inert=true;
-    this.viewInert=$('view-controls').inert;$('view-controls').inert=true;
-    this.inspectorInert=$('details').inert;this.small=matchMedia('(max-width:760px)');
-    this.resize=()=>{$('details').inert=this.inspectorInert||this.small.matches;};
-    this.small.addEventListener('change',this.resize);this.resize();
-    map.append(this.root);this.root.focus({preventScroll:true});
+    workspace.append(this.root);this.root.focus({preventScroll:true});
     for(const index of this.selected){
       const slot={node:el('section',null,{class:'source-pane'}),page:this.initial,index,pageVersion:0};
       this.slots.push(slot);panes.append(slot.node);this.controls(slot);this.read(slot);
@@ -88,7 +87,11 @@ class SourceComparison{
   controls(slot){
     slot.node.replaceChildren();
     const name=slot.page.items[slot.index-slot.page.cursor],header=el('div',null,{class:'source-pane-heading'});
-    header.append(sourceIcon('file'),el('h3',name.path.split('/').at(-1),{translate:'no'}));slot.node.append(header);
+    const identity=el('div',null,{class:'source-pane-identity'});
+    slot.owner=el('small',null,{translate:'no'});
+    identity.append(el('h3',name.path.split('/').at(-1),{translate:'no'}),slot.owner);
+    slot.actions=el('div',null,{class:'source-pane-actions'});
+    header.append(sourceIcon('file'),identity,slot.actions);slot.node.append(header);
     slot.position=el('strong',null,{class:'source-match-position'});
     slot.select=el('select',null,{'aria-label':'Match to compare'});
     for(const [i,item] of slot.page.items.entries()){
@@ -98,7 +101,7 @@ class SourceComparison{
     slot.select.value=String(slot.index);slot.select.onchange=()=>{slot.index=Number(slot.select.value);this.read(slot);};
     const matches=el('div',null,{class:'source-match-navigation'});slot.matchButtons=[];
     for(const [label,step] of [['Previous match',-1],['Next match',1]]){
-      const button=el('button',label,{type:'button'});
+      const button=el('button',step<0?'\u2039':'\u203a',{type:'button','aria-label':label,title:label});
       button.onclick=()=>{const index=slot.index+step;
         if(index>=slot.page.cursor&&index<slot.page.cursor+slot.page.items.length){
           slot.index=index;slot.select.value=String(index);this.read(slot);
@@ -115,24 +118,33 @@ class SourceComparison{
       button.onclick=()=>this.page(slot,cursor);slot.buttons.push(button);pager.append(button);
     }
     slot.content=el('div',null,{class:'source-pane-content'});
-    slot.node.append(slot.position,slot.select,matches,slot.pageStatus,pager,slot.content);
+    const picker=el('div',null,{class:'source-match-picker'});picker.append(slot.position,slot.select,matches);
+    slot.node.append(picker,slot.pageStatus,pager,slot.content);
   }
   async page(slot,cursor,index=cursor){
+    const focused=[...slot.matchButtons,...slot.buttons,slot.select].indexOf(document.activeElement);
     const version=++slot.pageVersion;slot.select.disabled=true;for(const b of [...slot.buttons,...slot.matchButtons])b.disabled=true;
+    const restoreFocus=()=>{
+      if(focused<0||document.activeElement!==document.body)return;
+      const control=[...slot.matchButtons,...slot.buttons,slot.select][focused];
+      (control.disabled||control.closest('[hidden]')?slot.select:control).focus({preventScroll:true});
+    };
     slot.pageStatus.hidden=false;slot.pageStatus.textContent='Loading ranges...';
     try{
       const data=await this.loadPage(cursor);
       if(!this.active()||version!==slot.pageVersion)return;
-      slot.page={...data,cursor};slot.index=index;this.controls(slot);this.read(slot);
+      slot.page={...data,cursor};slot.index=index;this.controls(slot);this.read(slot);restoreFocus();
     }catch(error){if(this.active()&&version===slot.pageVersion){
       slot.pageStatus.textContent=error.name==='AbortError'?'Range loading cancelled.':'Could not load ranges. '+error.message;
       slot.select.disabled=false;slot.buttons[0].disabled=!slot.page.cursor;slot.buttons[1].disabled=slot.page.next_cursor===null;
-      this.selectionSummary(slot);
+      this.selectionSummary(slot);restoreFocus();
     }}
   }
   selectionSummary(slot){
+    const focused=slot.matchButtons.indexOf(document.activeElement);
     slot.position.textContent=`Match ${slot.index+1} of ${slot.page.total}`;
     slot.matchButtons[0].disabled=slot.index===0;slot.matchButtons[1].disabled=slot.index>=slot.page.total-1;
+    if(focused>=0&&slot.matchButtons[focused].disabled)slot.select.focus({preventScroll:true});
     const indices=this.slots.map(p=>p.index+1);
     this.summary.textContent=`Showing ${indices.length===1?'match':'matches'} ${indices.join(' and ')} of ${this.initial.total}`;
   }
@@ -142,9 +154,10 @@ class SourceComparison{
     this.selectionSummary(slot);
     const active=()=>this.active()&&revision===slot.revision;
     slot.content.replaceChildren();
-    slot.node.querySelector('h3').textContent=item.path.split('/').at(-1);
-    const path=el('p',item.path,{class:'source-path',translate:'no'}),message=el('p','Loading source...',{role:'status'});
-    slot.content.append(path,sourceActions(item,this.target,active),message);
+    const heading=slot.node.querySelector('h3');heading.textContent=item.path.split('/').at(-1);heading.title=item.path;
+    slot.owner.textContent=[item.owner&&label(item.owner),`Lines ${item.line}-${item.end_line}`].filter(Boolean).join(' / ');
+    const actions=sourceActions(item,this.target,active),message=el('p','Loading source...',{role:'status',class:'source-preview-status'});
+    slot.actions.replaceChildren(actions);slot.content.append(message);
     if(!this.target.source_url){message.textContent='Preview unavailable on this server. Use the editor link.';return;}
     let url;try{url=new URL(this.target.source_url,location.href);}catch(error){message.textContent='Invalid source preview address.';return;}
     if(url.origin!==location.origin){message.textContent='Source preview requires the local server.';return;}
@@ -154,7 +167,7 @@ class SourceComparison{
       const response=await fetch(url+'?'+new URLSearchParams({report:this.report,finding:this.finding.id,occurrence:index}),{cache:'no-store',signal:controller.signal});
       if(!response.ok)throw Error(`Source preview: HTTP ${response.status}. Back to map and preview again to retry.`);
       const data=validateSourcePreview(await response.json(),item);if(!active())return;
-      message.textContent=data.detail;if(data.status!=='matching')return;
+      message.textContent=data.detail;message.dataset.status=data.status;if(data.status!=='matching')return;
       if(data.truncated)slot.content.append(el('p','Preview limited. Use the editor to inspect the complete range.',{role:'status'}));
       const code=el('pre',null,{class:'source-code',translate:'no',tabindex:'0',role:'region',
         'aria-label':`Source code: ${item.path}, lines ${data.start_line}-${data.lines.at(-1).number}`});
@@ -167,8 +180,7 @@ class SourceComparison{
   close(focus=false){
     if(this.closed)return;this.closed=true;for(const slot of this.slots)slot.controller?.abort();
     this.root?.remove();for(const [node,inert] of this.inert||[])node.inert=inert;
-    this.small?.removeEventListener('change',this.resize);$('details').inert=this.inspectorInert||false;
-    $('view-controls').inert=this.viewInert||false;this.onClose();
+    this.onClose();
     if(focus){const target=this.trigger.isConnected?this.trigger:state.inspector?.tabs.get('architecture');target?.focus({preventScroll:true});}
   }
 }

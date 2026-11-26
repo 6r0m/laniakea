@@ -7,13 +7,13 @@ recorded concerns and configured constraint violations, not an overall architect
 
 | check | result |
 |---|---|
-| Module dependency cycle | Candidate; a configured acyclic constraint makes the witnessed cycle a violation |
-| Forbidden module dependency direction | Violation only when a configured rule forbids the recorded relation |
-| Native call without recorded module access | Candidate only when the profile records a complete access closure with no supporting path; never an automatic violation |
-| Strict C++ token duplication | Candidate with matching source ranges, only when explicitly collected; no SOLID or semantic-equivalence verdict |
+| Module dependency cycle | Warning by default. An applicable acyclic constraint makes the witnessed cycle an error. |
+| Forbidden module dependency direction | Error when a configured rule forbids the recorded relation. |
+| Native call without recorded module access | Warning when the profile records a complete access closure with no supporting path. |
+| Strict C++ token duplication | Warning with matching source ranges when explicitly collected. SOLID and semantic equivalence require separate assessment. |
 
-Red identifies a policy violation; yellow identifies a review candidate. Each finding names its rule, affected
-modules, context, limits and exact evidence. Counts of findings, recorded relations and displayed witnesses are
+Review presents the recorded `violation` severity as a red error and `candidate` as an amber warning. Each finding names
+its rule, affected modules, context, limits and exact evidence. Counts of findings, recorded relations and displayed witnesses are
 different quantities. Large findings retain bounded witness samples; other exact references remain in ordinary inspection.
 
 Source duplication uses the optional run-bound observations produced by the [Unreal profile](unreal-profile.md#source-duplication).
@@ -53,7 +53,7 @@ Refresh findings; no extraction or server restart is needed for policy changes. 
 [synthetic policy](../../fixtures/review.rules.json) is an example to adapt, not an automatically selected design.
 [The policy validator](../../laniakea/review_policy.py) owns accepted fields, bounds and matching syntax.
 
-A missing file enables candidate-only defaults. An unreadable or malformed file fails review visibly instead of
+A missing file enables warning-only defaults. An unreadable or malformed file fails review visibly instead of
 silently substituting defaults. Required selectors with missing IDs or no matches are unavailable. Inspection exposes
 resolved module sets. Exact IDs, case-sensitive label globs, recorded root/path prefixes and exclusions select modules;
 they never scan the source tree. Explicit constraints must reflect the project's actual intended architecture.

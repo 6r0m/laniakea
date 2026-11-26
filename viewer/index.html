@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#edf2f7" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#101923" media="(prefers-color-scheme: dark)">
   <title>Laniakea</title>
-  <link rel="icon" href="data:,">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" sizes="any">
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -15,72 +15,97 @@
   <header>
     <h1>Laniakea</h1>
     <div class="project-controls">
-      <button id="inspect-project" type="button" aria-label="Project details" title="Inspect project source and configuration">Project</button>
-      <select id="target" aria-label="Project"></select>
+      <div class="project-identity">
+        <select id="target" aria-label="Project and target" aria-describedby="build-context" translate="no"></select>
+        <span id="build-context" translate="no">No saved target</span>
+      </div>
+      <button id="inspect-project" type="button" title="Inspect project source and configuration">Project details</button>
     </div>
-    <button id="up" type="button" title="One level up (Backspace)" disabled>Up</button>
-    <nav id="crumbs" aria-label="Scope"></nav>
     <div class="find-controls">
-      <input id="find" name="find" type="search" placeholder="Find a node ( / )" aria-label="Find a node by name or qualified signature" aria-controls="find-results" aria-expanded="false" autocomplete="off" spellcheck="false">
+      <input id="find" name="find" type="search" placeholder="Find nodes and code ( / )" aria-label="Find a node by name or qualified signature" aria-controls="find-results" aria-expanded="false" autocomplete="off" spellcheck="false">
       <div id="find-results" role="group" aria-label="Search matches" hidden></div>
+      <span id="find-hint" aria-live="polite"></span>
     </div>
-    <span id="find-hint" aria-live="polite"></span>
   </header>
-  <div id="banner" role="status" hidden></div>
   <div id="error" role="alert" hidden></div>
-  <div class="scope-bar">
-    <button id="toggle-analysis" type="button" aria-controls="analysis" aria-expanded="false" aria-live="polite"><span id="checks-label-wide" class="control-wide">Checks: waiting</span><span id="checks-label-compact" class="control-compact" aria-hidden="true">Checks: waiting</span><progress id="checks-meter" max="1" aria-hidden="true" hidden></progress></button>
-    <button id="toggle-review" type="button" aria-expanded="false" aria-controls="review" aria-live="polite"><span id="review-label-wide" class="control-wide">Review: checking...</span><span id="review-label-compact" class="control-compact" aria-hidden="true">Review: checking...</span></button>
-    <details id="view-controls"><summary id="view-summary">View</summary><div class="view-options">
-      <button id="toggle-filters" type="button" aria-controls="filters" aria-expanded="false">Browse &amp; filters</button>
-      <label>Layout <select id="layout"><option value="auto">orbits</option><option value="galaxy">galaxy</option>
-        <option value="breadthfirst">hierarchy</option><option value="cose">connections</option><option value="grid">grid</option></select></label>
-      <button id="toggle-configuration" type="button" aria-pressed="false" hidden>Config marks</button>
-      <button id="fit" type="button">Fit map</button>
-      <button id="arrange-files" type="button" hidden title="Arrange interface and implementation files in this scope only">Arrange files</button>
-      <button id="reset-layout" type="button" title="Forget saved positions for this map and layout">Reset layout</button>
-      <button id="clear" type="button">Clear selection</button>
-    </div></details>
-    <button id="toggle-details" type="button" aria-controls="details" aria-expanded="false">Inspector</button>
+  <div id="workspace-status" class="scope-bar" role="group" aria-label="Recorded analysis and Review">
+    <button id="toggle-analysis" type="button" aria-controls="analysis" aria-expanded="false" aria-live="polite">
+      <span class="status-heading">Checks</span><span id="checks-coverage">Waiting</span>
+      <span id="checks-activity" hidden></span><progress id="checks-meter" max="1" aria-hidden="true" hidden></progress>
+    </button>
+    <button id="toggle-review" type="button" aria-expanded="false" aria-controls="review" aria-live="polite">
+      <span class="status-heading">Review</span><span id="review-phase">Checking...</span>
+      <span id="review-violation-count" class="review-violation" hidden></span>
+      <span id="review-candidate-count" class="review-candidate" hidden></span>
+    </button>
   </div>
-  <div class="map-context"><span id="scope-summary" role="status"></span><span id="position-status" role="status"></span>
+  <div id="map-navigation">
+    <div class="scope-navigation">
+      <button id="up" class="map-tool" type="button" title="One level up (Backspace)" hidden disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 20V5m-6 6 6-6 6 6"/></svg>Up
+      </button>
+      <nav id="crumbs" aria-label="Scope"></nav>
+    </div>
+    <div id="map-actions">
+      <button id="toggle-browse" class="map-tool" type="button" aria-controls="browse" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 6h11M9 12h11M9 18h11M4 6h.5M4 12h.5M4 18h.5"/></svg>Browse
+      </button>
+      <button id="toggle-filters" class="map-tool" type="button" aria-controls="filters" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3.5 5h17l-6.5 8v5l-4 2v-7z"/></svg>Filters
+      </button>
+      <button id="fit" class="map-tool" type="button" title="Return to Overview and fit it on screen">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 9V4h5m6 0h5v5m0 6v5h-5m-6 0H4v-5"/></svg>Fit overview
+      </button>
+      <details id="view-controls"><summary id="view-summary" class="map-tool">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 6h4m0-3v6m0-3h12M4 12h11m0-3v6m0-3h5M4 18h6m0-3v6m0-3h10"/></svg>View
+      </summary><div class="view-options">
+        <select id="layout" aria-label="Layout mode" hidden><option value="auto">Uncentered orbit</option><option value="galaxy">Centered orbit</option>
+          <option value="breadthfirst">Dependency hierarchy</option><option value="cose">By connection</option><option value="grid">Grid</option></select>
+        <fieldset class="view-layouts"><legend>Layout</legend>
+          <button id="layout-orbit" type="button" aria-pressed="false">Orbit</button>
+          <button id="layout-connections" type="button" aria-pressed="false">By connection</button>
+        </fieldset>
+        <details id="saved-layouts" hidden><summary>Saved layouts<span id="saved-layout-current"></span></summary><div id="saved-layout-options"></div></details>
+        <label id="configuration-option" class="filter" hidden><input id="toggle-configuration" type="checkbox">Outline project-listed targets</label>
+        <button id="arrange-files" type="button" hidden title="Arrange interface and implementation files in this scope only">Arrange files</button>
+        <button id="reset-layout" type="button" hidden>Reset saved positions</button>
+      </div></details>
+    </div>
+  </div>
+  <div id="map-context" class="map-context"><span id="scope-summary" role="status"></span><span id="position-status" role="status"></span>
     <span id="layout-hint" role="status" hidden></span><span id="source-layout-status" role="status" hidden></span>
-    <button id="input-change-status" type="button" title="Inspect input changes in Checks">Changes: not checked</button></div>
+    <div id="banner" role="status" hidden></div></div>
   <main>
     <aside id="analysis" aria-label="Analysis checks" hidden>
-      <div class="review-actions"><h2>Checks</h2><button id="analysis-close" type="button" aria-label="Close checks">Close</button></div>
-      <section id="analysis-current" class="analysis-check" aria-labelledby="analysis-current-title">
+      <div class="panel-heading"><h2>Checks</h2><button id="analysis-close" type="button" aria-label="Close checks" title="Close checks">&#215;</button></div>
+      <section id="analysis-overview" class="analysis-check" aria-labelledby="analysis-overview-title" hidden>
+        <h3 id="analysis-overview-title">Recorded checks</h3>
+        <div id="analysis-checks"></div>
+      </section>
+      <section id="analysis-current" class="analysis-check" aria-label="Check activity">
         <h3 id="analysis-current-title">Preparing checks</h3>
         <progress id="analysis-meter" max="1" aria-label="Check progress" hidden></progress>
         <p id="analysis-progress" role="status" hidden></p><p id="analysis-status" role="status" hidden></p>
         <p id="analysis-ready" role="status" hidden></p><p id="analysis-error" role="alert" hidden></p>
         <div class="analysis-actions">
-          <button id="analysis-recommended" type="button" class="primary-action">Run recommended checks</button>
+          <button id="analysis-recommended" type="button" class="primary-action" hidden>Run recommended checks</button>
           <button id="analysis-stop" type="button" class="primary-action" hidden>Stop checks</button>
           <button id="analysis-retry" type="button" class="primary-action" hidden>Retry</button>
-          <button id="analysis-explore" type="button">Explore current map</button>
+          <button id="analysis-explore" type="button" hidden>Back to map</button>
         </div>
-        <p id="analysis-recommendation" class="muted"></p>
+        <p id="analysis-recommendation" class="muted" hidden></p>
       </section>
-      <section id="analysis-overview" class="analysis-overview analysis-check" aria-labelledby="analysis-overview-title" hidden>
-        <h3 id="analysis-overview-title"></h3><p id="analysis-overview-copy" class="muted"></p>
-        <ul id="analysis-overview-checks"></ul>
-        <button id="analysis-findings" type="button">Open Review</button>
-      </section>
-      <details id="analysis-settings" class="analysis-check">
-        <summary>Check settings</summary>
+      <section id="analysis-settings" class="analysis-check" aria-label="Check controls" hidden>
         <label class="filter"><input id="analysis-auto" name="analysis-auto" type="checkbox">Recheck enabled checks automatically</label>
-        <p id="analysis-auto-note" class="muted">Off checks stay Off.</p>
-        <div id="analysis-checks"></div>
-        <div class="analysis-actions"><button id="analysis-run" type="button" disabled>Recheck current settings</button>
+        <div class="analysis-actions"><button id="analysis-run" type="button" disabled hidden>Recheck enabled checks</button>
           <button id="analysis-discard" type="button" hidden>Reload settings</button></div>
-      </details>
+      </section>
       <section id="analysis-changes" class="analysis-check" aria-labelledby="input-change-heading">
-        <h3 id="input-change-heading">Changes since recorded analysis</h3>
+        <h3 id="input-change-heading">Input changes</h3>
         <p id="input-change-summary" role="status"></p><p id="input-change-detail" class="muted"></p>
         <div id="input-change-scope"></div>
         <p id="input-change-guidance"></p>
-        <details><summary>Comparison limits</summary><p id="input-change-limits"></p></details>
+        <details id="input-change-comparison-limits" hidden><summary>Comparison limits</summary><p id="input-change-limits"></p></details>
         <button id="input-change-show" type="button" hidden>Show paths</button>
         <div id="input-change-paths" hidden>
           <p id="input-change-page-status" role="status"></p>
@@ -88,34 +113,71 @@
           <div class="analysis-actions"><button id="input-change-previous" type="button">Previous paths</button>
             <button id="input-change-next" type="button">Next paths</button></div>
         </div>
-        <p class="muted">Input changes are advisory, not architecture findings. Recheck current settings keeps Off checks Off.</p>
       </section>
     </aside>
-    <aside id="filters" aria-label="Browse and filters" hidden></aside>
+    <aside id="browse" aria-labelledby="browse-title" hidden>
+      <div class="panel-heading"><h2 id="browse-title">Browse</h2><button id="browse-close" type="button" aria-label="Close browse" title="Close browse">&#215;</button></div>
+      <div id="browse-list" class="node-list" aria-label="Stars and constellations in this scope" role="group"></div>
+    </aside>
+    <aside id="filters" aria-labelledby="filters-title" hidden>
+      <div class="panel-heading"><h2 id="filters-title">Filters</h2><button id="filters-close" type="button" aria-label="Close filters" title="Close filters">&#215;</button></div>
+      <div id="filter-options"></div>
+    </aside>
     <aside id="review" aria-label="Code and architecture review" hidden>
-      <div class="review-actions"><h2>Review</h2><button id="review-close" type="button" aria-label="Close review">Close</button></div>
-      <p id="review-status" role="status"></p><p id="review-context" class="muted"></p>
-      <label><input id="review-enabled" type="checkbox" name="review-enabled" checked>Evaluate recorded evidence</label>
-      <p class="muted">Amber triangle / ?: review candidate. Red stop sign / !: policy violation. Hover to explain; click for evidence.</p>
-      <label><input id="review-ack" type="checkbox" name="review-ack">Show acknowledged</label>
-      <button id="review-recheck" type="button" title="Re-evaluate recorded evidence; does not collect source data">Refresh findings</button>
-      <details><summary>Policy &amp; availability</summary><p id="review-policy"></p><ul id="review-checks"></ul></details>
+      <div class="panel-heading"><h2>Review</h2><button id="review-close" type="button" aria-label="Close review" title="Close review">&#215;</button></div>
+      <details id="review-settings">
+        <summary>Review settings</summary>
+        <label class="filter"><input id="review-enabled" type="checkbox" name="review-enabled" checked>Show Review findings</label>
+        <label class="filter"><input id="review-ack" type="checkbox" name="review-ack">Show acknowledged</label>
+        <button id="review-recheck" type="button" title="Re-evaluate recorded evidence">Refresh findings</button>
+        <h3>Policy &amp; availability</h3>
+        <p id="review-context" class="muted"></p><p id="review-policy"></p><ul id="review-checks"></ul>
+      </details>
+      <p id="review-status" role="status"></p>
       <div id="review-items"></div><div id="review-pager" class="review-actions"></div>
     </aside>
     <section id="map" tabindex="-1" aria-label="Dependency map">
       <div id="graph" tabindex="0" role="group" aria-label="Dependency graph" aria-describedby="map-help"></div>
-      <div id="map-legend"><details id="type-key"><summary>Type icons</summary><div id="icon-key"></div></details>
-        Ring: expandable / Box: source / Diamond: external / Idle wires: endpoint colors<br>
-        Trace: <span class="trace-outgoing">-&gt; Outgoing</span> / <span class="trace-incoming">&lt;- Incoming</span> / <span class="trace-within">Within/self</span><span id="configuration-legend" hidden> / Outer outline: project-listed targets</span>
-        <span id="review-legend" hidden><br><span class="review-candidate">&#9888; Review candidate</span> / <span class="review-violation">! Policy violation</span></span></div>
-      <p id="map-help">Wheel to explore. Drag space to fly; drag stars or constellation names to arrange. Hover to trace. Double-click expands.</p>
-      <div id="map-tooltip" role="status" aria-live="polite" aria-atomic="true" tabindex="0" aria-label="Connection trace">Hover a star or connection to trace references in this view.</div>
+      <p id="map-help" class="visually-hidden">Wheel to explore. Use the arrow keys to browse stars, plus or minus to zoom, and Enter to expand. Open Map guide for more controls and symbols.</p>
+      <div id="map-legend"><details id="type-key"><summary id="map-guide-summary">Map guide</summary>
+        <div class="map-guide-content" tabindex="0" role="region" aria-labelledby="map-guide-summary">
+          <h2>Symbols</h2>
+          <p>Expandable groups have rings. Source files are boxes. External dependencies are diamonds. Dashed stars are outside the analysed target.</p>
+          <div id="icon-key"></div>
+          <p id="configuration-legend" hidden>An outer outline marks a project-listed target.</p>
+          <p id="review-legend" hidden><span class="review-violation">Red stop signs and halos mark errors.</span> <span class="review-candidate">Amber triangles and halos mark warnings.</span></p>
+          <h2>Connections</h2>
+          <p>Idle connections blend their endpoint colors. Trace colors show <span class="trace-outgoing">outgoing</span>, <span class="trace-incoming">incoming</span> and <span class="trace-within">within/self</span> references.</p>
+          <h2>Controls</h2>
+          <dl>
+            <dt>Wheel / + and -</dt><dd>Zoom and reveal constellations</dd>
+            <dt>Drag space</dt><dd>Move through the map</dd>
+            <dt>Drag star or group name</dt><dd>Arrange it</dd>
+            <dt>Hover / click</dt><dd>Trace or inspect stars and connections</dd>
+            <dt>Arrow keys</dt><dd>Browse and inspect stars when the graph has focus</dd>
+            <dt>Double-click / Enter</dt><dd>Expand or collapse a constellation</dd>
+            <dt>/</dt><dd>Search recorded nodes and code</dd>
+            <dt>Backspace / Up</dt><dd>Move up a scope</dd>
+            <dt>Esc</dt><dd>Dismiss open controls or clear the selection</dd>
+          </dl>
+        </div>
+      </details></div>
+      <div id="map-readout">
+        <div id="map-tooltip" role="status" aria-live="polite" aria-atomic="true" tabindex="-1" aria-label="Connection trace"></div>
+        <button id="toggle-details" class="map-tool" type="button" title="Inspect selection" aria-label="Inspect selection" aria-controls="details" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M14 5v14"/></svg>
+        </button>
+        <button id="clear" type="button" title="Clear selection or trace" aria-label="Clear selection or trace" hidden>&#215;</button>
+      </div>
       <div id="hover-card" role="tooltip" aria-hidden="true" hidden></div>
       <div id="map-empty" role="status" hidden></div>
     </section>
     <aside id="details" aria-label="Selection inspector" hidden></aside>
   </main>
-  <footer id="coverage"></footer>
+  <footer id="coverage">
+    <button id="input-change-status" type="button" title="Inspect input changes in Checks">Changes: not checked</button>
+    <details id="coverage-details"><summary id="coverage-summary">Coverage</summary><div id="coverage-record" tabindex="0" role="region" aria-labelledby="coverage-summary"></div></details>
+  </footer>
   <script src="vendor/cytoscape.min.js"></script>
   <script src="vendor/flatbush.js"></script>
   <script src="sections.js"></script>

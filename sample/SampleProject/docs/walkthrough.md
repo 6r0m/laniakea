@@ -50,7 +50,8 @@ Saved maps display their recorded runs. To explore changes to the sample, publis
 to load the latest publication.
 
 Open **View** and set **Layout** to **galaxy** for the Engine-centered overview. Wheel into a constellation, hover to
-trace connections, and click a wire or star to inspect its evidence. Use **Up** to return through the hierarchy.
+trace connections, and click a wire or star to inspect its evidence. Use **Up** to move up a scope or **Fit overview** to
+return to the overview. **Map guide** lists the controls and symbols.
 
 ## Record the relay path
 
@@ -77,11 +78,36 @@ Save review captures and recording drafts outside the checkout.
 | Where is the actual cycle? | Open **Compatibility** and **Legacy**, then drill down to the two modules in `SampleLegacy`. Both modules declare a private dependency on the other. Open the Review finding to inspect the two rule witnesses. The archive calls terminate normally. |
 | What belongs to this build? | **Project** shows the selected Editor target and descriptor context. Under **Experimental**, the active trial has evaluated dependencies and **Off** contains an out-of-target plugin. **Unreal Engine** is an external boundary. The Game export leaves the Editor module and its call into the trial outside the selected target. |
 
-In Review, open **Policy & availability** to see the [sample policy](../review.rules.json) and its
-resolved scope. The Editor policy makes the Gameplay-to-HUD direction and the legacy cycle violations. Without the
-policy, the witnessed cycle appears as a candidate. Open **Exact evidence** to see the rule files, then switch to
-**Details** to follow the ordinary references. Acknowledge and reopen a finding to see how a decision affects badges
-and the active list.
+## Walk through the Review findings
+
+With the [Editor policy](../review.rules.json) installed and all three Checks recorded, open **Review**. The relay
+sample has one finding for each [supported Review rule](../../../docs/architecture/review.md#rules-and-evidence).
+
+| Finding | Where to see the evidence |
+|---|---|
+| Error: forbidden dependency | Open `SampleGameplay -> SampleHUD` and inspect the private module dependency in **Exact evidence**. |
+| Error: module cycle | Open `SampleLegacySession -> SampleLegacyStats` and inspect the two module-rule witnesses in **Exact evidence**. |
+| Warning: native call without recorded module access | Open `SampleLegacyStats -> SampleCore` and follow the call to the inline helper. |
+| Warning: duplicated code | Open the **Duplication** finding for `SampleRelayScore.cpp` and `SampleRelayDisplay.cpp`. PMD CPD records the token match. **Compare matches** opens both source ranges. |
+
+Use **Review settings > Policy & availability** to verify the selected scope and **Details** to follow the ordinary references.
+Acknowledge and reopen a finding to see how the decision affects the badges and active list.
+
+### See the same cycle as a warning
+
+In the disposable workspace created above, change only the cycle rule's `acyclic` flag in the installed policy.
+
+```powershell
+$RulesPath = Join-Path $Policy 'rules.json'
+$Rules = Get-Content -LiteralPath $RulesPath -Raw | ConvertFrom-Json
+$CycleRule = $Rules.rules | Where-Object id -eq 'acyclic-legacy-modules'
+$CycleRule.acyclic = $false
+$Rules | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $RulesPath -Encoding ascii
+```
+
+Choose **Refresh findings** in **Review settings**. The same two dependency witnesses now appear under a warning. The Gameplay-to-HUD
+error and both source warnings remain. To restore the original exercise, set `$CycleRule.acyclic = $true`, repeat the
+last line, and refresh again.
 
 ## Inspect native calls and duplicated code
 
@@ -93,13 +119,13 @@ created the build receipt after opening the map, choose **Recheck enabled checks
   address-taking expression provides a function reference. Compare this compile access with the direct module calls.
 - Search for `PreviewDisplayScore` and follow its call to `SampleHUD`. Compare the call location with the build-rule and
   descriptor references. Expand its public header and private `Relay` source folders to see the different ownership layers.
-- Open the native access candidate from `SampleLegacyStats` to `SampleCore`. `ClampArchivedScore` calls the same inline
+- Open the native access warning from `SampleLegacyStats` to `SampleCore`. `ClampArchivedScore` calls the same inline
   `NormalizeInput` helper through a raw include directory in `SampleLegacyStats.Build.cs`. The build succeeds and Review
   finds no supporting recorded module path. Compare that witness with the supported call from `PreviewRound`.
-- Open the duplication candidate for `SampleRelayScore.cpp` and `SampleRelayDisplay.cpp`. Choose **Compare matches**
+- Open the duplication warning for `SampleRelayScore.cpp` and `SampleRelayDisplay.cpp`. Choose **Compare matches**
   and read both highlighted `NormalizeRelayScore` ranges. Strings and labels in the map are only navigation aids. The ranges
   and recorded token match are the evidence.
-- If Checks reports incomplete or unavailable evidence, use its displayed reason. In Review, **Policy & availability**
+- If Checks reports incomplete or unavailable evidence, use its displayed reason. **Review settings > Policy & availability**
   shows the coverage and limits of each check for the selected run.
 
 ## Repair one boundary and recheck
@@ -112,7 +138,8 @@ Reopen **Compare matches** in the saved run before rebuilding. The edited Gamepl
 unchanged HUD range still matches its recorded source hash.
 
 Keep the normal viewer open and inspect the changed inputs in Checks. Rebuild the Editor target to refresh native build
-evidence. Open **Checks**, expand **Check settings**, and choose **Recheck current settings**.
+evidence. Open **Checks** and choose **Recheck enabled checks**. When the primary action recommends Auto, use
+**Recheck enabled checks** below it to keep the saved choices.
 The Gameplay-to-HUD witness disappears, the legacy findings and source match stay, and the
 camera and surviving pins can be compared across the two published runs.
 
@@ -126,9 +153,9 @@ Return to the overview, close the side panels, and drag **Telemetry** to pin it.
 2. Remove both private copies. Include the new header in the scoring and display source files and call
    `Contracts::NormalizeRelayScore` from both. The existing Gameplay and HUD dependencies already provide access to Core.
 3. Open **Compare matches** on the saved run. Both edited ranges report that the source changed. Rebuild the Editor
-   target, return to the map, and choose **Recheck current settings** in **Check settings** from the same tab.
+   target, return to the map, and choose **Recheck enabled checks** in **Checks** from the same tab.
 4. After the new map arrives, check that Telemetry is still pinned in place. Review no longer lists the matching pair.
-   The Gameplay-to-HUD violation and the legacy findings still have their own evidence.
+   The Gameplay-to-HUD error and the legacy findings still have their own evidence.
 
 ## Compare with the Game target
 

@@ -40,13 +40,13 @@ test('late check settings responses cannot change another target form or status'
 test('check coverage keeps unavailable and skipped acquisition distinct from successful evidence',()=>{
   const target={checks:[{label:'Modules',status:'completed'},{label:'C++',status:'unavailable'},{label:'Clones',status:'disabled'}]};
   const value=checksSummary(null,target);
-  assert.equal(value.label,'Checks: 1 recorded / 1 off / 1 unavailable');assert.equal(value.attention,true);
+  assert.equal(value.coverage,'1 recorded / 1 off / 1 unavailable');assert.equal(value.attention,true);
   assert.match(value.description,/C\+\+: unavailable/);assert.match(value.description,/Clones: disabled/);
 });
 
 test('Off is guidance rather than failure and recorded counts remain explicit',()=>{
   const value=checksSummary({active:true,state:'fresh'},{checks:[{status:'completed'},{status:'disabled'},{status:'disabled'}]});
-  assert.equal(value.label,'Checks: 1 recorded / 2 off');assert.equal(value.compact,'Checks: 2 off');
+  assert.equal(value.coverage,'1 recorded / 2 off');assert.equal(value.phase,'');
   assert.equal(value.attention,false);assert.equal(value.guidance,true);
 });
 
@@ -62,8 +62,9 @@ function guidanceFixture(){
     globalThis.status={targets:[{id:'sample',active:true,state:'fresh',ready:state.target}]};
     globalThis.control=Object.create(AnalysisControls.prototype);control.dismissed=new Set();control.choices={};
     control.build=()=>{};control.renderChanges=()=>{};state.analysis=control;
-    $('view-controls').open=false;$('analysis').contains=()=>false;
-    Object.assign($('analysis-overview-checks'),el('ul'));
+    $('view-controls').open=false;$('analysis').contains=()=>false;$('analysis-checks').querySelector=()=>null;
+    for(const id of ['foundation','native','duplication'])Object.assign($('check-'+id+'-status'),el('strong'));
+    Object.assign($('toggle-analysis'),el('button'));
     for(const id of ['analysis-meter','checks-meter']){Object.assign($(id),el('progress'));
       $(id).removeAttribute=function(name){delete this.attrs[name];};}`);
   return {...v,stored};
@@ -89,7 +90,7 @@ test('quiet metadata and a hidden coordination close do not consume later attent
 });
 
 test('automatic guidance yields to reading panels, View and keyboard focus but manual Checks still opens',()=>{
-  for(const id of ['review','details','filters','view-controls','keyboard']){
+  for(const id of ['review','details','browse','filters','view-controls','keyboard']){
     const {run,stored}=guidanceFixture();
     run(id==='view-controls'?"$('view-controls').open=true":id==='keyboard'?
       "document.activeElement={closest:()=>({})}":`$('${id}').hidden=false`);
@@ -108,7 +109,8 @@ test('storage refusal retains a session guard and handled guidance never suppres
   run('control.render(status)');assert.equal(run("$('analysis').hidden"),false);
   run("$('analysis').hidden=true;status.targets[0].error='Synthetic later failure';control.render(status)");
   assert.equal(run("$('analysis').hidden"),true,'Failure repeated the introduction');
-  assert.equal(run("$('checks-label-wide').textContent"),'Checks: failed');
+  assert.equal(run("$('checks-activity').textContent"),'Failed');
+  assert.match(run("$('checks-coverage').textContent"),/1 recorded/);
   assert.match(run("$('analysis-error').textContent"),/Synthetic later failure/);
 });
 
@@ -140,21 +142,23 @@ test('a newer ready snapshot cannot supply displayed check counts',()=>{
   const displayed={checks:[{id:'native',label:'C++',status:'incomplete'}]},
     ready={checks:[{id:'native',label:'C++',status:'completed'}]};
   const summary=checksSummary({active:true,state:'fresh',checks:ready.checks,ready},displayed);
-  assert.equal(summary.done,0);assert.match(summary.description,/C\+\+: incomplete/);
+  assert.equal(summary.done,0);assert.equal(summary.coverage,'0 recorded / 1 incomplete');
+  assert.match(summary.description,/C\+\+: incomplete/);
 });
 
 test('an old complete map cannot disguise running or failed new work as completed checks',()=>{
   const target={checks:[{label:'Modules',status:'completed'}]};
-  assert.equal(checksSummary({active:true,state:'updating'},target).label,'Checks: running');
-  assert.equal(checksSummary({active:false,state:'stopping'},target).label,'Checks: stopping');
-  assert.equal(checksSummary({active:true,state:'failed',error:'compiler error'},target).label,'Checks: failed');
+  assert.equal(checksSummary({active:true,state:'updating'},target).phase,'Running');
+  assert.equal(checksSummary({active:false,state:'stopping'},target).phase,'Stopping');
+  const failed=checksSummary({active:true,state:'failed',error:'compiler error'},target);
+  assert.equal(failed.phase,'Failed');assert.equal(failed.coverage,'1 recorded');
   const degraded=checksSummary({active:true,state:'fresh',degraded:'Source watch failed'},target);
   assert.equal(degraded.attention,true);assert.match(degraded.description,/Source watch failed/);
 });
 
 test('a profile without a catalog never invents completed checks and generic acquisition errors remain visible',()=>{
-  assert.equal(checksSummary(null,{}).label,'Checks: unavailable');
-  assert.equal(checksSummary(null,{acquisition:{source:{status:'failed',code:'tool_invalid'}}}).label,'Checks: failed');
+  assert.equal(checksSummary(null,{}).coverage,'Coverage unavailable');
+  assert.equal(checksSummary(null,{acquisition:{source:{status:'failed',code:'tool_invalid'}}}).phase,'Failed');
   const {run}=guidanceFixture();run('state.target.checks=[];control.render(status)');
   assert.equal(run("$('analysis-current-title').textContent"),'Check coverage unavailable');
   assert.equal(run("$('analysis-recommended').disabled"),true);
@@ -168,8 +172,10 @@ test('current source work is prominent while displayed Off evidence stays unchan
   assert.equal(run("$('analysis-meter').hidden"),false);
   assert.equal(run("$('analysis-meter').getAttribute('value')"),null,'CPD must not invent a percentage');
   assert.match(run("$('analysis-progress').textContent"),/31 s elapsed/);
-  assert.match(run("$('checks-label-wide').textContent"),/duplicated code/);
-  assert.equal(run("$('analysis-overview-checks').children[1].children[1].textContent"),'Off');
+  assert.match(run("$('checks-coverage').textContent"),/1 recorded.*off/i);
+  assert.match(run("$('checks-activity').textContent"),/duplicated code/i);
+  assert.match(run("$('toggle-analysis').getAttribute('aria-label')"),/Displayed map: 1 of .*Checking duplicated code/);
+  assert.equal(run("$('check-native-status').textContent"),'Off');
   run("status.targets[0].progress={phase:'native',label:'Indexing C++ units',completed:3,total:8,seconds:44};control.render(status)");
   assert.equal(run("$('analysis-meter').getAttribute('value')"),'3');
   assert.equal(run("$('analysis-meter').getAttribute('max')"),'8');
@@ -179,18 +185,28 @@ test('current source work is prominent while displayed Off evidence stays unchan
 
 test('retrying an old failed snapshot shows running work rather than a failed attempt',()=>{
   const value=checksSummary({active:true,state:'updating',progress:{phase:'native'}},{checks:[{status:'failed'}]});
-  assert.equal(value.label,'Checks: running');
+  assert.equal(value.phase,'Running');
 });
 
-test('findings navigation only counts the displayed generation and explains Off monitoring',()=>{
+test('saved views offer check details without run controls, and live views avoid duplicate recheck actions',()=>{
   const {run}=guidanceFixture();
-  run(`state.target.map_identity='one';state.review.enabled=true;state.review.target=state.target;
-    state.review.data={counts:{violation:2,candidate:3}};control.render(status);`);
-  assert.equal(run("$('analysis-findings').textContent"),'View 5 recorded findings');
-  assert.match(run("$('analysis-auto-note').textContent"),/Off checks stay Off/);
-  run("state.review.target={...state.target,run:'another'};control.render(status)");
-  assert.equal(run("$('analysis-findings').textContent"),'Open Review');
-  assert.equal(run("$('analysis-findings').textContent.includes('5')"),false);
+  run(`state.target.checks.forEach(row=>row.status='completed');
+    state.startup.monitoring=false;control.render(null);`);
+  assert.equal(run("$('analysis-recommended').hidden"),true);
+  assert.equal(run("$('analysis-run').hidden"),true);
+  assert.equal(run("$('analysis-settings').hidden"),true);
+  run(`state.startup.monitoring=true;control.render(status);`);
+  assert.equal(run("$('analysis-recommended').textContent"),'Recheck enabled checks');
+  assert.equal(run("$('analysis-recommended').hidden"),false);
+  assert.equal(run("$('analysis-run').hidden"),true);
+  run(`control.edited=true;control.render(status);`);
+  assert.equal(run("$('analysis-recommended').hidden"),true);
+  assert.equal(run("$('analysis-run').hidden"),false);
+  assert.equal(run("$('analysis-run').textContent"),'Apply and run');
+  run(`control.edited=false;state.target.checks[1].status='disabled';control.render(status);`);
+  assert.equal(run("$('analysis-recommended').textContent"),'Run recommended checks');
+  assert.equal(run("$('analysis-run').hidden"),false);
+  assert.equal(run("$('analysis-run').textContent"),'Recheck enabled checks');
 });
 
 test('current missing prerequisites have a visible explanation without changing displayed evidence',()=>{
@@ -199,7 +215,7 @@ test('current missing prerequisites have a visible explanation without changing 
     control.render(status);`);
   assert.equal(run("$('analysis-current-title').textContent"),'Checks need setup');
   assert.match(run("$('analysis-status').textContent"),/successful project build receipt/);
-  assert.equal(run("$('analysis-overview-checks').children[1].children[1].textContent"),'Off');
+  assert.equal(run("$('check-native-status').textContent"),'Off');
 });
 
 test('queued recheck explains owned earlier work without borrowing its native counts',()=>{

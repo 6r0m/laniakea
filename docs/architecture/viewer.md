@@ -104,7 +104,7 @@ Bundle counts appear in the trace readout or inspection; the overview keeps the 
 Idle bundle names and colors use manifest metadata. A summary without its own manifest type inherits the exact type's color;
 mixed types use a neutral color and name each recorded type rather than implying one kind of reference.
 
-Tracing uses theme roles defined in CSS: cyan outgoing, amber incoming and violet within/self. The visible legend,
+Tracing uses theme roles defined in CSS: cyan outgoing, amber incoming and violet within/self. Map guide,
 direction words and native arrowheads provide alternatives to color. Node colors keep their existing meaning.
 A node trace names its focus and partitions represented references by canonical endpoints in its containment subtree:
 source inside/target outside is outgoing, the reverse is incoming, and both inside is within. These counts are disjoint
@@ -162,7 +162,7 @@ references and navigation remain reachable. Constellation controls track expansi
 The shared header and native accessible tabs stay outside each page's scroll region. Tab changes retain mounted content,
 reference paging, scroll and unsaved decision reasons, without changing selection or camera. Ordinary reference pages load
 when Details first opens. The panel's close button uses the same inspection cancellation as Escape and returns focus to
-the toolbar's Inspector control. At narrow widths, the inspector, findings queue and filters are mutually exclusive;
+the toolbar. At narrow widths, the inspector, findings queue and filters are mutually exclusive;
 opening the queue hides inspection without discarding it. Explicit reinspection reopens the retained dock; background
 projection refresh does not.
 
@@ -199,7 +199,7 @@ handoff drops its staging expansion and retains the displayed camera. Arrival co
 ordinary projection and settled history. Explicit navigation, keyboard zoom, drag and renderer replacement release
 pending wheel frames before taking ownership of the camera.
 
-Camera-bearing explicit navigation (search results, reference Follow, Fit map and presentation-group breadcrumbs) uses
+Camera-bearing explicit navigation (search results, reference Follow, Fit overview and presentation-group breadcrumbs) uses
 one cancellable camera flight in `scene.js`. Ordinary scope breadcrumbs continue to open their scope directly. The
 flight owns `state.flight` for its entire lifetime, including gaps between animation frames, so `live.js` cannot adopt
 a snapshot mid-flight. Frames check the originating renderer and generation; camera updates go through
@@ -317,12 +317,16 @@ only to original references from the analyzed root, not every reference of those
 the viewer recognizes no language-specific ids, paths or levels. Invalid hints are refused before publishing a run or
 replacing a scene; absent hints keep the run usable and the galaxy option visibly falls back to orbits.
 
+By connection uses a bounded CoSE pass on the folded overview. It seeds distinct starting positions, uses one spring per
+connected star pair and maps the result to world-space bounds appropriate for the overview. Larger or unconnected maps
+use Orbit with a visible explanation. The layout input affects positions only. Saved positions still take precedence.
+
 Classified project configuration stays outside the architecture projection in every layout, including layout input and
 Fit. Canonical declarations remain unchanged, counted once and available for exact inspection. The map summary names
 configuration separately from other filtered references. Non-root dependencies of the same type remain ordinary wires;
 unclassified root references keep their known meaning.
 
-Config marks adds optional neutral outer outlines to existing visible representatives. Marks start off in every layout;
+The project-listed target checkbox adds optional neutral outer outlines to existing visible representatives. Marks start off in every layout;
 explicit choices remain per mode in scene/history state, never in position files. Restored choices affect marks only.
 An outline means that representative contains explicitly listed configuration targets. Hover distinguishes an exact
 listed target from a collapsed owner's distinct listed-target count. Marks follow effective projection expansion,
@@ -434,8 +438,8 @@ map reads the workspace with HTTP caching disabled after outstanding saves finis
 pending/failed saves trigger the browser's leave-page guard. Saved positions do not change graph facts, extraction
 inputs, runs, or the analysed project.
 
-Fit map restores root navigation and uses canonical top-level world positions, so it also recovers the overview from an
-empty viewport. Reset layout requires confirmation before discarding the current mode's saved positions.
+Fit overview restores root navigation and uses canonical top-level world positions, so it also recovers the overview from an
+empty viewport. Reset saved positions is available for the current layout when it has saved positions and requires confirmation.
 Layout updates retain pins absent from the current run, so module-only extraction does not erase native-symbol positions.
 Reset clears the selected mode's pins belonging to the current graph; temporarily unavailable pins remain stored.
 
@@ -458,13 +462,17 @@ findings in a file. The Review tab identifies duplication separately from archit
 source ranges in bounded pages for the selected finding. Reading range metadata does not read source bodies.
 Current-source links retain a snapshot/staleness warning.
 
-Source findings expose Compare matches and plain file/range rows. Preview, external-editor and copy actions are distinct;
-there are no nested source disclosures. Compare opens up to two numbered read-only panes over the existing map region;
+Inspector Review lists related findings and mounts evidence and decision controls for the selected finding. It retains
+unfinished decision reasons within the same inspection even when another finding is selected. The Review owner uses the
+existing finding index and paged reports to populate the list and read selected evidence.
+
+Source findings expose Compare matches and file, owner and line-range rows. Preview, external-editor and copy actions are distinct.
+Compare opens up to two numbered read-only panes over the central workspace;
 an individual Preview opens one. The header distinguishes total code locations from the currently displayed match ordinals.
 Each pane names its match number and provides Previous match / Next match controls across page boundaries.
 Occurrence selectors and bounded paging reveal further ranges on demand, including
 different ranges in the same file. Wide views compare side by side; narrow views stack contained, scrollable panes.
-The Inspector retains the finding and decision draft. Covered map controls are inert; covered narrow inspection is inert.
+The Inspector retains the finding, scroll and decision draft. The covered workspace and surrounding controls are inert.
 Back to map or Escape disposes the comparison and returns focus to its invoking control. The graph stays mounted at the
 same size underneath: no layout, fit, refresh or duplicate camera state is needed to return. Explicit navigation closes
 comparison; live adoption waits while reading, while status polling and snapshot retention continue.
@@ -477,7 +485,7 @@ owner cancels the comparison without taking new focus. Late responses cannot res
 reopening revalidates their files. No editor dependency or source write is added.
 
 Exact reference-group associations also mark existing projected connections and their revealed endpoints. Amber/red
-halos identify candidates/violations independently of direction colors. Fixed-size amber triangle and red stop-sign
+halos identify Review warnings and errors independently of direction colors. Fixed-size amber triangle and red stop-sign
 badges remain separate from type icons; counts belong to hover and inspection. Visible stars with active findings
 pulse in their family color. Visible connections pulse at the same cadence, with tint, strength and priority driven
 by their highest active finding. Badges show the highest displayed severity and stay steady. The pulse holds its current brightness
@@ -546,20 +554,31 @@ Dragging, pending or failed position writes, in-flight Review decisions and edit
 revision change during staging discards that staged copy rather than applying layouts read before a newer move. Independent
 tabs heartbeat their current read contexts through the [monitoring contract](monitoring.md#publication-and-shutdown).
 
-Primary Checks, Review, View and Inspector actions remain visible without horizontal scrolling. View discloses layout,
-filters and arrangement; the separate summary row keeps changing counts from resizing the map. The non-modal Analysis
-panel labels coverage from the displayed snapshot separately from newer results awaiting adoption. Attempt progress and
-requested-versus-applied settings do not replace displayed evidence; removing an adoption block updates coverage with the map. Only optional profile checks
-have mode selectors; the map foundation stays mandatory. Review evaluates existing evidence independently.
-Current checks leads with the owned attempt's phase, optional measured unit count and elapsed job time. Progress remains
+The masthead shows the selected project and the displayed manifest's build target. The scope bar starts at Overview.
+Browse and Filters share a sidebar slot. Browse selects from the rendered scope members and Filters changes graph visibility.
+View groups layout, target outlines and applicable arrangement actions. The Orbit choice uses existing orbit pins first and
+then the declared center when available. Legacy modes retain their keys and saved arrangements. Map guide,
+coverage details and advisory stale-input diagnostics open over the map. The workspace status row and trace area have
+stable heights across status and hover updates. Selection opens Inspector through the existing inspection route.
+Source comparison makes the graph and map actions inert until it closes.
+
+The adoption checkpoint captures the displayed build context, coverage and status controls alongside the scene and
+focused readers. Recovery restores these controls with the previous generation and keeps the native stylesheet installed.
+Checks uses the displayed snapshot's
+coverage alongside the in-progress phase and labels newer results awaiting adoption. Attempt progress and
+requested-versus-applied settings do not replace displayed evidence; removing an adoption block updates coverage with the map.
+Only optional profile checks have mode selectors; the map foundation stays mandatory.
+The Checks panel starts with recorded coverage. During an attempt it shows the phase, optional measured unit count and elapsed job time. Progress remains
 visible in the fixed-height toolbar control when the panel closes. Only validated native unit counts have a determinate
 denominator; preparation, duplication, publication and queued earlier work stay indeterminate. Unit completion never claims
 overall completion or an ETA, and terminal states clear the running bar. Recorded coverage remains separate from attempts.
-Check settings discloses modes and rechecking current choices; the contextual primary action enables recommended checks or
-rechecks enabled choices, with Stop/Retry for their applicable states. Findings navigation uses only the displayed generation's
-loaded Review counts. Missing/loading/error coverage never becomes a successful zero; unavailable check catalogs cannot start work.
+Each check has an expandable row with the displayed snapshot's coverage and details for setup, diagnostics and modes.
+Status and form updates keep these controls mounted while the check catalog is stable. Edited choices expose Apply and run.
+The contextual primary action enables recommended checks or rechecks enabled choices, with Stop/Retry for their
+applicable states. Saved-only views show modes as text. Missing/loading/error coverage never becomes a successful zero;
+unavailable check catalogs cannot start work.
 Analysis offers first-opening guidance when displayed check coverage is incomplete, including informational Off choices.
-Automatic opening waits for a visible tab and yields to Review, Inspector, filters, View controls, graph keyboard focus,
+Automatic opening waits for a visible tab and yields to Review, Inspector, Browse, Filters, View controls, Map guide, graph keyboard focus,
 focused controls, gestures and drafts. It does not
 close a reading panel or move focus/scroll; deferred guidance remains eligible through the existing status lifecycle.
 Manual Checks opening retains normal panel coordination. Presentation or visible dismissal is remembered through the existing
@@ -567,11 +586,11 @@ browser preferences, keyed by target and project-root identity rather than run/i
 panel does not consume that opportunity. Hidden-tab rendering cannot acknowledge a panel, including one opened before coverage
 arrives; visibility changes reuse the existing status lifecycle. Storage refusal retains an in-memory session guard.
 Handled guidance suppresses introductions only; progress, coverage, failure labels and explanations continue updating.
-Idle controls explicitly distinguish recorded checks, Off and unavailable evidence, with compact labels at narrow widths;
-Review counts describe recorded findings, never an architecture score. Limited input comparisons are labeled as limited scope.
+Checks distinguishes recorded coverage, Off and unavailable evidence. Review separately shows active errors and
+warnings in recorded evidence. Limited input comparisons are labeled as limited scope.
 Settings drafts defer live adoption; late control responses cannot overwrite another target's form. Recommended checks reuse
 the normal Auto request and cannot replace dirty/submitting choices or start redundant running work. Close/Escape restores the
-primary action's focus; Explore current map returns focus to the graph without fitting it or starting acquisition.
+primary action's focus. Back to map in the first-opening guide returns focus to the graph without fitting it or starting acquisition.
 Successful adoption restores a detached fixed control's visible equivalent, including the Inspector close control, without
 scrolling or replacing a newer user focus. The scene rollback path remains independent.
 Unavailable, failed, disabled and incomplete checks remain distinct from completed checks and zero findings.

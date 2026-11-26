@@ -352,7 +352,7 @@ test('following configuration retains exact provenance without enabling wires or
 
 test('details close control dismisses stars and connections without moving the map',t=>{
   const {run}=inspectionViewer();treeElements(run);t.after(()=>run('state.cy.destroy()'));
-  run(`globalThis.appendReferences=()=>{};globalThis.focused=null;$('toggle-details').focus=()=>focused='toggle-details';
+  run(`globalThis.appendReferences=()=>{};globalThis.focused=null;$('view-summary').focus=()=>focused='view-summary';
     globalThis.beforePositions=JSON.stringify([...state.universe.positions]);
     globalThis.beforeExpansion=JSON.stringify([...state.universe.expanded]);
     globalThis.closed=0;
@@ -364,7 +364,7 @@ test('details close control dismisses stars and connections without moving the m
       if(!$('details').hidden||state.selection||state.cy.elements(':selected').length)throw Error('Close left inspection selected');
       closed++;
     }`);
-  assert.equal(run('closed'),2);assert.equal(run('focused'),'toggle-details');
+  assert.equal(run('closed'),2);assert.equal(run('focused'),'view-summary');
   assert.equal(run('JSON.stringify([...state.universe.positions])'),run('beforePositions'));
   assert.equal(run('JSON.stringify([...state.universe.expanded])'),run('beforeExpansion'));
 });
@@ -380,7 +380,7 @@ test('a late project declaration page cannot reopen closed inspection or replace
     state.referencePages={cancel(){cancelled++;},load:()=>new Promise(resolve=>requests.push(resolve))};
     renderDetails({...state.universe.nodes.get('app'),projectContext:true});
     globalThis.oldEpoch=state.referenceEpoch;
-    $('toggle-details').focus=()=>{};
+    $('view-summary').focus=()=>{};
     $('details').querySelector('[aria-label="Close inspector"]').onclick();refreshMap();
     requests[0]({total:1,items:[],next_cursor:null});`);
   await new Promise(setImmediate);
@@ -643,6 +643,18 @@ test('Fit overview restores root navigation without moving saved pins',()=>{
   run('state.cy.destroy()');
 });
 
+test('an Orbit choice honors orbital pins before using the profile center',()=>{
+  const {run}=viewer();
+  run('state.positionCache={layouts:{}};state.universe.overview=null;');
+  assert.equal(run('orbitLayout()'),'auto');
+  run("state.universe.overview={anchor:'engine'};");
+  assert.equal(run('orbitLayout()'),'galaxy');
+  run('state.positionCache.layouts.auto={a:{x:1,y:2}};');
+  assert.equal(run('orbitLayout()'),'auto');
+  run('state.positionCache.layouts.galaxy={a:{x:3,y:4}};');
+  assert.equal(run('orbitLayout()'),'galaxy');
+});
+
 test('reset cancellation preserves user pins and sends no write',async()=>{
   const {run,context}=viewer();const requests=[];context.fetch=async(url,options)=>{requests.push(options);return{ok:true};};
   run(`globalThis.prompts=[];globalThis.confirm=message=>{prompts.push(message);return false;};
@@ -656,6 +668,7 @@ test('reset cancellation preserves user pins and sends no write',async()=>{
   run('confirm=()=>true');await run('resetPositions()');
   assert.equal(requests.length,1);assert.equal(run('state.positionCache.layouts.auto'),undefined);
   run('confirm=()=>{throw Error("Empty layouts need no confirmation")};');await run('resetPositions()');
+  assert.equal(requests.length,1,'Reset sent a redundant write for an empty layout');
   run('state.cy.destroy()');
 });
 
@@ -859,7 +872,7 @@ test('gesture frames defer label restyling and settle once without moving world 
   run('state.cy.destroy()');
 });
 
-test('Fit map recovers the overview after panning into an empty viewport',()=>{
+test('Fit overview recovers the map after panning into an empty viewport',()=>{
   const {run}=viewer();
   run(`state.universe.place({},'auto');state.cy=cytoscape({headless:true,elements:[]});
     globalThis.bounds=null;globalThis.frame=box=>bounds=box;globalThis.refreshed=0;
@@ -1141,10 +1154,31 @@ test('Connections receives projected dependencies while preserving pins and expa
   const result=JSON.parse(run('JSON.stringify(layoutInputs[0])'));
   assert.equal(result.name,'cose');
   assert.deepEqual(result.edges.sort(),[['app.core','stdlib'],['app.web','app.core']]);
+  assert.ok(run(`Math.hypot(state.universe.positions.get('app.web').x-state.universe.positions.get('stdlib').x,
+    state.universe.positions.get('app.web').y-state.universe.positions.get('stdlib').y)>200`),
+    'Connected stars need enough world space for labels and semantic zoom');
   assert.equal(run('JSON.stringify([...state.universe.expanded])'),expanded);
   assert.deepEqual(JSON.parse(run("JSON.stringify(state.universe.positions.get('app.core'))")),{x:42,y:-17});
+  const positions=run('JSON.stringify([...state.universe.positions])');
+  run('layout()');
+  assert.equal(run('JSON.stringify([...state.universe.positions])'),positions,'The same graph changed places on relayout');
   run('omitConnections=true;layout()');
-  assert.equal(run('layoutInputs[1].edges.length'),0,'the same probe must detect the old disconnected layout');
+  assert.equal(run('layoutInputs[2].edges.length'),0,'the same probe must detect the old disconnected layout');
+  run('state.cy.destroy()');
+});
+
+test('a large connection layout keeps the saved positions and skips the force solver',()=>{
+  const {run}=inspectionViewer();
+  run(`$('layout').value='cose';
+    state.positionCache={layouts:{cose:{'app.core':{x:42,y:-17}}},status(){}};
+    state.universe.graph.edges.length=20001;
+    globalThis.fitMap=()=>{};globalThis.refreshMap=()=>{};
+    state.universe.project=()=>{throw Error('Over-budget layout projected its connections');};
+    globalThis.cytoscape=()=>{throw Error('Over-budget layout started a solver');};
+    layout();`);
+  assert.match(run('state.connectionLayoutNotice'),/uses Orbit on larger maps/);
+  assert.equal(run("state.universe.positions.get('app.core').x"),42);
+  assert.ok(run("Number.isFinite(state.universe.positions.get('app.web').y)"));
   run('state.cy.destroy()');
 });
 

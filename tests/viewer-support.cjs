@@ -8,7 +8,8 @@ function viewer() {
   const context = vm.createContext({ console, Set, Map, URL, URLSearchParams, TextEncoder, AbortController, DOMException, setTimeout, clearTimeout,
     document: { body: {}, getElementById: id => {
       if (!elements.has(id)) elements.set(id, { value: '', textContent: '', hidden: true, setAttribute() {},
-        append(){},replaceChildren(){},querySelectorAll(){return[];},classList:{add(){},remove(){},toggle(){}} });
+        append(){},replaceChildren(){},contains(node){return node===this;},
+        querySelectorAll(){return[];},classList:{add(){},remove(){},toggle(){}} });
       return elements.get(id);
     } }, location: { hash: '' }, history: { pushState() {}, replaceState() {} },
     localStorage: { setItem() {}, getItem() { return null; } }, innerWidth: 1280,
@@ -36,7 +37,7 @@ function viewer() {
     globalThis.realRenderBanner = renderBanner;
     globalThis.realRenderCrumbs = renderCrumbs;
     globalThis.realRenderGraph=renderGraph;
-    for (const name of ['renderBanner','renderCoverage','renderCrumbs','renderFilters','renderGraph','renderDetails','renderIconKey']) {
+    for (const name of ['renderBanner','renderBuildContext','renderCoverage','renderCrumbs','renderBrowse','renderFilters','renderGraph','renderDetails','renderIconKey']) {
       globalThis[name] = () => {};
     }
     state.targets = [{id:'sample', project:'SampleProject'}];
@@ -67,6 +68,7 @@ function inspectionViewer(styleEnabled = false) {
 function treeElements(run) {
   run(`globalThis.el=(tag,text,attrs={})=>({tag,textContent:text||'',attrs,children:[],isConnected:true,
     append(...items){this.children.push(...items);},replaceChildren(...items){this.children=items;},
+    contains(node){return node===this||this.children.some(child=>child.contains?.(node));},
     setAttribute(name,value){this.attrs[name]=value;},getAttribute(name){return this.attrs[name]??null;},remove(){},scrollIntoView(){this.scrolled=true;},
     querySelector(selector){const attribute=selector.match(/^\\[([^=]+)="([^"]+)"\\]$/);
       return this.children.flatMap(function walk(n){return[n,...(n.children||[]).flatMap(walk)];})

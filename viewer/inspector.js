@@ -3,12 +3,14 @@
 'use strict';
 
 class InspectorTabs {
-  constructor(container,create,{title,tabs,onClose,onSelect,id='inspector'}) {
+  constructor(container,create,{title,subtitle,tabs,onClose,onSelect,id='inspector'}) {
     this.pages=new Map();this.tabs=new Map();this.onSelect=onSelect;
-    const header=create('div',null,{class:'inspector-header'}),heading=create('h2',title),
+    const header=create('div',null,{class:'panel-heading inspector-header'}),heading=create('h2',title),
       close=create('button','\u00d7',{type:'button',class:'details-close','aria-label':'Close inspector',title:'Close inspector (Esc)'}),
       list=create('div',null,{role:'tablist','aria-label':'Inspection view',class:'inspector-tabs'});
-    close.onclick=onClose;header.append(heading,close);container.append(header,list);
+    const identity=create('div',null,{class:'inspector-identity'});identity.append(heading);
+    if(subtitle)identity.append(create('small',subtitle));
+    close.onclick=onClose;header.append(identity,close);container.append(header,list);
     for(const {id:name,label} of tabs) {
       const button=create('button',label,{type:'button',role:'tab',id:`${id}-tab-${name}`,
         'aria-controls':`${id}-page-${name}`,'aria-selected':'false',tabindex:'-1'}),

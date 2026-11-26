@@ -2,6 +2,9 @@
 // Serve test_review.fixture through the ordinary pipeline/index/server in a disposable workspace.
 async page=>{
   const check=(ok,message)=>{if(!ok)throw Error(message);},errors=[],requests=[],writes=[];
+  const openSettings=async()=>{
+    if(!await page.locator('#review-settings').evaluate(node=>node.open))await page.locator('#review-settings > summary').click();
+  };
   await page.emulateMedia({reducedMotion:'no-preference'});
   page.on('pageerror',e=>errors.push(e.message));
   page.on('request',r=>{requests.push(r);if(r.method()==='POST'&&r.url().includes('/layout/'))writes.push(r.url());});
@@ -27,7 +30,7 @@ async page=>{
   check(await page.locator('#review').isHidden(),'Automatic review should not cover the map with its list');
   await page.waitForFunction(()=>state.review.data&&!state.review.requests.size);
   await page.waitForFunction(()=>!state.gestureActive&&!state.viewportFrame&&!state.zoomFrame);
-  check(await page.locator('#toggle-review').getAttribute('aria-label').then(t=>/candidate|violation/.test(t)),'Toolbar hides the result');
+  check(await page.locator('#toggle-review').getAttribute('aria-label').then(t=>/\b(errors?|warnings?)\b/.test(t)),'Toolbar hides the result');
   const marked=await page.evaluate(()=>{
     const node=state.cy.nodes().find(n=>n.data('reviewMark')),edge=state.cy.edges('.review-candidate,.review-violation')[0];
     return{images:(node.style('background-image').match(/data:image\/svg\+xml/g)||[]).length,
@@ -110,11 +113,11 @@ async page=>{
     await page.evaluate(()=>{state.universe.expanded.delete('A');refreshMap();});
     await clickStar('A');
     const card=page.locator('#details [data-review-finding]');await card.waitFor();
-    check(await card.innerText().then(t=>t.includes('! Policy violation')),'Configured violation is not identified');
+    check(await card.getByText('Error',{exact:true}).isVisible(),'Configured violation is not identified');
     check(await page.evaluate(()=>state.cy.getElementById('A').data('reviewMark').startsWith('violation:')),'Violation badge missing');
-    await card.getByText('Exact evidence',{exact:true}).click();
     await card.getByRole('button',{name:'Inspect recorded reference',exact:true}).click();
     await page.waitForFunction(()=>document.querySelector('.review-details li'));
+    await card.getByText('Review decision',{exact:true}).click();
     await card.getByRole('button',{name:'Not relevant',exact:true}).focus();await page.keyboard.press('Enter');
     await page.waitForFunction(()=>state.review.data?.counts.acknowledged===1&&state.review.data.total===0);
     check(await page.evaluate(()=>document.activeElement?.id==='inspector-tab-architecture'),
@@ -123,9 +126,11 @@ async page=>{
     await page.reload();await page.waitForFunction(()=>state.cy&&state.positionCache);
     await page.locator('#toggle-review').click();
     await page.waitForFunction(()=>state.review.data?.counts.acknowledged===1);
+    await openSettings();
     await page.getByLabel('Show acknowledged',{exact:true}).check();
     await page.waitForFunction(()=>state.review.data?.total===1);
-    await clickStar('A');await card.getByRole('button',{name:'Reopen',exact:true}).click();
+    await clickStar('A');await card.getByText('Review decision (not relevant)',{exact:true}).click();
+    await card.getByRole('button',{name:'Reopen',exact:true}).click();
     await page.waitForFunction(()=>state.review.data?.counts.violation===1&&state.review.data.counts.acknowledged===0);
     check(await page.evaluate(()=>JSON.stringify(state.positionCache.layouts))===pins,'Policy review changed positions');
     check(errors.length===0,'Policy browser errors');
@@ -137,7 +142,7 @@ async page=>{
   await page.route(loadingPattern,async route=>{arriveLoading();await loadingGate;await route.continue();});
   await page.reload();await loadingWaiting;
   await page.waitForFunction(()=>state.cy&&state.positionCache);
-  check(await page.locator('#toggle-review').getAttribute('aria-label').then(t=>/checking/.test(t)),'Pending review is not explicit');
+  check(await page.locator('#toggle-review').getAttribute('aria-label').then(t=>/checking/i.test(t)),'Pending review is not explicit');
   await clickStar('A');await page.locator('#toggle-review').click();
   await page.waitForFunction(()=>state.mapSize.width===$('graph').getBoundingClientRect().width);
   const loadingZoom=await page.evaluate(()=>worldZoom()),loadingBox=await page.locator('#graph').boundingBox();
@@ -153,18 +158,24 @@ async page=>{
   await page.getByRole('button',{name:'Close inspector',exact:true}).click();
   await page.waitForFunction(()=>state.mapSize.width===$('graph').getBoundingClientRect().width);
   await page.unroute(loadingPattern);
-  check(!await page.locator('#review-items').innerText().then(text=>text.includes('off-view')),
+  check(await page.locator('#review-items h3').allTextContents().then(labels=>labels.join()==='Warnings'),
+    'Active findings are not grouped by severity');
+  check(await page.locator('#review-settings input').first().isHidden(),'Settings compete with the active findings');
+  check(await page.locator('#review-items button[data-finding] strong').count()===2&&
+    await page.locator('#review-pager button').count()===0,'Finding titles or single-page navigation are unclear');
+  check(!await page.locator('#review-items').innerText().then(text=>text.includes('Outside view')),
     'Visible marked entities were incorrectly labelled off-view');
   check(await page.evaluate(()=>state.cy.elements().length)===initial.elements,'Review added graph elements');
   const nativeId=await page.evaluate(()=>state.review.data.items.find(f=>f.kind==='native').id);
   check(await page.evaluate(id=>[...state.review.links.values()].some(records=>records.has(id)),nativeId),'Flagged reference has no visible warning wire');
   await page.evaluate(()=>inspectOverlap(ConnectionTrace.overlap(state.shard,state.shard.edges)));
-  const findingChoice=page.getByRole('combobox',{name:'Review finding',exact:true});
-  check(await findingChoice.locator('option').count()===2,'Overlapping findings need a complete, deduplicated choice');
-  await findingChoice.selectOption(nativeId);
+  const findings=page.locator('#details [data-inspection-finding]'),nativeChoice=page.locator(`#details [data-inspection-finding="${nativeId}"]`);
+  check(await findings.count()===2,'Overlapping findings need a complete, deduplicated choice');
+  await nativeChoice.focus();await page.keyboard.press('Enter');
   await page.locator('#details .review-finding').filter({hasText:'Native call without recorded module access'}).waitFor();
-  check(await findingChoice.evaluate(node=>document.activeElement===node),'Finding choice lost keyboard focus');
-  await findingChoice.selectOption({index:0});
+  check(await nativeChoice.evaluate(node=>document.activeElement===node),'Finding choice lost keyboard focus');
+  const cycleChoice=findings.filter({hasText:'Module dependency cycle'});
+  await cycleChoice.click();
   await page.locator('#details .review-finding').filter({hasText:'Module dependency cycle'}).waitFor();
   await page.getByRole('button',{name:'Close inspector',exact:true}).click();
   await page.waitForFunction(()=>state.mapSize.width===$('graph').getBoundingClientRect().width);
@@ -188,7 +199,7 @@ async page=>{
   await page.waitForFunction(()=>!state.review.requests.size);
   const beforeHover=requests.filter(r=>r.url().includes('/review')).length;
   await page.mouse.move(connectionPoint.x,connectionPoint.y);
-  await page.locator('#hover-card .review-summary').getByText(/review candidate/).waitFor();
+  await page.locator('#hover-card .review-summary').getByText(/\bwarnings?\b/).waitFor();
   check(requests.filter(r=>r.url().includes('/review')).length===beforeHover,'Warning hover fetched analysis or evidence');
   await page.mouse.click(connectionPoint.x,connectionPoint.y);
   await page.locator('#details .review-finding').filter({hasText:'Native call without recorded module access'}).waitFor();
@@ -205,11 +216,16 @@ async page=>{
   await page.getByRole('button',{name:'Close inspector',exact:true}).click();
   await clickStar('A');
   const native=page.locator('#details .review-finding').filter({hasText:'Native call without recorded module access'});
-  await native.waitFor();
-  await native.getByText('Exact evidence',{exact:true}).click();
+  await nativeChoice.click();await native.waitFor();
   await native.getByRole('button',{name:'Inspect recorded reference',exact:true}).click();
   await page.waitForFunction(()=>document.querySelector('.review-details')?.textContent.includes('Source/Sample.cpp'));
+  await native.getByText('Review decision',{exact:true}).click();
   await native.getByLabel('Decision reason (optional)').fill('Intentional synthetic relationship');
+  await cycleChoice.click();
+  check(await page.locator('#details [data-review-finding]').count()===1,'Inactive findings kept expanded evidence');
+  check(await page.evaluate(()=>liveBlockReason().includes('decision draft')),'Selecting another finding lost the decision draft guard');
+  await nativeChoice.click();
+  check(await native.getByLabel('Decision reason (optional)').inputValue()==='Intentional synthetic relationship','Switching findings lost the draft');
   await native.getByRole('button',{name:'Accept risk',exact:true}).click();
   await page.waitForFunction(()=>state.review.data?.counts.acknowledged===1&&state.review.data.total===1);
   check(await page.evaluate(id=>![...state.review.links.values()].some(records=>records.has(id)),nativeId),'Acknowledged warning retained an active wire');
@@ -222,6 +238,7 @@ async page=>{
     if(query.get('ack')==='true'&&!query.has('node')){arriveAck();await ackGate;}
     await route.continue();
   });
+  await openSettings();
   await page.getByLabel('Show acknowledged',{exact:true}).check();await ackWaiting;
   await page.getByLabel('Show acknowledged',{exact:true}).uncheck();
   await page.waitForFunction(()=>state.review.data?.total===1);
@@ -230,6 +247,7 @@ async page=>{
   await page.unroute(ackPattern);
   await page.getByLabel('Show acknowledged',{exact:true}).check();
   await page.waitForFunction(()=>state.review.data?.total===2);
+  await nativeChoice.click();await native.getByText('Review decision (risk accepted)',{exact:true}).click();
   await native.getByRole('button',{name:'Reopen',exact:true}).click();
   await page.waitForFunction(()=>state.review.data?.counts.acknowledged===0);
   await page.getByLabel('Show acknowledged',{exact:true}).uncheck();
@@ -239,6 +257,7 @@ async page=>{
       return route.fulfill({status:503,body:'Synthetic write refusal'});
     return route.continue();
   });
+  await nativeChoice.click();await native.getByText('Review decision',{exact:true}).click();
   await native.getByRole('button',{name:'Not relevant',exact:true}).click();
   await native.getByText(/Synthetic write refusal/).waitFor();
   check(await page.evaluate(()=>state.review.data.counts.acknowledged===0&&state.review.data.total===2),'Refused write changed visible triage');
@@ -258,24 +277,26 @@ async page=>{
   await page.unroute(pattern);
   await page.setViewportSize({width:640,height:900});
   check(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Review overflows narrow viewport');
+  await openSettings();
   await page.getByRole('button',{name:'Refresh findings',exact:true}).click();
   await page.waitForFunction(()=>state.review.data?.total===2&&!state.review.requests.size);
   await clickStar('A');await page.locator('#details .review-details').waitFor();
   await page.route('**'+initial.url,async route=>route.request().method()==='POST'&&route.request().postDataJSON()?.action==='recheck'?
     route.fulfill({status:400,body:'Synthetic invalid policy'}):route.continue());
   if(await page.locator('#review').isHidden())await page.locator('#toggle-review').click();
+  await openSettings();
   await page.getByRole('button',{name:'Refresh findings',exact:true}).click();
   await page.locator('#review-status').getByText(/Synthetic invalid policy/).waitFor();
-  check(await page.locator('#toggle-review').getAttribute('aria-label').then(t=>/failed/.test(t)),'Failed review resembles a clean result');
+  check(await page.locator('#toggle-review').getAttribute('aria-label').then(t=>/failed/i.test(t)),'Failed review resembles a clean result');
   check(await page.locator('#review-items [data-finding]').count()===0&&await page.locator('#details .review-details').count()===0,
     'Failed recheck retained apparently current findings');
   await page.unroute('**'+initial.url);
   await page.getByRole('button',{name:'Close review',exact:true}).click();
   check(await page.evaluate(()=>state.review.enabled),'Closing the list disabled review');
   await page.locator('#toggle-review').click();
-  await page.getByLabel('Evaluate recorded evidence',{exact:true}).uncheck();
+  await page.getByLabel('Show Review findings',{exact:true}).uncheck();
   check(await page.evaluate(()=>!state.review.enabled&&!state.cy.nodes().some(n=>n.data('reviewMark'))),'Review off retained badges');
-  check(await page.locator('#toggle-review').getAttribute('aria-label').then(t=>/off/.test(t)),'Disabled review state is hidden');
+  check(await page.locator('#toggle-review').getAttribute('aria-label').then(t=>/off/i.test(t)),'Disabled review state is hidden');
   check(await page.evaluate(()=>JSON.stringify(state.positionCache.layouts))===pins,'Review modified pins');
   check(writes.length===0,'Review wrote positions');check(errors.length===0,'Browser errors: '+errors.join('; '));
   return {review:true,automatic:true,readableSymbols:true,independentList:true,warningWires:true,findingChoice:true,offscreenPartner:true,oppositeEndpoint:true,exactEvidence:true,triage:true,refusal:true,lateClose:true,pinsUnchanged:true,

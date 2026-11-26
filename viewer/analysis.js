@@ -2,6 +2,9 @@
 // Acquisition controls project Monitor state; they do not execute checks or evaluate Review policy.
 'use strict';
 
+const CHECK_LABELS={completed:'Recorded',disabled:'Off',unavailable:'Unavailable',incomplete:'Not recorded',pending:'Queued',failed:'Failed'};
+const CHECK_MODES={auto:'Auto',on:'On (required)',off:'Off'};
+
 function checkElapsedTime(value){
   if(!Number.isFinite(value)||value<0)return '';
   const seconds=Math.round(value),minutes=Math.floor(seconds/60);
@@ -14,20 +17,20 @@ function checksSummary(current,target,message='') {
   const failed=rows.some(r=>r.status==='failed')||current?.checks?.some(r=>r.status==='failed')||
     outcomes.some(r=>r.status==='failed')||Boolean(current?.error||message);
   const busy=current?.active&&!['fresh','failed','retry required','saved','paused'].includes(current.state);
-  const done=rows.filter(r=>r.status==='completed').length;
   const counts={completed:0,disabled:0,unavailable:0,incomplete:0,pending:0,failed:0};
   for(const row of rows)counts[Object.hasOwn(counts,row.status)?row.status:'incomplete']++;
+  const done=counts.completed;
   const missing=rows.some(r=>!['completed','disabled'].includes(r.status))||outcomes.some(r=>['incomplete','unavailable'].includes(r.status));
-  const phase=current?.state==='stopping'?'Checks: stopping':busy?'Checks: running':failed?'Checks: failed':null;
-  const breakdown=[[done,'recorded'],[counts.disabled,'off'],[counts.unavailable,'unavailable'],
-    [counts.incomplete,'incomplete'],[counts.pending,'queued']].filter(([count])=>count).map(([count,label])=>`${count} ${label}`);
-  const label=phase||(rows.length?'Checks: '+breakdown.join(' / '):'Checks: unavailable');
-  const short=[[counts.unavailable,'unavailable'],[counts.incomplete,'incomplete'],[counts.pending,'queued'],
-    [counts.disabled,'off'],[done,'recorded']].find(([count])=>count);
-  const compact=phase||(short?`Checks: ${short[0]} ${short[1]}`:'Checks: unavailable');
-  return {label,compact,counts,guidance:rows.length>0&&done<rows.length,
+  const phase=current?.state==='stopping'?'Stopping':busy?'Running':failed?'Failed':
+    current?.degraded?'Monitoring degraded':current?.state==='paused'?'Paused':'';
+  const breakdown=[[counts.disabled,'off'],[counts.unavailable,'unavailable'],
+    [counts.incomplete,'incomplete'],[counts.pending,'queued'],[counts.failed,'failed']]
+    .filter(([count])=>count).map(([count,label])=>`${count} ${label}`);
+  const coverage=rows.length?[`${done} recorded`,...breakdown].join(' / '):'Coverage unavailable';
+  return {coverage,phase,counts,guidance:rows.length>0&&done<rows.length,
     attention:failed||missing||Boolean(current?.degraded),done,total:rows.length,busy,
-    description:[`Displayed map: ${done} of ${rows.length} checks recorded`,...rows.filter(r=>r.status!=='completed')
+    description:[rows.length?`Displayed map: ${done} of ${rows.length} checks recorded`:'Displayed map: check coverage unavailable',
+      ...rows.filter(r=>r.status!=='completed')
       .map(r=>`${r.label}: ${r.status}`),...outcomes.filter(r=>r.status!=='completed').map(r=>`${r.status}: ${r.code}`),
       current?.error,current?.degraded,message].filter(Boolean).join('. ')};
 }
@@ -64,18 +67,25 @@ class AnalysisControls {
     $('analysis-recommended').onclick=()=>{if(this.recommended){
       for(const select of $('analysis-checks').querySelectorAll('select'))select.value='auto';this.edited=true;}
       this.run();};
-    $('analysis-findings').onclick=()=>state.review?.panel(true);
     $('analysis-explore').onclick=()=>{this.panel(false);$('graph').focus({preventScroll:true});};
     $('analysis-discard').onclick=()=>{this.edited=false;this.formKey=null;this.error='';this.render(this.status);};
     $('analysis-auto').onchange=()=>this.control($('analysis-auto').checked?'activate':'pause');
     $('analysis-retry').onclick=()=>this.control('retry');
-    $('input-change-status').onclick=()=>{this.panel(true);$('analysis-changes').scrollIntoView({block:'nearest'});};
+    $('input-change-status').onclick=()=>{
+      this.panel(true);
+      const section=$('analysis-changes');
+      (section.hidden?$('analysis-current'):section).scrollIntoView({block:'nearest'});
+    };
     $('input-change-show').onclick=()=>{
       if(this.pathsOpen){this.cancelPaths();this.pathsOpen=false;this.renderChanges(this.changeCurrent);}
       else {this.pathsOpen=true;this.renderChanges(this.changeCurrent);}
     };
     $('input-change-previous').onclick=()=>this.loadPaths(Math.max(0,(this.pathPage?.cursor||0)-50));
     $('input-change-next').onclick=()=>{if(this.pathPage?.next!==null)this.loadPaths(this.pathPage.next);};
+    const repositionHelp=()=>this.positionCheckHelp();
+    $('analysis').addEventListener('scroll',repositionHelp,{passive:true});
+    window.addEventListener('scroll',repositionHelp,{passive:true});
+    window.addEventListener('resize',repositionHelp);
   }
   dirty(){return this.edited||this.saving;}
   guideKey(){return state.target?.id?'analysis-guide:'+JSON.stringify([state.target.id,
@@ -90,34 +100,45 @@ class AnalysisControls {
     this.handled.add(key);remember(key,'1');
   }
   guideBlocked(){
-    return Boolean(document.hidden||document.activeElement===$('graph')||liveBlockReason()||
-      ['review','details','filters'].some(id=>!$(id).hidden)||$('view-controls').open||
+    return Boolean(document.hidden||['graph','map-tooltip'].some(id=>document.activeElement===$(id))||liveBlockReason()||
+      ['review','details',...mapPanels].some(id=>!$(id).hidden)||
+      ['view-controls','type-key','coverage-details'].some(id=>$(id).open)||
       document.activeElement?.closest?.('input,select,textarea,button,a,summary,[contenteditable="true"]'));
   }
-  panel(open=$('analysis').hidden){
+  panel(open=$('analysis').hidden,{guidance=false}={}){
     const shown=!$('analysis').hidden;
     $('analysis').hidden=!open;$('toggle-analysis').setAttribute('aria-expanded',String(open));
-    if(open){state.review?.panel(false);togglePanel('filters',false);
+    $('analysis-explore').hidden=!open||!guidance;
+    if(open){state.review?.panel(false);closeMapPanels();
       if(innerWidth<=1000)togglePanel('details',false);
       if(this.hasGuide)this.markHandled();}
-    else {this.cancelPaths();if(shown)this.markHandled();
+    else {this.dismissCheckHelp();this.cancelPaths();if(shown)this.markHandled();
       if($('analysis').contains(document.activeElement))$('toggle-analysis').focus();}
     if(open&&this.pathsOpen)this.renderChanges(this.changeCurrent);
   }
-  renderOverview(){
-    const rows=state.target.checks||[],root=$('analysis-overview-checks');
-    this.hasGuide=rows.length>0;$('analysis-overview').hidden=!this.hasGuide;
-    if(!this.hasGuide)return;
-    $('analysis-overview-title').textContent='Displayed results';
-    $('analysis-overview-copy').textContent='Evidence for the map on screen. Missing checks limit which findings can be shown.';
-    root.replaceChildren();
-    const names={completed:'Recorded',disabled:'Off',unavailable:'Unavailable',incomplete:'Not recorded',pending:'Queued',failed:'Failed'};
-    for(const row of rows){const item=el('li');
-      item.append(el('span',row.label),el('strong',names[row.status]||'Not recorded',{'data-status':row.status}));root.append(item);}
-    const review=state.review,counts=review?.enabled&&!review.loading&&!review.error&&review.data?.counts&&
-      liveGeneration(review.target)===liveGeneration(state.target)?review.data.counts:null;
-    $('analysis-findings').textContent=counts?`View ${counts.violation+counts.candidate} recorded findings`:'Open Review';
-    $('analysis-findings').disabled=!state.target.review_url;
+  dismissCheckHelp(){
+    const popup=$('analysis-checks').querySelector('.check-help:popover-open');
+    if(!popup)return false;
+    popup.hidePopover();
+    return true;
+  }
+  positionCheckHelp(popup=$('analysis-checks').querySelector('.check-help:popover-open')){
+    if(!popup)return;
+    const anchor=popup.parentElement.querySelector('.check-help-toggle').getBoundingClientRect();
+    const panel=$('analysis').getBoundingClientRect();
+    const height=document.documentElement.clientHeight,width=document.documentElement.clientWidth;
+    if(anchor.bottom<=Math.max(panel.top,0)||anchor.top>=Math.min(panel.bottom,height)){
+      popup.hidePopover();
+      return;
+    }
+    const edge=10,gap=6,below=height-anchor.bottom-gap-edge,above=anchor.top-gap-edge;
+    const placeBelow=below>=popup.scrollHeight+2||below>=above;
+    const left=Math.max(edge,Math.min(anchor.left,width-popup.offsetWidth-edge));
+    Object.assign(popup.style,{
+      left:left+'px',top:placeBelow?anchor.bottom+gap+'px':'auto',
+      bottom:placeBelow?'auto':height-anchor.top+gap+'px',
+      maxHeight:Math.max(0,placeBelow?below:above)+'px'
+    });
   }
   renderCurrent(current,summary,awaiting,blocked,enabled){
     const busy=summary.busy,stopping=current?.state==='stopping',progress=busy&&!this.saving?current?.progress:null;
@@ -140,6 +161,8 @@ class AnalysisControls {
     $('analysis-error').setAttribute('role',waiting&&busy?'status':'alert');
     $('analysis-error').setAttribute('data-waiting',String(Boolean(waiting&&busy)));
     const running=Boolean(busy||stopping||this.saving);
+    $('analysis-current-title').hidden=!(running||awaiting||this.error||summary.attention||!summary.total||
+      enabled&&(summary.guidance||current?.state==='paused'));
     const determinate=progress?.phase==='native'&&Number.isSafeInteger(progress.completed)&&
       Number.isSafeInteger(progress.total)&&progress.total>0&&progress.total<=1000000&&progress.completed>=0&&progress.completed<=progress.total;
     for(const id of ['analysis-meter','checks-meter']){const meter=$(id);meter.hidden=!running;
@@ -150,78 +173,129 @@ class AnalysisControls {
       checkElapsedTime(progress.seconds),progress.detail].filter(Boolean).join(' / '):
       this.saving?'Waiting for the request to be accepted.':earlier&&Number.isFinite(earlier.seconds)?
         `Earlier work: ${checkElapsedTime(earlier.seconds)}`:running?'Waiting for phase progress.':'';
-    if(running){$('checks-label-wide').textContent='Checks: '+title;
-      $('checks-label-compact').textContent='Checks: '+(this.saving?'requesting':stopping?'stopping':earlier?'queued':progress?.phase||'running');
-      const button=$('toggle-analysis');button.title+='. '+title+'. '+$('analysis-progress').textContent;
-      button.setAttribute('aria-label','Checks. '+button.title);}
-    let explanation=!enabled?'Saved-only view. Open the viewer normally to enable background checks.':
+    const activity=running?title:awaiting&&!current?.error?'Results ready':summary.phase;
+    $('checks-activity').textContent=activity;
+    $('checks-activity').hidden=!activity;
+    const button=$('toggle-analysis');
+    button.setAttribute('data-phase',activity);
+    button.title=[summary.description,activity,running&&$('analysis-progress').textContent,
+      blocked&&`Update waiting: ${blocked}`].filter(Boolean).join('. ');
+    button.setAttribute('aria-label','Checks. '+button.title);
+    let explanation=!enabled?'Saved view. Open in live mode to run checks and compare inputs.':
       stopping?'Stopping owned work. The previous map and saved settings remain available.':
       current?.state==='paused'?'Checks paused for this session. Showing previous results.':
       waiting?current.state==='waiting for external build'?'Another project build is running. Checks will retry automatically.':
         'Checks are waiting for shared resources. The current map remains available.':
       current?.error?'The attempt failed. Showing the previous map; saved settings were retained.':
       earlier?'Earlier checks are still running. The current map remains available.':
-      busy?'Keep exploring the displayed map while checks run.':concern?`${concern.label}: ${concern.detail||'Inspect Check settings for details.'}`:'';
+      busy?'Keep exploring the displayed map while checks run.':concern?`${concern.label}: ${concern.detail||'Expand this check for details.'}`:'';
     if(current?.requested)explanation+=' Check choices are pending; they are saved only with a validated update.';
     if(blocked)explanation+=` Update waiting: ${blocked}.`;
     $('analysis-status').hidden=!explanation;$('analysis-status').textContent=explanation;
-    $('analysis-recommendation').hidden=running;
-    $('analysis-recommendation').textContent=this.edited?'Apply or reload your choices in Check settings below.':
-      this.recommended?'Auto uses available local tools and build context. Checks do not install tools, build the project or guarantee completion. Off prerequisites are unverified.':
-      'Recheck using your current settings. This keeps Off checks Off.';
+    const canRecheck=enabled&&summary.total>0&&!running&&!(current?.error&&current?.active);
+    const showRecommended=Boolean(canRecheck&&this.recommended&&!this.edited);
+    $('analysis-recommendation').hidden=!showRecommended;
+    $('analysis-recommendation').textContent='Sets optional checks to Auto using installed tools and existing build results.';
     $('analysis-recommended').textContent=this.recommended?'Run recommended checks':'Recheck enabled checks';
-    $('analysis-recommended').hidden=Boolean(busy||stopping||current?.error&&current?.active);
-    $('analysis-recommended').disabled=!enabled||!summary.total||this.saving||this.edited||running;
-    $('analysis-auto-note').textContent='Off checks stay Off. Automatic rechecks use only the enabled checks.';
-    if(!$('analysis-recommended').hidden)$('analysis-recommended').classList.add('primary-action');
+    $('analysis-recommended').hidden=!canRecheck||this.edited;
+    $('analysis-recommended').disabled=!canRecheck||this.edited;
+    $('analysis-run').hidden=!enabled||!(this.edited||canRecheck&&this.recommended);
+    $('analysis-run').textContent=this.edited?'Apply and run':'Recheck enabled checks';
+    $('analysis-run').disabled=!enabled||!summary.total||this.saving||stopping;
   }
-  build(rows,current){
+  build(rows){
     const root=$('analysis-checks');root.replaceChildren();this.choices={};
-    const pending=current?.requested?.checks;
     for(const row of rows){
-      const section=el('section',null,{class:'analysis-check','data-check':row.id});
-      const header=el('div',null,{class:'analysis-check-heading'});header.append(el('h3',row.label));
+      const section=el('details',null,{class:'check-disclosure','data-check':row.id});
+      const summary=el('summary'),line=el('span',null,{class:'check-line'});
+      line.append(el('span',row.label),el('strong',null,{id:'check-'+row.id+'-status',class:'check-coverage'}));
+      summary.append(line);
+      const body=el('div',null,{class:'check-body'});
+      const descriptionRegion=el('div');
+      const description=el('p',row.description,{class:'muted'});
+      descriptionRegion.append(description);body.append(descriptionRegion);
+      if(row.help?.why&&row.help?.method){
+        const explanation=el('div',null,{id:'check-'+row.id+'-help',class:'check-help',popover:'auto'});
+        const toggle=el('button','?',{type:'button',class:'check-help-toggle','aria-label':'About '+row.label,
+          'aria-controls':explanation.id,'aria-expanded':'false'});
+        let dismissTimer;
+        const isOpen=()=>explanation.matches(':popover-open');
+        const show=open=>{
+          clearTimeout(dismissTimer);
+          if(open===isOpen())return;
+          if(open){
+            explanation.showPopover({source:toggle});
+            this.positionCheckHelp(explanation);
+          }else explanation.hidePopover();
+        };
+        explanation.onbeforetoggle=event=>toggle.setAttribute('aria-expanded',String(event.newState==='open'));
+        toggle.onpointerenter=event=>{if(event.pointerType!=='touch')show(true);};
+        descriptionRegion.onpointerenter=()=>clearTimeout(dismissTimer);
+        descriptionRegion.onpointerleave=event=>{
+          if(event.pointerType!=='touch')dismissTimer=setTimeout(()=>{
+            if(document.activeElement!==toggle)show(false);
+          },150);
+        };
+        toggle.onfocus=()=>{if(toggle.matches(':focus-visible'))show(true);};
+        toggle.onblur=()=>{if(!descriptionRegion.matches(':hover'))show(false);};
+        toggle.onclick=event=>show(event.pointerType==='touch'||!isOpen());
+        section.ontoggle=()=>{if(!section.open)show(false);};
+        for(const [label,text] of [['Why it matters',row.help.why],['How it is checked',row.help.method]]){
+          const paragraph=el('p');paragraph.append(el('strong',label),' '+text);explanation.append(paragraph);
+        }
+        description.append(' ',toggle);
+        descriptionRegion.append(explanation);
+      }
       if(row.optional){
-        const label=el('label','Mode '),select=el('select',null,{name:'check-'+row.id,'aria-label':row.label+' mode'});
-        for(const [value,text] of [['auto','Auto'],['on','On (required)'],['off','Off']])select.append(el('option',text,{value}));
-        select.value=pending?.[row.id]||row.mode||'off';this.choices[row.id]=select;
-        select.onchange=()=>{this.edited=true;this.error='';this.render(this.status);};label.append(select);header.append(label);
-      }else header.append(el('small','Always collected',{class:'muted'}));
-      section.append(header,el('p',row.description,{class:'muted'}),
-        el('strong','',{id:'check-'+row.id+'-status'}),el('p','',{id:'check-'+row.id+'-detail'}));
+        const label=el('label','Mode ',{id:'check-'+row.id+'-mode-control',class:'check-mode'});
+        const select=el('select',null,{name:'check-'+row.id,'aria-label':row.label+' mode'});
+        for(const [value,text] of Object.entries(CHECK_MODES))select.append(el('option',text,{value}));
+        this.choices[row.id]=select;
+        select.onchange=()=>{this.edited=true;this.error='';this.render(this.status);};
+        label.append(select);
+        body.append(label,el('p',null,{id:'check-'+row.id+'-saved-mode',hidden:true}));
+      }
+      body.append(el('p',null,{id:'check-'+row.id+'-detail',class:'check-observation'}));
       const diagnostic=el('details',null,{id:'check-'+row.id+'-technical',hidden:true});
-      diagnostic.append(el('summary','Technical details'),el('p','',{id:'check-'+row.id+'-diagnostic'}));section.append(diagnostic);
-      if(row.setup){const help=el('details'),summary=el('summary','Tool setup');
-        help.append(summary,el('p','Tools are installed locally, offline. Show the setup command options:'),el('code',row.setup));
-        section.append(help);}
+      diagnostic.append(el('summary','Technical details'),el('p','',{id:'check-'+row.id+'-diagnostic'}));
+      body.append(diagnostic);
+      if(row.setup){
+        const help=el('details',null,{id:'check-'+row.id+'-setup',hidden:true});
+        help.append(el('summary','Tool setup'),el('code',row.setup));
+        body.append(help);
+      }
+      section.append(summary,body);
       root.append(section);
     }
-    const cycles=el('section',null,{class:'analysis-check'});
-    cycles.append(el('h3','Dependency cycles and boundary rules'),
-      el('p','Review evaluates the recorded map. Open Review for findings and policy; this does not start source analysis.',{class:'muted'}));
-    root.append(cycles);
   }
   render(status=this.status,message=state.live?.message||''){
     this.status=status;
     if(!state.target)return;
     message=message||status?.error||'';
     const current=status?.targets.find(t=>t.id===state.target.id),ready=current?.ready||state.target;
-    const rows=current?.checks?.length?current.checks:ready.checks||[];
     const displayed=state.target,enabled=Boolean(state.startup?.monitoring),summary=checksSummary(current,displayed,message);
+    const reported=current?.checks?.length?current.checks:ready.checks||[];
+    const rows=[...new Map([...(displayed.checks||[]),...reported].map(row=>[row.id,row])).values()];
     const awaiting=Boolean(current?.ready&&liveGeneration(current.ready)!==liveGeneration(displayed));
     const blocked=awaiting?liveBlockReason():'';
-    const button=$('toggle-analysis');
-    $('checks-label-wide').textContent=awaiting&&!summary.busy?'Checks: waiting':summary.label;
-    $('checks-label-compact').textContent=awaiting&&!summary.busy?'Checks: waiting':summary.compact;
-    button.title=[summary.description,blocked&&`Update waiting: ${blocked}`].filter(Boolean).join('. ');
-    button.setAttribute('aria-label','Checks. '+button.title);button.setAttribute('data-attention',String(summary.attention));
-    const key=JSON.stringify([ready.id,ready.run,current?.revision||0,current?.requested?.checks]);
+    $('checks-coverage').textContent=summary.coverage;
+    this.hasGuide=summary.total>0;$('analysis-overview').hidden=!rows.length;
+    const catalog=JSON.stringify([displayed.id,rows.map(({id,label,optional,description,setup,help})=>
+      [id,label,optional,description,setup,help?.why,help?.method])]);
+    const key=JSON.stringify([liveGeneration(ready),current?.revision||0,current?.requested?.checks]);
     if(this.target!==ready.id){this.target=ready.id;this.requestId=(this.requestId||0)+1;
       this.edited=false;this.saving=false;this.formKey=null;this.error='';}
     this.renderChanges(current);
-    if(!this.edited&&!this.saving&&key!==this.formKey){this.build(rows,current);this.formKey=key;
-      this.base={run:ready.run,revision:current?.revision||0};}
-    this.renderOverview();
+    if(!this.edited&&!this.saving){
+      if(catalog!==this.catalog){this.build(rows);this.catalog=catalog;this.formKey=null;}
+      if(key!==this.formKey){
+        for(const row of rows){
+          const select=this.choices[row.id];
+          if(select)select.value=current?.requested?.checks?.[row.id]||row.mode||'off';
+        }
+        this.formKey=key;this.base={run:ready.run,revision:current?.revision||0};
+      }
+    }
     const busy=summary.busy,progress=current?.progress;
     this.renderCurrent(current,summary,awaiting,blocked,enabled);
     $('analysis-ready').hidden=!awaiting;
@@ -233,30 +307,39 @@ class AnalysisControls {
     $('analysis-error').textContent=[this.error,current?.error,current?.degraded&&`Monitoring degraded: ${current.degraded}`,message].filter(Boolean).join('. ');
     for(const row of rows){
       const cell=$('check-'+row.id+'-status'),detail=$('check-'+row.id+'-detail');if(!cell||!detail)continue;
-      const labels={completed:'Recorded',disabled:'Off',unavailable:'Needs setup / prerequisite',failed:'Failed',
-        incomplete:'Not recorded',pending:'Queued'};
       const evidence=displayed.checks?.find(item=>item.id===row.id)||{status:'incomplete',detail:'Not recorded in the displayed map.'};
       const next=awaiting&&readyRows.find(item=>item.id===row.id);
-      cell.textContent=(labels[evidence.status]||evidence.status)+' in displayed map';
-      detail.textContent=[evidence.detail,busy&&progress?.phase===row.id?'Current attempt: running.':
-        row.status!==evidence.status&&row.status!=='completed'?`Current attempt: ${labels[row.status]||row.status}. ${row.status==='disabled'?'':row.detail}`:'',
-        next&&next.status!==evidence.status?`Update ready: ${labels[next.status]||next.status}; not displayed yet.`:''].filter(Boolean).join(' ');
+      const label=CHECK_LABELS[evidence.status]||'Not recorded';
+      if(cell.textContent!==label)cell.textContent=label;
+      detail.textContent=[evidence.status!=='completed'&&evidence.status!=='disabled'?evidence.detail:'',
+        busy&&progress?.phase===row.id?'Current attempt: running.':row.status!==evidence.status&&row.status!=='completed'?
+          `Current attempt: ${CHECK_LABELS[row.status]||row.status}. ${row.status==='disabled'?'':row.detail}`:'',
+        next&&next.status!==evidence.status?`Update ready: ${CHECK_LABELS[next.status]||next.status}; not displayed yet.`:''].filter(Boolean).join(' ');
       const diagnostic=!['completed','disabled'].includes(row.status)?row:evidence;
-      $('check-'+row.id+'-technical').hidden=['completed','disabled'].includes(diagnostic.status);
-      $('check-'+row.id+'-diagnostic').textContent=[diagnostic.code,diagnostic.diagnostic].filter(Boolean).join(': ');
-      cell.setAttribute('data-status',evidence.status);
+      const diagnosticText=[diagnostic.code,diagnostic.diagnostic].filter(Boolean).join(': ');
+      $('check-'+row.id+'-technical').hidden=!diagnosticText||['completed','disabled'].includes(diagnostic.status);
+      $('check-'+row.id+'-diagnostic').textContent=diagnosticText;
+      if(cell.getAttribute('data-status')!==evidence.status)cell.setAttribute('data-status',evidence.status);
+      const setup=$('check-'+row.id+'-setup');
+      if(setup)setup.hidden=evidence.status==='completed'&&diagnostic.status==='completed';
+      if(row.optional){
+        $('check-'+row.id+'-mode-control').hidden=!enabled;
+        const savedMode=$('check-'+row.id+'-saved-mode'),mode=CHECK_MODES[evidence.mode];
+        savedMode.hidden=enabled||!mode;savedMode.textContent=mode?'Mode: '+mode:'';
+      }
     }
-    for(const select of Object.values(this.choices||{}))select.disabled=this.saving;
-    $('analysis-run').textContent=this.edited?'Apply and run':'Recheck current settings';
-    $('analysis-run').disabled=!enabled||this.saving||current?.state==='stopping';
-    $('analysis-stop').hidden=!current?.active||!busy;
+    for(const select of Object.values(this.choices||{}))select.disabled=!enabled||this.saving;
+    $('analysis-settings').hidden=!enabled;
+    $('analysis-stop').hidden=!enabled||!current?.active||!busy;
     $('analysis-stop').textContent=current?.state==='updating'||current?.previous_work?'Stop checks':'Skip for now';
     $('analysis-stop').disabled=this.saving||current?.state==='stopping';
     $('analysis-auto').checked=Boolean(current?.active);$('analysis-auto').disabled=!enabled||this.saving||this.edited;
-    $('analysis-discard').hidden=!this.edited;$('analysis-retry').hidden=!current?.error||!current?.active||Boolean(busy);
+    $('analysis-discard').hidden=!enabled||!this.edited;
+    $('analysis-retry').hidden=!enabled||!current?.error||!current?.active||Boolean(busy);
     $('analysis-retry').disabled=this.saving;
     if(!$('analysis').hidden&&this.hasGuide)this.markHandled();
-    if(current&&this.hasGuide&&(summary.guidance||summary.attention)&&!this.guideHandled()&&!this.guideBlocked())this.panel(true);
+    if(enabled&&current&&this.hasGuide&&(summary.guidance||summary.attention)&&!this.guideHandled()&&!this.guideBlocked())
+      this.panel(true,{guidance:true});
   }
   cancelPaths(){this.pathRequest=(this.pathRequest||0)+1;this.pathController?.abort();this.pathLoading=false;}
   renderChanges(current){
@@ -266,6 +349,7 @@ class AnalysisControls {
     if(this.changeKey!==key){this.cancelPaths();this.changeKey=key;this.pathPage=null;this.pathError='';}
     const indicator=$('input-change-status');indicator.textContent=summary.label;
     indicator.title=summary.label+'. '+summary.detail;indicator.setAttribute('aria-label',indicator.title+' Open Checks.');
+    $('analysis-changes').hidden=!state.startup?.monitoring&&!value;
     $('input-change-summary').textContent=summary.label;
     $('input-change-detail').textContent=[summary.detail,summary.available&&value.observed_at?
       'Observed '+new Date(value.observed_at*1000).toLocaleString()+'.':''].filter(Boolean).join(' ');
@@ -275,7 +359,9 @@ class AnalysisControls {
       if(!value.complete)scopes.append(el('p',`${value.available||0} of ${value.total.toLocaleString()} changed paths available.`));
     }
     $('input-change-guidance').textContent=summary.available?(value.guidance||[]).join(' '):'';
-    $('input-change-limits').textContent=summary.available?(value.limits||[]).join(' '):summary.detail;
+    const limits=summary.available?(value.limits||[]).join(' '):'';
+    $('input-change-comparison-limits').hidden=!limits;
+    $('input-change-limits').textContent=limits;
     $('input-change-show').hidden=!summary.available||!value.available;
     $('input-change-show').textContent=this.pathsOpen?'Hide paths':'Show paths';
     $('input-change-paths').hidden=!summary.available||!value.available||!this.pathsOpen;

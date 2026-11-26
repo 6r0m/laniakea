@@ -3,6 +3,7 @@
 async (page,{publish})=>{
   const check=(v,message)=>{if(!v)throw Error(message);};
   await page.waitForFunction(()=>state.live&&!state.live.running);
+  await page.waitForFunction(()=>!state.review.loading&&!state.review.requests.size);
   await page.evaluate(()=>{clearTimeout(state.live.timer);state.live.stopped=true;});
   const poll=async()=>{await page.waitForFunction(()=>!state.live.running);
     await page.evaluate(async()=>{state.live.stopped=false;await state.live.tick();clearTimeout(state.live.timer);state.live.stopped=true;});
@@ -15,20 +16,28 @@ async (page,{publish})=>{
   await page.waitForFunction(()=>!state.framing&&!state.gestureActive&&!state.flight);
   let view;
   await page.evaluate(id=>selectNode(id),before.id);
-  await page.waitForFunction(()=>!state.referencePages.pending.size&&!liveBlockReason());
-  for(const operation of ['layout','refreshMap']){
+  await page.locator('#toggle-browse').click();
+  await page.waitForFunction(()=>state.mapSize.width===$('graph').clientWidth&&
+    !state.referencePages.pending.size&&!liveBlockReason());
+  for(const operation of ['layout','refreshMap','renderCoverage']){
     await page.evaluate(operation=>{
       const elements=()=>state.cy.elements().map(e=>e.json()).sort((a,b)=>a.data.id.localeCompare(b.data.id));
       window.priorAdoption={target:state.target,manifest:state.manifest,universe:state.universe,
         cache:state.positionCache,reader:state.referencePages,review:state.review,inspector:state.inspector,
         details:[...$('details').childNodes],text:$('details').innerText,elements:JSON.stringify(elements()),
+        browseRows:[...$('browse-list').childNodes],
         styles:JSON.stringify(renderedOverrides(state.cy).sort(([a],[b])=>a.localeCompare(b))),
         pan:state.cy.pan(),zoom:worldZoom(),url:location.href,history:JSON.stringify(history.state),
+        chrome:['build-context','coverage-summary','coverage-record','toggle-review'].map(id=>$(id).outerHTML),
         operation,original:window[operation]};
       window[operation]=()=>{
         if(operation==='refreshMap'){
           priorAdoption.original();state.cy.nodes().data('candidateOnly','must not survive recovery')
             .style({width:12345,opacity:0.25});
+        }
+        if(operation==='renderCoverage'){
+          state.manifest.target.name='CandidateEditor';
+          renderBuildContext();priorAdoption.original();
         }
         throw Error('injected '+operation+' failure');
       };
@@ -40,15 +49,21 @@ async (page,{publish})=>{
       state.referencePages===priorAdoption.reader&&state.review===priorAdoption.review&&
       state.inspector===priorAdoption.inspector&&
       priorAdoption.details.every((node,i)=>$('details').childNodes[i]===node)&&$('details').innerText===priorAdoption.text&&
+      ['build-context','coverage-summary','coverage-record','toggle-review'].every((id,i)=>$(id).outerHTML===priorAdoption.chrome[i])&&
       JSON.stringify(state.cy.elements().map(e=>e.json()).sort((a,b)=>a.data.id.localeCompare(b.data.id)))===priorAdoption.elements&&
       JSON.stringify(renderedOverrides(state.cy).sort(([a],[b])=>a.localeCompare(b)))===priorAdoption.styles&&
       location.href===priorAdoption.url&&JSON.stringify(history.state)===priorAdoption.history&&
       JSON.stringify(state.cy.pan())===JSON.stringify(priorAdoption.pan)&&worldZoom()===priorAdoption.zoom),
       'Failed '+operation+' left a partially adopted map, scene or Inspector');
+    const browse=await page.evaluate(()=>({open:!$('browse').hidden,expanded:$('toggle-browse').getAttribute('aria-expanded'),
+      focus:document.activeElement.id,rows:priorAdoption.browseRows.every((node,i)=>$('browse-list').childNodes[i]===node)}));
+    check(browse.open&&browse.expanded==='true'&&browse.focus==='browse-close'&&browse.rows,
+      'Failed '+operation+' changed Browse: '+JSON.stringify(browse));
     check(await page.evaluate(()=>state.live.message.includes('injected '+priorAdoption.operation+' failure')),
       'Rendering failure is not observable');
     await page.evaluate(()=>{delete window.priorAdoption;state.live.failed=null;});
   }
+  await page.locator('#browse-close').click();
   await page.evaluate(()=>renderDetails(null));
   await page.waitForFunction(()=>!liveBlockReason());
   view=await page.evaluate(()=>({pan:{...state.cy.pan()},size:{...state.mapSize},zoom:worldZoom(),scope:state.scopeShard.scope,
@@ -76,6 +91,7 @@ async (page,{publish})=>{
     await page.setViewportSize({width,height:1000});
     if(selector==='#review-ack'){
       if(await page.locator('#review').isHidden())await page.locator('#toggle-review').click();
+      if(!await page.locator('#review-settings').evaluate(node=>node.open))await page.locator('#review-settings > summary').click();
     }else await page.evaluate(id=>selectNode(id),before.id);
     await page.locator(selector).focus();
     const pane=selector==='#review-ack'?'review':'details';

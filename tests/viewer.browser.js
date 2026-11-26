@@ -3,7 +3,8 @@
 async (page) => {
   const base = page.url().split('/').slice(0,3).join('/');
   const view=async p=>{if(!await p.locator('#view-controls').evaluate(n=>n.open))await p.locator('#view-summary').click();};
-  const layout=async(p,mode)=>{await view(p);await p.selectOption('#layout',mode);await p.locator('#view-summary').click();};
+  const layout=async(p,mode)=>{await p.evaluate(mode=>chooseLayout(mode),mode);
+    if(await p.locator('#view-controls').evaluate(n=>n.open))await p.locator('#view-summary').click();};
   const check = (ok, message) => { if (!ok) throw new Error(message); };
   const frames=async()=>{await page.waitForFunction(()=>!state.flight);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));};
   const point = id => page.evaluate(id => {
@@ -40,6 +41,30 @@ async (page) => {
   await page.waitForFunction(()=>typeof state!=='undefined'&&state.cy&&state.positionCache);
   await frames();
   check(await page.evaluate(()=>$('error').hidden),'Startup reports an error');
+  check(await page.evaluate(()=>{
+    const {name,platform,configuration}=state.manifest.target;
+    return $('build-context').textContent.includes(name)&&$('build-context').textContent.includes(platform)&&
+      $('build-context').textContent.includes(configuration)&&$('crumbs').innerText.trim()==='Overview';
+  }),'Overview needs displayed build context and a distinct scope label');
+  for(const id of ['toggle-browse','toggle-filters','fit'])
+    check(await page.locator('#'+id).isVisible(),'Overview hides '+id+' under View');
+  await page.locator('#toggle-browse').click();
+  check(await page.locator('#browse [data-node]').count()>0&&await page.locator('#browse input').count()===0,
+    'Browse should list stars separately from filter controls');
+  await page.locator('#toggle-filters').click();
+  check(await page.locator('#browse').isHidden()&&await page.locator('#filters input').count()>0&&
+    await page.locator('#filters [data-node]').count()===0,'Filters should open directly and replace Browse');
+  await page.locator('#filters-close').focus();await page.keyboard.press('Escape');
+  check(await page.locator('#filters').isHidden()&&
+    await page.locator('#toggle-filters').evaluate(n=>n===document.activeElement),'Filters lost its keyboard return target');
+  check(await page.locator('#up').isHidden()&&await page.locator('#toggle-details').isHidden(),
+    'Overview exposes Up or Inspector before it is needed');
+  await view(page);
+  check(await page.locator('.view-layouts button:visible').count()===2&&
+    await page.getByRole('checkbox',{name:'Outline project-listed targets'}).isVisible()&&
+    await page.locator('#toggle-details').isHidden()&&await page.locator('#clear').isHidden(),
+    'View should present layout and outline settings with contextual selection actions hidden');
+  await page.keyboard.press('Escape');
   check(await page.evaluate(()=>state.target.id==='sample'&&state.universe.nodes.has('folder:Sample')&&
     state.universe.nodes.has('module:SampleCore')),'This mutation check requires the served synthetic sample');
   const original=await page.evaluate(()=>({mode:$('layout').value,layouts:state.positionCache.layouts}));
@@ -94,14 +119,14 @@ async (page) => {
     const configuration=page.locator('#toggle-configuration');
     const architecture=await page.evaluate(()=>({edges:state.cy.edges().map(e=>e.id()).sort().join(),
       pins:JSON.stringify(state.positionCache.layouts),positions:JSON.stringify([...state.universe.positions])}));
-    await view(page);await configuration.focus();await page.keyboard.press('Enter');await frames();
-    check(await configuration.getAttribute('aria-pressed')==='true'&&await page.evaluate(()=>
+    await view(page);await configuration.focus();await page.keyboard.press('Space');await frames();
+    check(await configuration.isChecked()&&await page.evaluate(()=>
       !state.cy.getElementById(state.universe.root).length&&state.cy.nodes('.configured').length>0),
       'Keyboard configuration marks must outline targets without restoring the root endpoint');
     check(await page.evaluate(before=>state.cy.edges().map(e=>e.id()).sort().join()===before.edges&&
       JSON.stringify(state.positionCache.layouts)===before.pins&&JSON.stringify([...state.universe.positions])===before.positions,
       architecture),'Annotations changed architecture edges or positions');
-    await view(page);await configuration.focus();await page.keyboard.press('Enter');await frames();
+    await view(page);await configuration.focus();await page.keyboard.press('Space');await frames();
     check(await accounted(),'Configuration subset filtering lost or double-counted references');
     const projectDetails=page.getByRole('button',{name:'Project details',exact:true});
     const contextBefore=await page.evaluate(()=>({file:state.file,zoom:worldZoom(),
@@ -116,12 +141,12 @@ async (page) => {
       'Project context lost exact declarations and distinct target counts');
     const closeDetails=page.getByRole('button',{name:'Close inspector',exact:true});
     await closeDetails.focus();await page.keyboard.press('Enter');await page.evaluate(()=>refreshMap());
-    check(await page.locator('#details').isHidden()&&await page.locator('#toggle-details').evaluate(n=>n===document.activeElement),
-      'Keyboard close must dismiss inspection and return focus to Details');
+    check(await page.locator('#details').isHidden()&&await page.locator('#view-summary').evaluate(n=>n===document.activeElement),
+      'Keyboard close must dismiss inspection and return focus to View');
     await projectDetails.click();
     await page.keyboard.press('Escape');await page.evaluate(()=>refreshMap());
     check(await page.locator('#details').isHidden(),'Escape must close context without reopening Project details');
-    await projectDetails.click();await view(page);await page.getByRole('button',{name:'Clear selection',exact:true}).click();
+    await projectDetails.click();await page.getByRole('button',{name:'Clear selection or trace',exact:true}).click();
     check(await page.locator('#details').isHidden(),'Clear must close Project details');
     await page.evaluate(()=>flyToNode('plugin:SampleCore'));
     await page.waitForFunction(()=>!state.gestureActive&&!state.flight);
@@ -181,9 +206,9 @@ async (page) => {
       const metadata=page.locator('#details .node-metadata'),summary=metadata.locator('summary');
       check(await summary.innerText()==='Metadata'&&await metadata.evaluate(node=>!node.open),'Bulk node metadata must start collapsed');
       const usable=await page.evaluate(()=>{
-        const panel=$('details'),box=panel.getBoundingClientRect(),heading=panel.querySelector('h3'),metadata=panel.querySelector('.node-metadata');
+        const panel=$('details'),box=panel.getBoundingClientRect(),heading=panel.querySelector('.inspection-section-title'),metadata=panel.querySelector('.node-metadata');
         return heading&&heading.getBoundingClientRect().bottom<=box.bottom&&
-          Boolean(metadata.compareDocumentPosition(heading)&Node.DOCUMENT_POSITION_FOLLOWING)&&
+          Boolean(heading.compareDocumentPosition(metadata)&Node.DOCUMENT_POSITION_FOLLOWING)&&
           [...panel.querySelectorAll('button')].some(b=>b.textContent==='Fly to star'&&b.getBoundingClientRect().bottom<=box.bottom);
       });
       check(usable,'Bulk metadata pushes navigation or connection headings below the initial detail viewport');
@@ -234,8 +259,8 @@ async (page) => {
       'Connection close left inspection open or selected');
     await page.evaluate(()=>selectNode('folder:Sample'));
     await page.getByRole('button',{name:'Collapse constellation',exact:true}).click();
-    await view(page);await page.getByRole('button',{name:'Clear selection',exact:true}).click();
-    await view(page);await page.getByRole('button',{name:'Fit map',exact:true}).click();await frames();
+    await page.getByRole('button',{name:'Clear selection or trace',exact:true}).click();
+    await page.getByRole('button',{name:'Fit overview',exact:true}).click();await frames();
     await page.evaluate(()=>selectNode('folder:Sample'));
     const groupControl=page.locator('#details [data-action="toggle-group"]');
     check(await groupControl.innerText()==='Expand constellation'&&await groupControl.getAttribute('aria-expanded')==='false',
@@ -249,8 +274,8 @@ async (page) => {
     check(await page.evaluate(()=>groupProbe.button===document.querySelector('#details [data-action="toggle-group"]')&&
       groupProbe.pager===document.querySelector('#details .reference-pager')),'Semantic zoom recreated the reader\'s reference pager');
     await groupControl.click();await page.evaluate(()=>delete globalThis.groupProbe);
-    await view(page);await page.getByRole('button',{name:'Clear selection',exact:true}).click();
-    await view(page);await page.getByRole('button',{name:'Fit map',exact:true}).click();await frames();
+    await page.getByRole('button',{name:'Clear selection or trace',exact:true}).click();
+    await page.getByRole('button',{name:'Fit overview',exact:true}).click();await frames();
     const unaffected=await page.evaluate(()=>({...state.universe.positions.get('folder:Experimental')}));
     const openSteps=await wheel('folder:Sample',true,-120);
     check(await accounted(),'References disappeared while opening the folder');
@@ -366,11 +391,11 @@ async (page) => {
     const flight=await page.evaluate(()=>({...state.cy.pan()}));
     check(Math.abs(flight.x-empty.pan.x)>30&&posts.length===flightPosts,'Dragging space did not fly without writing pins');
     const beforeReset=await page.evaluate(()=>({...state.universe.positions.get('engine')}));
-    await view(page);await page.getByRole('button',{name:'Fit map',exact:true}).click();
+    await page.getByRole('button',{name:'Fit overview',exact:true}).click();
     check(await page.evaluate(()=>state.file===state.manifest.entry&&state.scopeShard.scope===state.universe.root&&
-      location.hash===hashFor(state.target.id,state.manifest.entry)&&$('up').disabled&&
-      $('crumbs').querySelector('[aria-current="page"]').textContent.startsWith(state.manifest.project)),
-      'Fit map leaves a deep breadcrumb or scope address on the overview');
+      location.hash===hashFor(state.target.id,state.manifest.entry)&&$('up').hidden&&
+      $('crumbs').querySelector('[aria-current="page"]').textContent==='Overview'),
+      'Fit overview leaves a deep breadcrumb or scope address on the overview');
     await page.evaluate(()=>renderDetails(null));await frames();
     await page.waitForFunction(()=>!state.gestureActive&&state.visibleLabels);
     const engine=await point('engine'), beforeDrag=posts.length;
@@ -414,7 +439,7 @@ async (page) => {
       count:Object.keys(state.positionCache.layouts[$('layout').value]||{}).length}));
     check(savedBeforeReset.count>0,'Reset refusal needs saved synthetic positions');
     const beforeCancel=posts.length,cancelDialog=page.waitForEvent('dialog');
-    await view(page);const cancelClick=page.getByRole('button',{name:'Reset layout',exact:true}).click();
+    await view(page);const cancelClick=page.getByRole('button',{name:'Reset saved positions',exact:true}).click();
     const refused=await cancelDialog;
     const resetMessage=refused.message();
     check(refused.type()==='confirm'&&resetMessage.includes(savedBeforeReset.project)&&resetMessage.includes(savedBeforeReset.modeLabel)&&
@@ -423,7 +448,7 @@ async (page) => {
     check(posts.length===beforeCancel&&await page.evaluate(before=>JSON.stringify(state.positionCache.layouts)===before.pins&&
       JSON.stringify([...state.universe.positions])===before.positions&&!$('reset-layout').disabled,savedBeforeReset),
       'Cancelling reset changed or saved positions');
-    await view(page);const acceptDialog=page.waitForEvent('dialog'),acceptClick=page.getByRole('button',{name:'Reset layout',exact:true}).click();
+    await view(page);const acceptDialog=page.waitForEvent('dialog'),acceptClick=page.getByRole('button',{name:'Reset saved positions',exact:true}).click();
     const accepted=await acceptDialog;await accepted.accept();await acceptClick;
     await page.waitForFunction(()=>state.positionCache.pending===0&&state.positionCache.errors.size===0&&
       !Object.hasOwn(state.positionCache.layouts,$('layout').value));
@@ -466,7 +491,7 @@ async (page) => {
     check(await page.evaluate(()=>$('inspector-page-details').scrollTop===0&&$('inspector-page-details').scrollLeft===0),
       'New inspection retained the previous list scroll');
     await page.setViewportSize({width:390,height:844});await frames();
-    await view(page);await page.getByRole('button',{name:'Fit map',exact:true}).click();
+    await page.getByRole('button',{name:'Fit overview',exact:true}).click();
     const narrow=await page.evaluate(()=>({width:document.documentElement.scrollWidth,viewport:innerWidth,
       count:state.cy.nodes().length,error:$('error').hidden}));
     check(narrow.width<=narrow.viewport&&narrow.count>0&&narrow.error,'Narrow viewport overflows or loses the map');

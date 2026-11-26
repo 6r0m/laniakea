@@ -2,6 +2,10 @@
 // A monitored Sample corpus; the harness edits synthetic build rules and holds staging until released.
 async(page,{change,hold,inspect=async()=>{}})=>{
   const check=(value,message)=>{if(!value)throw Error(message);};
+  const openNative=async()=>{
+    const row=page.locator('[data-check="native"]');
+    if(!await row.evaluate(node=>node.open))await row.locator(':scope > summary').click();
+  };
   await page.waitForFunction(()=>{const current=state.live?.status?.targets.find(t=>t.id===state.target.id);
     return state.analysis?.base&&current?.state==='fresh'&&current.ready.run===state.target.run&&current.comparison?.baseline===state.target.run;});
   if(await page.locator('#analysis').isHidden())await page.locator('#toggle-analysis').click();
@@ -25,7 +29,7 @@ async(page,{change,hold,inspect=async()=>{}})=>{
   check(await page.locator('#input-change-list li').count()===23,'Last page lost changed paths');
   check(await page.locator('#input-change-list a').count()===22,'Removed input acquired a source link');
   await page.locator('#input-change-previous').click();await page.waitForFunction(()=>state.analysis.pathPage?.cursor===50);
-  if(!await page.locator('#analysis-settings').evaluate(node=>node.open))await page.locator('#analysis-settings > summary').click();
+  await openNative();
   await page.locator('[name="check-native"]').selectOption('auto');
   await page.locator('#input-change-next').click();await page.waitForFunction(()=>state.analysis.pathPage?.cursor===100);
   check(await page.evaluate(()=>state.analysis.edited&&state.analysis.choices.native.value==='auto'),'Paging erased check choices');
@@ -61,6 +65,7 @@ async(page,{change,hold,inspect=async()=>{}})=>{
   await page.waitForFunction(()=>state.target.id==='sample'&&state.analysis.target==='sample'&&state.analysis.base.run===state.target.run);
   if(await page.locator('#analysis').isHidden())await page.locator('#toggle-analysis').click();
   const token=await page.evaluate(()=>state.live.status.targets.find(t=>t.id==='sample').comparison.observation);
+  await openNative();
   await page.locator('[name="check-native"]').selectOption('auto');
   await change(1);await page.waitForFunction(token=>state.live.status.targets.find(t=>t.id==='sample').comparison.observation!==token,token);
   const stale=await page.evaluate(async({token,run})=>(await fetch('/monitor/changes?'+new URLSearchParams({target:'sample',run,observation:token}))).status,

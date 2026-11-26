@@ -43,7 +43,7 @@ test('wire readouts count distinct findings and bound explanations without fetch
   const control=Object.assign(Object.create(ArchitectureReview.prototype),{enabled:true,data:{},
     referenceIndex:ReviewReferenceIndex(records)});
   const readout=control.readout({kind:'pair',refs:[{group:1,count:8},{group:2,count:8}]});
-  assert.match(readout.summary,/1 policy violation/);assert.match(readout.summary,/2 review candidates/);
+  assert.match(readout.summary,/1 error/);assert.match(readout.summary,/2 warnings/);
   assert.match(readout.summary,/1 acknowledged/);assert.equal(readout.titles.length,2);
 });
 
@@ -81,9 +81,9 @@ test('disabled review performs no rendered-node scan and clears only its previou
 });
 
 test('review starts enabled with a closed list, and closing that list retains analysis',()=>{
-  const {ArchitectureReview}=require('../viewer/review.js'),previous=global.$,previousPanel=global.togglePanel;
+  const {ArchitectureReview}=require('../viewer/review.js'),previous=global.$,previousClose=global.closeMapPanels;
   const nodes=new Map(),node=id=>{if(!nodes.has(id))nodes.set(id,{hidden:true,setAttribute(){},focus(){}});return nodes.get(id);};
-  global.$=node;global.togglePanel=()=>{};
+  global.$=node;global.closeMapPanels=()=>{};
   try {
     const control=new ArchitectureReview();control.reset({review_url:'/review'});
     assert.equal(control.enabled,true);assert.equal(node('review').hidden,true);
@@ -92,14 +92,19 @@ test('review starts enabled with a closed list, and closing that list retains an
     control.loading=true;control.status();assert.match(node('toggle-review').title,/checking/i);
     control.loading=false;control.error='Failed';control.status();assert.match(node('toggle-review').title,/failed/i);
     control.error=null;control.data={counts:{candidate:2,violation:0,acknowledged:0}};control.status();
-    assert.match(node('toggle-review').title,/2 candidates/);
+    assert.match(node('toggle-review').title,/2 warnings/);
+    assert.equal(node('review-candidate-count').textContent,'2 warnings');
+    assert.equal(node('review-violation-count').hidden,true);
+    control.data.counts={candidate:2,violation:1,acknowledged:4};control.status();
+    assert.equal(node('review-violation-count').textContent,'1 error');
+    assert.equal(node('review-candidate-count').textContent,'2 warnings');
     control.data={counts:{candidate:0,violation:0,acknowledged:0},checks:[
       {status:'failed'},{status:'unavailable'},{status:'available'},{status:'disabled'}]};
     control.status();assert.match(node('toggle-review').title,/0 recorded findings \/ 1 failed \/ 1 unavailable \/ 1 disabled/);
-    assert.equal(node('review-label-wide').textContent,'Review: 0 recorded findings');
+    assert.equal(node('review-phase').textContent,'0 recorded findings');
     control.data.checks.push({status:'incomplete'});control.status();
     assert.match(node('toggle-review').title,/0 recorded findings \/ 1 incomplete \/ 1 failed \/ 1 unavailable \/ 1 disabled/);
-  } finally {global.$=previous;global.togglePanel=previousPanel;}
+  } finally {global.$=previous;global.closeMapPanels=previousClose;}
 });
 
 test('warning symbols use independent readable images rather than shrinking inside type icons',()=>{

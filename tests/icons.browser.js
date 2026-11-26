@@ -49,11 +49,13 @@ async page=>{
     check(proof.titleTop>=Math.max(0,-proof.titleY),'Expanded title images are clipped by native texture bounds');
     check(JSON.stringify(proof.ids)===JSON.stringify(initial.ids)&&proof.positions===initial.positions,'Decoration changed graph or positions');
     await page.locator('#type-key summary').focus();await page.keyboard.press('Enter');
+    check(await page.locator('#map-guide-summary').innerText()==='Map guide','Map disclosure does not identify its contents');
     check(await page.locator('#icon-key').isVisible(),'Icon key has no keyboard route');
     check(await page.locator('#icon-key img').count()===17,'Icon key is incomplete');
     check(await page.locator('#icon-key').evaluate(el=>el.getBoundingClientRect().right<=innerWidth),'Icon key overflows');
     await page.keyboard.press('Escape');
     check(!await page.locator('#type-key').evaluate(el=>el.open),'Escape leaves the icon key open');
+    check(await page.locator('#map-guide-summary').evaluate(el=>el===document.activeElement),'Closing Map guide lost keyboard focus');
   }
   const point=await page.evaluate(()=>{const p=state.cy.getElementById('method').renderedPosition(),b=$('graph').getBoundingClientRect();
     return{x:p.x+b.x,y:p.y+b.y};});

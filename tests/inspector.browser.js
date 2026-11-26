@@ -26,8 +26,14 @@ async page=>{
   check(referenceRequests()===before,'Opening Architecture eagerly requested ordinary reference pages');
   check(await page.locator('#inspector-page-details .review-finding').count()===0,'Findings leaked into Details');
   check(await page.locator('#inspector-page-architecture .reference-pager').count()===0,'Ordinary references leaked into Architecture');
+  await page.evaluate(()=>{
+    const review=state.review,data=review.data;review.data=null;review.refreshInspection();
+    review.data=data;review.refreshInspection();
+  });
+  await card.waitFor();
+  check(await page.locator('#details [data-review-finding]').count()===1,'Loading a refreshed report lost the active finding');
+  await card.getByText('Review decision',{exact:true}).click();
   await card.getByLabel('Decision reason (optional)').fill('Unfinished synthetic decision');
-  await card.getByText('Exact evidence',{exact:true}).click();
   await card.getByRole('button',{name:'Inspect recorded reference',exact:true}).click();await card.locator('li').waitFor();
   await details.click();await page.locator('#inspector-page-details .reference-pager').first().waitFor();
   await page.waitForFunction(()=>!document.querySelector('#inspector-page-details').textContent.includes('Loading references...'));
@@ -55,7 +61,7 @@ async page=>{
   await page.setViewportSize({width:640,height:800});
   check(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Inspector overflows the narrow window');
   await page.getByRole('button',{name:'Close inspector',exact:true}).click();
-  check(await page.locator('#toggle-details').evaluate(n=>n===document.activeElement),'Close did not restore toolbar focus');
+  check(await page.locator('#view-summary').evaluate(n=>n===document.activeElement),'Close did not restore toolbar focus');
   await page.setViewportSize({width:1440,height:1000});
   let release,arrive;const gate=new Promise(resolve=>release=resolve),arrived=new Promise(resolve=>arrive=resolve);
   const reviewUrl=await page.evaluate(()=>state.target.review_url),pattern='**'+reviewUrl+'?*';
@@ -73,8 +79,26 @@ async page=>{
   check(await architecture.innerText().then(t=>/failed/i.test(t)),'Failed findings look like zero findings');
   await details.click();check(await page.locator('#inspector-page-details').isVisible(),'Review failure blocked Details');
   await page.unroute(pattern);await page.getByRole('button',{name:'Close inspector',exact:true}).click();
+  const loaded=await page.evaluate(()=>state.review.data.items[0]);
+  await page.route(pattern,async route=>{
+    const query=new URL(route.request().url()).searchParams;
+    if(query.get('node')!=='A')return route.continue();
+    const response=await route.fetch(),data=await response.json(),cursor=Number(query.get('cursor')||0),total=62;
+    const items=Array.from({length:Math.min(50,total-cursor)},(_,i)=>({...loaded,id:`synthetic-${cursor+i}`,title:`Synthetic finding ${cursor+i+1}`}));
+    return route.fulfill({response,json:{...data,items,total,next_cursor:cursor+items.length<total?cursor+items.length:null}});
+  });
+  await page.evaluate(()=>{state.review.pages.clear();selectNode('A');});
+  const choices=page.locator('#details [data-inspection-finding]'),active=page.locator('#details [data-review-finding]');
+  await active.waitFor();check(await choices.count()===50,'A large finding list exceeds its first page');
+  check(await choices.first().locator('..').evaluate(list=>list.clientHeight<list.scrollHeight&&list.clientHeight<=232),
+    'Many compact findings push the active evidence below the entire list');
+  await page.getByRole('button',{name:'More findings',exact:true}).click();
+  await choices.nth(61).click();
+  check(await choices.count()===62&&await active.count()===1&&await active.getByRole('heading',{name:'Synthetic finding 62'}).isVisible(),
+    'Paging replaced the finding list or rendered several evidence panels');
+  await page.unroute(pattern);await page.getByRole('button',{name:'Close inspector',exact:true}).click();
   check(await page.evaluate(()=>JSON.stringify(state.positionCache.layouts))===pins,'Inspector changed saved pins');
   check(!errors.length&&!writes.length,'Inspector failed or wrote state: '+JSON.stringify({errors,writes}));
   return{tabs:true,keyboard:true,separation:true,lazyReferences:true,retainedContent:true,draft:true,lateResponse:true,
-    failure:true,narrow:true,closeFocus:true,pinsUnchanged:true,errors,writes};
+    failure:true,narrow:true,paginatedFindings:true,closeFocus:true,pinsUnchanged:true,errors,writes};
 }

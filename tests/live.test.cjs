@@ -78,7 +78,7 @@ test('source acquisition failure stays visible even with the live controls close
   run(`state.startup={monitoring:true};live.status={targets:[{id:'sample',active:true,state:'fresh',
     ready:{run:'next',acquisition:{clones:{status:'failed',code:'provider_exit'}}}}]};live.render();`);
   const summary=run('checksSummary(live.status.targets[0],live.status.targets[0].ready)');
-  assert.match(summary.label,/failed/);assert.match(summary.description,/provider_exit/);
+  assert.equal(summary.phase,'Failed');assert.match(summary.description,/provider_exit/);
 });
 
 test('validated unchanged topology reuses geometry while changed facts stage a new universe',async()=>{
