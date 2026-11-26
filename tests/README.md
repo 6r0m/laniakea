@@ -65,7 +65,9 @@ calling down first.
 
 `python tests/record_fixture.py [--engine <engine root>]` regenerates the sample's recorded UBT export when the sample
 changes. It uses the [sample copy command](../sample/copy_sample.py), so track new sample files before recording.
-Review the tokenized fixture before publishing. Tracked tests use only synthetic project data.
+The recorder captures the engine version and fingerprints the sample's descriptors, module rules and target rules with
+normalized line endings. The public preview refuses a mismatch in their paths or content. Review the tokenized fixture
+before publishing. Tracked tests use only synthetic project data.
 
 ## Browser acceptance
 

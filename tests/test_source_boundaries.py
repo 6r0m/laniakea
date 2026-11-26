@@ -21,6 +21,18 @@ def directory_link(link, target):
 
 
 class Boundaries(unittest.TestCase):
+    def test_project_directory_alias_preserves_declared_plugin_mount(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = root / 'project'
+            plugin = root / 'shared/SamplePlugin'
+            plugin.mkdir(parents=True)
+            (plugin / 'SamplePlugin.uplugin').write_text('{}')
+            directory_link(project / 'Plugins/SamplePlugin', plugin)
+            alias = root / 'alias'
+            directory_link(alias, project)
+            self.assertEqual(descriptors.project_plugins(alias), [alias / 'Plugins/SamplePlugin/SamplePlugin.uplugin'])
+
     def test_external_file_link_is_rejected_too(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -3,13 +3,14 @@
 
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from unittest.mock import patch
 from pathlib import Path
 
 from laniakea import LaniakeaError, cli, pipeline, schema
 from laniakea.unreal import target_fields
 from laniakea.workspace import Workspace, read_json
-from support import copy_sample, fake_engine, publish_recorded_sample, recorded_ubt
+from support import FIXTURES, copy_sample, fake_engine, publish_recorded_sample, recorded_ubt
 
 
 class Pipeline(unittest.TestCase):
@@ -38,11 +39,33 @@ class Pipeline(unittest.TestCase):
         self.assertIn('module', manifest['levels'])
         self.assertNotIn('function', manifest['levels'])
         self.assertNotIn('health', manifest)
+        recording = read_json(FIXTURES / 'sample.ubt.json')['recording']
+        source = next(source for source in manifest['sources'] if source['id'] == 'ubt')
+        self.assertIn('Recorded', source['name'])
+        self.assertEqual(source['version'], recording['engine_version'])
+        self.assertIn('Recorded module-only preview', ' '.join(manifest['coverage']['analysed']))
+        self.assertNotIn('current UBT', ' '.join(manifest['coverage']['analysed']))
         with make_server(workspace, scan=False, launch_target='sample') as server:
             report = server.reviews['sample'].page({})
             self.assertEqual(report['total'], 2)
             self.assertEqual({(item['kind'], item['severity']) for item in report['items']},
                              {('cycles', 'violation'), ('forbidden', 'violation')})
+
+    def test_preview_refuses_changed_build_inputs_before_publication(self):
+        base = Path(self.temporary.name) / 'preview'
+        rules = self.project / 'Source/SampleProject/SampleProject.Build.cs'
+        descriptor = self.project / 'SampleProject.uproject'
+        for path in (rules, descriptor):
+            with self.subTest(path=path.name):
+                original = path.read_bytes()
+                try:
+                    path.write_bytes(original + b'\n ')
+                    with patch('support.copy_sample', return_value=self.project):
+                        with self.assertRaisesRegex(LaniakeaError, path.name):
+                            publish_recorded_sample(base, demo_policy=True)
+                    self.assertIsNone(Workspace(base / 'analysis').latest('sample'))
+                finally:
+                    path.write_bytes(original)
 
     def test_module_extraction_ignores_installed_or_broken_symbol_tools_and_source_edits(self):
         tools = self.workspace.root / 'tools/unreal'
@@ -181,8 +204,10 @@ class Pipeline(unittest.TestCase):
 
     def test_no_project_means_the_newest_extracted_one(self):
         other = self.workspace.register("other", dict(self.target, project_file=str(self.project.parent / "O.uproject")))
-        self.workspace.commit_run("other", self.workspace.begin_run("other"))
-        self.workspace.commit_run("sample", self.workspace.begin_run("sample"))
+        with patch('laniakea.workspace.datetime') as clock:
+            clock.now.side_effect = [datetime(2026, 1, 1, second=second, tzinfo=timezone.utc) for second in (0, 1)]
+            self.workspace.commit_run("other", self.workspace.begin_run("other"))
+            self.workspace.commit_run("sample", self.workspace.begin_run("sample"))
         self.assertEqual(self.workspace.last()["id"], "sample")
         self.assertEqual(cli._target(self.workspace, None, None, None, None)["id"], "sample")
         self.assertEqual(other["id"], "other")

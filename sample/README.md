@@ -4,7 +4,9 @@ Fictional projects for exploring Laniakea on public data.
 
 Run `python -B tests/preview_sample.py` from the repository root to explore the committed Unreal relay recording
 without installing Unreal. The preview serves a disposable, saved-only module map. Open **Review** to inspect its two
-module errors. Use the walkthrough below to record live C++ and duplication evidence with Unreal and the optional tools.
+module errors, and **Coverage** for the recording's engine version and limits. The preview requires the build rules and
+descriptors that match the recording. Stop the preview with Ctrl+C. Use the walkthrough below to collect fresh evidence
+from an edited sample.
 
 | what you will find | owner |
 |---|---|

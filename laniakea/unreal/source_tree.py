@@ -9,12 +9,12 @@ from .. import LaniakeaError
 
 class SourceTree:
     def __init__(self, root, plugins=()):
-        self.root = Path(root).resolve()
-        self.allowed = {self.root, *(Path(plugin).parent.resolve() for plugin in plugins)}
+        self.logical_root = Path(os.path.abspath(root))
+        self.allowed = {self.logical_root.resolve(), *(Path(plugin).parent.resolve() for plugin in plugins)}
         self.visited = set()
 
     def require(self, path, discover_plugin=False):
-        path = Path(path).absolute()
+        path = Path(os.path.abspath(path))
         try:
             physical = path.resolve()
         except (OSError, RuntimeError) as error:
@@ -22,7 +22,7 @@ class SourceTree:
         if any(physical.is_relative_to(root) for root in self.allowed):
             return physical
         # Only plugin discovery may admit a new mount, at its descriptor-owning directory.
-        if discover_plugin and path.is_relative_to(self.root / 'Plugins') and path.is_dir() and any(path.glob('*.uplugin')):
+        if discover_plugin and path.is_relative_to(self.logical_root / 'Plugins') and path.is_dir() and any(path.glob('*.uplugin')):
             self.allowed.add(physical)
             return physical
         raise LaniakeaError(f'external source link is not a declared plugin mount: {path}')

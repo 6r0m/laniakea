@@ -3,10 +3,12 @@
 
 import argparse
 import tempfile
+import webbrowser
 
 from support import ROOT, publish_recorded_sample
 
-from laniakea import cli
+from laniakea import LaniakeaError
+from laniakea.server import make_server
 
 
 def main():
@@ -16,12 +18,20 @@ def main():
     scratch = ROOT / 'workspace' / 'tmp'
     scratch.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='relay-', dir=scratch) as temporary:
-        workspace = publish_recorded_sample(temporary, demo_policy=True)
-        print('Unreal relay preview: recorded module evidence from the synthetic sample.', flush=True)
-        arguments = ['--workspace', str(workspace.root), 'up', 'sample', '--no-watch', '--port', '0']
-        if options.no_browser:
-            arguments.append('--no-browser')
-        return cli.main(arguments)
+        try:
+            workspace = publish_recorded_sample(temporary, demo_policy=True)
+            server = make_server(workspace, scan=False, launch_target='sample')
+        except LaniakeaError as error:
+            parser.exit(2, f'Sample preview unavailable. {error}\n')
+        with server:
+            url = f'http://127.0.0.1:{server.server_address[1]}/'
+            print(f'Unreal relay preview: serving {url} (Ctrl+C stops)', flush=True)
+            if not options.no_browser:
+                webbrowser.open(url)
+            try:
+                server.serve_forever()
+            except KeyboardInterrupt:
+                pass
 
 
 if __name__ == '__main__':

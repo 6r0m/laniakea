@@ -53,7 +53,7 @@ class EngineResolution(unittest.TestCase):
 
     def test_empty_association_uses_the_enclosing_engine(self):
         inside = self.project("", self.engine / "Samples" / "Game")
-        self.assertEqual(engine.resolve(inside, launcher={}, sources={}), self.engine)
+        self.assertEqual(engine.resolve(inside, launcher={}, sources={}), self.engine.resolve())
 
     def test_bundled_dotnet_prefers_the_newest_version(self):
         for version in ("8.0", "10.0"):

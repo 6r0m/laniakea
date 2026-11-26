@@ -4,7 +4,7 @@
     python tests/record_fixture.py [--engine <engine root>]
 
 Absolute roots become <project> and <engine>, and engine modules are pruned to the ones the sample uses, so the
-fixture holds no machine path and no engine data beyond module names and locations.
+fixture keeps portable module data, the engine version and the sample's build input fingerprints.
 """
 
 import argparse
@@ -16,8 +16,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from laniakea import LaniakeaError  # noqa: E402
 from laniakea.unreal import engine, ubt  # noqa: E402
-from sample.copy_sample import copy_sample  # noqa: E402
+from support import copy_sample, recording_inputs  # noqa: E402
 
 FIXTURE = ROOT / "fixtures" / "sample.ubt.json"
 TARGET = "SampleProjectEditor"
@@ -54,18 +55,30 @@ def main():
     options = argparse.ArgumentParser()
     options.add_argument("--engine")
     args = options.parse_args()
-    with tempfile.TemporaryDirectory() as temporary:
+    scratch = ROOT / 'workspace' / 'tmp'
+    scratch.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='record-ubt-', dir=scratch) as temporary:
         copy = copy_sample(temporary)
         project_file = copy / "SampleProject.uproject"
         root = engine.resolve(project_file, args.engine)
+        inputs = recording_inputs(copy)
+        try:
+            version = engine.version(root)
+        except (FileNotFoundError, KeyError):
+            version = 'unknown'
         out = Path(temporary) / "out"
         out.mkdir()
         targets = ubt.query_targets(root, project_file, out)
         exported = ubt.export(root, project_file, TARGET, "Win64", "Development", out)
-        text = json.dumps({"targets": targets, "export": prune(exported, copy)}, indent=1, sort_keys=True)
+        if recording_inputs(copy) != inputs:
+            raise LaniakeaError('Sample build inputs changed during the UBT recording.')
+        text = json.dumps({"targets": targets, "export": prune(exported, copy),
+                           "recording": {"engine_version": version, "build_inputs": inputs}}, indent=1, sort_keys=True)
         text = tokenize(text, copy, root).replace("\\\\", "/")
-    FIXTURE.parent.mkdir(exist_ok=True)
-    FIXTURE.write_text(text + "\n", encoding="utf-8")
+        json.loads(text)
+        candidate = Path(temporary) / FIXTURE.name
+        candidate.write_text(text + '\n', encoding='utf-8')
+        candidate.replace(FIXTURE)
     print(f"wrote {FIXTURE.relative_to(ROOT)}")
 
 

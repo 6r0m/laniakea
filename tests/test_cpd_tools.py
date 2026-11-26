@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 from laniakea import LaniakeaError
 from laniakea.unreal import cpd_tools
+from test_source_boundaries import directory_link
 
 
 class ToolIntegrity(unittest.TestCase):
@@ -91,11 +92,13 @@ class ToolIntegrity(unittest.TestCase):
         with self.assertRaises(LaniakeaError):cpd_tools.load(self.directory)
 
     def test_linked_classpath_directory_is_refused_before_reinstall_mutation(self):
-        self.install();linked=self.directory/'classes/linked';linked.mkdir()
-        protected=(self.directory/'classes/CpdBridge.class').read_bytes();original=Path.is_symlink
-        with patch.object(Path,'is_symlink',lambda path:path==linked or original(path)):
-            with self.assertRaisesRegex(LaniakeaError,'linked entries'):cpd_tools.load(self.directory)
-            with self.assertRaisesRegex(LaniakeaError,'linked entries'):self.install()
+        self.install()
+        outside = self.root / 'foreign-classes'
+        outside.mkdir()
+        directory_link(self.directory / 'classes/linked', outside)
+        protected=(self.directory/'classes/CpdBridge.class').read_bytes()
+        with self.assertRaisesRegex(LaniakeaError,'linked entries'):cpd_tools.load(self.directory)
+        with self.assertRaisesRegex(LaniakeaError,'linked entries'):self.install()
         self.assertEqual((self.directory/'classes/CpdBridge.class').read_bytes(),protected)
 
 
