@@ -54,6 +54,9 @@ ask a question the user can answer from evidence in the viewer and point to the 
   - Effect: Use sample-local ignore rules, a source-only copy for the tour and fixture recorder, and sample-owned documents.
   - Reason: Close the public repository and onboarding gaps found in the architecture review.
   - Date/source: 2026-11-25 operator follow-up.
+- **D8** Keep showcase stills and recording drafts out of tracked Git. Reserve a video for a future presentation.
+  - Effect: The public walkthrough guides readers through the live sample. Review captures stay outside the checkout.
+  - Date/source: 2026-11-26 operator follow-up.
 
 ### Operator gates
 
@@ -65,8 +68,7 @@ ask a question the user can answer from evidence in the viewer and point to the 
 
 - **A1 [ACTIVE]** An original relay-scoring scenario gives the sample a coherent purpose with no map, assets or playable loop.
 - **A2 [RESOLVED by D5]** One HUD module and one isolated legacy plugin with two modules are enough to tell the main story.
-- **A3 [ACTIVE]** A short public preview plus the documented local build serves readers without Unreal. An interactive
-  prebuilt download can wait for a supported distribution workflow.
+- **A3 [RESOLVED by D8]** The written walkthrough serves the live sample. A separate video can show it to viewers without Unreal.
 - **A4 [ACTIVE]** The current 5.8 association is the first environment to verify. Real build, native indexing and CPD
   acceptance depend on their actual prerequisites and observed results.
 - **A5 [VERIFIED]** A genuine unsupported native access note may be difficult to produce in a clean Unreal build. Try a small
@@ -169,9 +171,8 @@ symbols the analyzer actually records. [Native symbol tests](../tests/test_nativ
 ### Premise / KISS gate
 
 The existing Unreal profile, workspace and viewer already own analysis, publication and navigation. Reuse them end to end.
-This adds original sample source, a sample policy and a guided tour, with no new service, port, format or load path. The
-capability given up for this delivery is a prebuilt interactive map for someone without Unreal. A3 gives that reader a static
-preview and gives installed users the supported, reproducible route.
+This adds original sample source, a sample policy and a guided tour, with no new service, port, format or load path.
+The walkthrough documents the local build and viewer route. D8 reserves a video for a future presentation.
 
 ### Alternatives considered
 
@@ -179,7 +180,7 @@ preview and gives installed users the supported, reproducible route.
   boundaries. It duplicates the sample entry point and departs from D2. Revisit only if an operator decision changes scope.
 - **Expanded in-place project with interactive replay.** Could make onboarding independent of Unreal, but requires a
   relocatable, versioned published run, a verified local registration path, and provenance for any redistributed data.
-  A3 avoids making that additional distribution problem a prerequisite for this showcase.
+  The local walkthrough already covers exploration of the sample.
 
 ## Required invariants
 
@@ -266,8 +267,8 @@ preview and gives installed users the supported, reproducible route.
   findings and controls, prerequisites and coverage limits, explained alongside the sample policy.
 - **Router** Route the root README through [sample](../sample/README.md), the project and its local documentation.
   Keep general instructions and contracts in [the guide](../docs/guide.md), the Unreal profile and Review docs.
-- Use the current run path and real observed evidence for all examples. Any screenshots or recording use synthetic sample
-  source only. Keep raw outputs local and stable docs independent of task files.
+- Use the current run path and real observed evidence for all examples. Keep sample-derived review captures and recording
+  drafts outside the checkout. Keep raw outputs local and stable docs independent of task files.
 
 ## Rollout and rollback
 
@@ -279,11 +280,11 @@ target. Any later rollback should restore the matched source and fixture togethe
 
 - The existing sample builds in both documented contexts and its real published map supports the tour. Required native and
   CPD runs show measured coverage. Any fallback for A5 or other missing positive is explicitly accepted and labelled.
-- The overview and expanded views make the ownership and cross-branch story clear. The public preview and walkthrough use
-  the real viewer and give users enough detail to repeat the tour.
+- The overview and expanded views make the ownership and cross-branch story clear. The walkthrough gives users enough
+  detail to repeat the tour in the real viewer.
 - The evidence distinguishes a clean transitive call, a forbidden direction, reciprocal aggregate wires, a real legacy
   build cycle and genuine strict clones. The tour includes a reproducible correction and a clean control for each finding it claims.
-- Existing tests and new focused guards pass. Source, fixture, docs and screenshots pass privacy and licensing review.
+- Existing tests and new focused guards pass. Source, fixture and docs pass privacy and licensing review.
   The operator sees the running result and approves the educational flow, appearance and interaction before DONE.
 
 ## Review record

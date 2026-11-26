@@ -3,8 +3,6 @@
 The [relay sample](../README.md) uses fictional relay scoring, match coordination and archive data. Follow the exercised
 paths to see which findings come from build rules, static calls, and matching source tokens.
 
-![Relay overview with Results, Session, Standings and the existing architecture findings](overview.png)
-
 ## Open the sample with default checks
 
 Run these commands in PowerShell from the root of the Laniakea Git checkout. The copy command uses the working-tree
@@ -56,6 +54,8 @@ trace connections, and click a wire or star to inspect its evidence. Use **Up** 
 
 ## Record the relay path
 
+Save review captures and recording drafts outside the checkout.
+
 1. Start at the project overview with Checks and Inspector closed. Hover **Results** to reveal its incoming project
    reference and its outgoing connections to **Session** and **Standings**.
 2. Wheel into **Match** and expand **SampleMatch**. Pause on its five modules. Hover the coordinating module to
@@ -76,8 +76,6 @@ trace connections, and click a wire or star to inspect its evidence. Use **Up** 
 | Do both arrows between Sample and Presentation imply a cycle? | Inspect the wire and open exact references in each direction. `SampleGameplay` privately imports `SampleHUD`, and `SampleHUD` publicly depends on `SampleCore`. Those three modules form a directed chain. The arrows are reciprocal at folder level because Core and Gameplay are both in **Sample**. |
 | Where is the actual cycle? | Open **Compatibility** and **Legacy**, then drill down to the two modules in `SampleLegacy`. Both modules declare a private dependency on the other. Open the Review finding to inspect the two rule witnesses. The archive calls terminate normally. |
 | What belongs to this build? | **Project** shows the selected Editor target and descriptor context. Under **Experimental**, the active trial has evaluated dependencies and **Off** contains an out-of-target plugin. **Unreal Engine** is an external boundary. The Game export leaves the Editor module and its call into the trial outside the selected target. |
-
-![SampleMatch expanded to show coordination, rules, validation, replay and result modules](match.png)
 
 In Review, open **Policy & availability** to see the [sample policy](../review.rules.json) and its
 resolved scope. The Editor policy makes the Gameplay-to-HUD direction and the legacy cycle violations. Without the

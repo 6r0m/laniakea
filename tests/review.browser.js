@@ -32,11 +32,11 @@ async page=>{
     const node=state.cy.nodes().find(n=>n.data('reviewMark')),edge=state.cy.edges('.review-candidate,.review-violation')[0];
     return{images:(node.style('background-image').match(/data:image\/svg\+xml/g)||[]).length,
       badge:parseFloat(node.style('background-width').split(/\s+/).at(-1))*state.cy.zoom(),
-      wire:edge.id(),label:edge.style('label'),size:parseFloat(edge.style('font-size'))*state.cy.zoom(),
+      wire:edge.id(),label:edge.style('label'),violation:edge.hasClass('review-violation'),
       glowWidth:2*edge.numericStyle('underlay-padding')*state.cy.zoom()};
   });
   check([3,4].includes(marked.images)&&Math.abs(marked.badge-16)<.1,'Warning icon is not independently readable: '+JSON.stringify(marked));
-  check(['?','!'].includes(marked.label)&&marked.size>=12,'Idle wire hides its review symbol');
+  check(marked.label==='','Idle wire has a redundant Review label');
   check(marked.glowWidth>1.5&&marked.glowWidth<=3,'Review wire glow must read as a thin stroke');
   const paint=await badgePixels();check(paint.count>30,'Warning badge pixels: '+JSON.stringify(paint));
   await page.evaluate(()=>{
@@ -44,6 +44,9 @@ async page=>{
     const edge=state.cy.getElementById(state.universe.renderPrefix+trace.roles.keys().next().value);
     preview(edge,null,trace);
   });
+  check(await page.locator('#hover-card .review-summary').isVisible(),'Trace hover hides the Review summary');
+  check(await page.evaluate(()=>state.cy.edges('.focus.review-candidate,.focus.review-violation')
+    .every(edge=>edge.style('label')==='')),'Hovered wire has a redundant Review label');
   await page.waitForFunction(()=>document.querySelectorAll('#graph .wire-feed > span').length===2);
   check(await page.evaluate(()=>{
     const lights=[...document.querySelectorAll('#graph .wire-feed > span')];
@@ -59,7 +62,7 @@ async page=>{
     const edge=state.cy.getElementById(id);
     return {glow:Number(edge.style('underlay-opacity')),width:edge.renderedWidth(),label:edge.style('label')};
   };
-  const staticGlow=marked.label==='!'?.22:.17;
+  const staticGlow=marked.violation?.22:.17;
   await page.waitForFunction(({id,base})=>Number(state.cy.getElementById(id).style('underlay-opacity'))>base+.07,
     {id:marked.wire,base:staticGlow},{timeout:5500});
   const brightWire=await page.evaluate(wireSample,marked.wire);
@@ -93,7 +96,7 @@ async page=>{
   const still=await page.evaluate(pulseSample,pulseBadge);
   const stillWire=await page.evaluate(wireSample,marked.wire);
   check(stillWire.glow===staticGlow&&brightWire.width===stillWire.width&&brightWire.label===stillWire.label,
-    'Review pulse changed wire geometry or its badge, or reduced motion did not restore static lighting');
+    'Review pulse changed wire geometry or label, or reduced motion did not restore static lighting');
   check(bright.glow>still.glow&&still.badge===1&&bright.badge===1&&bright.width===still.width&&
     bright.position.x===still.position.x&&bright.position.y===still.position.y,'Review glow moved or faded the badge or star');
   await page.emulateMedia({reducedMotion:'no-preference'});

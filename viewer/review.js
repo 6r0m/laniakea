@@ -199,17 +199,11 @@ class ArchitectureReview {
     for(const id of new Set([...oldLinks.keys(),...this.links.keys()])){
       const edge=state.cy.getElementById(state.universe.renderPrefix+id);if(!edge.length)continue;
       const records=this.links.get(id),violation=records&&[...records.values()].some(f=>f.severity==='violation');
-      const value=records?`${violation?'violation':'candidate'}:${records.size}`:'';
       const mark=records?(violation?'review-violation':'review-candidate'):null;
-      if(edge.data('reviewMark')===value&&(mark?edge.hasClass(mark):
-        !edge.hasClass('review-candidate')&&!edge.hasClass('review-violation')))continue;
+      if(mark?edge.hasClass(mark):!edge.hasClass('review-candidate')&&!edge.hasClass('review-violation'))continue;
       edge.removeClass('review-candidate review-violation');
-      edge.data('reviewMark',value);state.labelGeometry=null;
-      if(records){
-        edge.data('reviewSymbol',violation?'!':'?');
-        edge.data('reviewText',`${violation?'!':'?'} ${records.size} review`);
-        edge.addClass(violation?'review-violation':'review-candidate');}
-      else {edge.data('reviewText','');edge.data('reviewSymbol','');}
+      if(mark)edge.addClass(mark);
+      state.labelGeometry=null;
     }
     for(const id of new Set([...previous.keys(),...this.badges.keys()])) {
       const node=state.cy.getElementById(id);if(!node.length)continue;

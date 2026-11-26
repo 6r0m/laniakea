@@ -705,8 +705,7 @@ function readableLabels(geometryOnly = false) {
           'corner-radius':14/zoom });
         cy.edges('.loop').forEach(edge => edge.data('loopDistance',
           2*Math.max(edge.source().outerWidth(),edge.source().outerHeight())+20/zoom));
-        cy.edges('.review-candidate,.review-violation').style({'underlay-padding':1.25/zoom,'font-size':13/zoom,
-          'text-background-padding':3/zoom,'text-border-width':1/zoom});
+        cy.edges('.review-candidate,.review-violation').style('underlay-padding',1.25/zoom);
       }
       for (const [n, align] of alignments) {
         if (state.labelAlign.get(n.id()) !== align) {

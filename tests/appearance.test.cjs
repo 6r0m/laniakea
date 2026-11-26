@@ -218,3 +218,18 @@ test('connection paint follows displayed endpoint families and yields to directi
     assert.deepEqual(proof.arrow.match(/\d+/g).map(Number),proof.traceTint);
   }finally{run('state.cy.destroy()');}
 });
+
+test('Review wires carry their glow without text labels',()=>{
+  const cy=cytoscape()({headless:true,styleEnabled:true,style:styleRules(),elements:[
+    {data:{id:'a'}},{data:{id:'b'}},
+    {data:{id:'wire',source:'a',target:'b',weight:12,count:'12',reviewSymbol:'!',reviewText:'! 1 review'},
+      classes:'derived review-violation'},
+  ]});
+  try{
+    const wire=cy.$id('wire');
+    assert.equal(wire.style('label'),'');
+    assert.ok(Number(wire.style('underlay-opacity'))>0);
+    wire.addClass('hovered trace-outgoing');
+    assert.equal(wire.style('label'),'');
+  }finally{cy.destroy();}
+});

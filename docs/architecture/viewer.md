@@ -482,11 +482,9 @@ badges remain separate from type icons; counts belong to hover and inspection. V
 pulse in their family color. Visible connections pulse at the same cadence, with tint, strength and priority driven
 by their highest active finding. Badges show the highest displayed severity and stay steady. The pulse holds its current brightness
 during camera gestures, and directional flow clears as the camera moves. Reduced motion uses static lighting throughout.
-Native wire labels show a compact
-`?` candidate or `!` violation symbol while idle. The map key explains both, without adding hit targets.
-Warnings follow file, class and callable projection,
-including a visible line to an off-screen endpoint. A halo means the connection contains finding evidence, not that
-every reference in its bundle is problematic. Filtered-out references receive no wire marker.
+Wire halos mark connections that contain finding evidence. The map key explains the star badges.
+Warnings follow file, class and callable projection, including a visible line to an off-screen endpoint.
+The halo reflects findings attached to the references that pass the current filters.
 
 Hover shows distinct finding counts and a bounded explanation without fetching analysis or exact rows. Clicking a
 marked wire or clicking/keyboard-inspecting a marked entity opens the Inspector's Review tab. Ordinary inspection
