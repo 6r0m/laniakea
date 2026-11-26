@@ -463,8 +463,10 @@ source ranges in bounded pages for the selected finding. Reading range metadata 
 Current-source links retain a snapshot/staleness warning.
 
 Inspector Review lists related findings and mounts evidence and decision controls for the selected finding. It retains
-unfinished decision reasons within the same inspection even when another finding is selected. The Review owner uses the
-existing finding index and paged reports to populate the list and read selected evidence.
+unfinished decision reasons in the target's Review controller through transient loads and inspection changes. The Review
+panel lets the reader recover or discard a draft when its finding becomes unavailable. Reasons are restored only against
+the same finding fingerprint. The existing finding index and paged reports populate the list and read selected evidence;
+an initial page selects a default only while the reader has made no newer selection.
 
 Source findings expose Compare matches and file, owner and line-range rows. Preview, external-editor and copy actions are distinct.
 Compare opens up to two numbered read-only panes over the central workspace;
@@ -557,7 +559,8 @@ tabs heartbeat their current read contexts through the [monitoring contract](mon
 The masthead shows the selected project and the displayed manifest's build target. The scope bar starts at Overview.
 Browse and Filters share a sidebar slot. Browse selects from the rendered scope members and Filters changes graph visibility.
 View groups layout, target outlines and applicable arrangement actions. The Orbit choice uses existing orbit pins first and
-then the declared center when available. Legacy modes retain their keys and saved arrangements. Map guide,
+then the declared center when available. All modes are selectable. Secondary modes retain their keys and saved arrangements
+under More layouts. Map guide,
 coverage details and advisory stale-input diagnostics open over the map. The workspace status row and trace area have
 stable heights across status and hover updates. Selection opens Inspector through the existing inspection route.
 Source comparison makes the graph and map actions inert until it closes.

@@ -66,18 +66,27 @@ function ReviewEdgeProjection(index,view) {
 class ArchitectureReview {
   constructor() {
     this.enabled=false;this.ack=false;this.epoch=0;this.requests=new Set();this.pages=new Map();this.badges=new Map();
+    this.drafts=new Map();
     this.referenceIndex=new Map();this.findingIndex=new Map();this.links=new Map();this.nodeLinks=new Map();this.ownerBadges=new Set();
     $('toggle-review').onclick=()=>this.panel();
     $('review-close').onclick=()=>this.panel(false);
     $('review-enabled').onchange=()=>this.toggle($('review-enabled').checked);
-    $('review-ack').onchange=()=>{this.ack=$('review-ack').checked;this.pages.clear();this.load();};
+    $('review-ack').onchange=()=>{
+      const control=$('review-ack');
+      if(!control.checked){
+        const hidden=[...this.drafts].filter(([id,draft])=>this.findingIndex.get(id)?.acknowledged??draft.acknowledged);
+        if(!this.confirmDiscardDrafts('Hiding acknowledged findings',hidden.map(([id])=>id))){control.checked=this.ack;return;}
+      }
+      this.ack=control.checked;this.pages.clear();this.load();
+    };
     $('review-recheck').onclick=()=>this.recheck();
+    $('review-drafts').ontoggle=()=>{if($('review-drafts').open)this.renderDrafts();};
   }
   reset(target) {
     this.closeComparison();
     this.epoch++;for(const controller of this.requests)controller.abort();this.requests.clear();this.pages.clear();
     this.target=target;this.data=null;this.badges.clear();this.enabled=Boolean(target?.review_url);this.pendingFinding=null;
-    this.inspectionView=null;
+    this.inspectionView=null;this.drafts.clear();
     this.loading=false;this.error=null;
     this.referenceIndex.clear();this.findingIndex.clear();this.links.clear();this.nodeLinks.clear();this.ownerBadges.clear();
     this.panel(false);this.status();
@@ -118,9 +127,11 @@ class ArchitectureReview {
     $('review-enabled').checked=this.enabled;$('review-enabled').disabled=button.disabled;
     $('review-recheck').disabled=!this.enabled;
     $('review-legend').hidden=!this.enabled||!this.data;
+    this.renderDrafts();
     if(typeof state!=='undefined'&&state.inspector&&state.selection)this.refreshInspection();
   }
   toggle(enabled=!this.enabled) {
+    if(!enabled&&!this.confirmDiscardDrafts('Turning off Review')){$('review-enabled').checked=this.enabled;return;}
     this.enabled=enabled;this.error=null;this.loading=false;
     if(enabled)this.load();
     else {this.closeComparison();this.epoch++;for(const c of this.requests)c.abort();this.requests.clear();
@@ -278,15 +289,18 @@ class ArchitectureReview {
     if(source)button.append(el('small',`${finding.token_count} tokens in ${finding.evidence_total} source ranges`));
     const caption=finding.triage==='accepted'?'Risk accepted':finding.triage==='not-relevant'?'Not relevant':'';
     button.append(el('small',caption,{'data-review-location':finding.id,'data-caption':caption}));
-    button.onclick=()=>{this.pendingFinding=finding.id;
-      const visible=[...this.badges].find(([,b])=>b.ids.has(finding.id));
-      if(visible&&state.selection?.id===visible[0]&&!state.selection.projectContext&&state.inspector){
-        this.refreshInspection();togglePanel('details',true);state.inspector.select('architecture',{focus:true});return;
-      }
-      state.detailsKey=null;
-      if(visible){if(typeof cancelNavigationFlight==='function')cancelNavigationFlight();selectNode(visible[0]);}
-      else flyToNode(finding.subjects[0]);};
+    button.onclick=()=>this.openFinding(finding);
     return button;
+  }
+  openFinding(finding){
+    this.pendingFinding=finding.id;
+    const visible=[...this.badges].find(([,b])=>b.ids.has(finding.id));
+    if(visible&&state.selection?.id===visible[0]&&!state.selection.projectContext&&state.inspector){
+      this.refreshInspection();togglePanel('details',true);state.inspector.select('architecture',{focus:true});return;
+    }
+    state.detailsKey=null;
+    if(visible){if(typeof cancelNavigationFlight==='function')cancelNavigationFlight();selectNode(visible[0]);}
+    else flyToNode(finding.subjects[0]);
   }
   subjects(finding) {
     return finding.subjects.slice(0,8).map(label).join(finding.kind==='duplication'?', ':' -> ')+
@@ -360,8 +374,6 @@ class ArchitectureReview {
     if(panel.dataset.reviewKey===key){if(requested)this.inspectionView.select(requested);return;}
     this.closeComparison();
     label(status.count);
-    const previous=this.inspectionView;
-    const drafts=previous?.panel===panel&&previous.report===report?previous.drafts:new Map();
     panel.dataset.reviewKey=key;delete panel.dataset.finding;
     const section=el('section',null,{class:'review-details','aria-label':'Review findings'});
     const rows=el('div',null,{class:'inspection-findings',role:'group','aria-label':'Select a finding'});
@@ -383,8 +395,8 @@ class ArchitectureReview {
       button.onclick=()=>select(finding.id);
       entries.set(finding.id,{button,finding,page});rows.append(button);
     };
-    const select=async id=>{
-      if(!id||id===panel.dataset.finding)return;
+    const select=async(id,reload=false)=>{
+      if(!id||!reload&&id===panel.dataset.finding)return;
       const entry=entries.get(id),known=this.findingIndex.get(id);
       if(!entry&&!known)return;
       if(!entry)add(recorded.get(id)||known,recorded.has(id)?this.data:undefined);
@@ -400,14 +412,14 @@ class ArchitectureReview {
         const finding=selection.page?selection.finding:data.items[0];
         if(!finding){body.replaceChildren(el('p','This finding is no longer available.',{role:'status'}));return;}
         this.findingSummary(entries.get(id).button,finding);
-        body.replaceChildren();this.card(body,finding,data.revision,data.report,drafts);
+        body.replaceChildren();this.card(body,finding,data.revision,data.report);
       }catch(error){if(active()&&error.name!=='AbortError'){
         const retry=el('button','Retry finding',{type:'button'});
         retry.onclick=()=>{delete panel.dataset.finding;select(id);};
         body.replaceChildren(el('p',error.message,{role:'alert'}),retry);
       }}
     };
-    this.inspectionView={panel,report,drafts,select};
+    this.inspectionView={panel,select};
     const load=async(first=false)=>{
       more.disabled=true;
       try{
@@ -423,7 +435,7 @@ class ArchitectureReview {
         statusLine.textContent=count?'':'No recorded findings for this selection.';
         const next=exact?(cursor+50<count?cursor+50:null):data.next_cursor;
         more.hidden=next===null;more.textContent='More findings';cursor=next;
-        if(first)select(this.findingIndex.has(chosen)?chosen:entries.keys().next().value);
+        if(first){if(!panel.dataset.finding)select(this.findingIndex.has(chosen)?chosen:entries.keys().next().value);}
         else [...entries.values()][before]?.button.focus();
       }catch(error){if(current()&&error.name!=='AbortError'){
         if(first)label(null,'failed');
@@ -456,10 +468,43 @@ class ArchitectureReview {
     button.replaceChildren(el('span','',{class:`severity-mark review-${finding.severity}`,'aria-label':REVIEW_SEVERITY_LABELS[finding.severity],role:'img'}),copy);
   }
   hasInspectionDraft(){
-    const view=this.inspectionView;
-    return Boolean(view?.panel.isConnected&&view.drafts.size);
+    return this.drafts.size>0;
   }
-  card(parent,finding,revision,report,drafts) {
+  confirmDiscardDrafts(action,ids=[...this.drafts.keys()]){
+    if(!ids.length)return true;
+    if(!confirm(`${action} hides unsaved decisions. Discard ${ids.length===1?'the draft':ids.length+' drafts'} to continue?`))return false;
+    for(const id of ids)this.drafts.delete(id);
+    this.renderDrafts();
+    return true;
+  }
+  renderDrafts(){
+    const panel=$('review-drafts');
+    if(panel.hidden&&!this.drafts.size)return;
+    panel.hidden=!this.drafts.size;
+    if(panel.hidden){$('review-draft-items').replaceChildren();panel.open=false;return;}
+    $('review-drafts-summary').textContent=`Unsaved decisions (${this.drafts.size})`;
+    if(!panel.open)return;
+    const rows=[];
+    for(const [id,draft] of this.drafts){
+      const row=el('div',null,{class:'review-draft'}),actions=el('div',null,{class:'review-actions'});
+      const finding=this.findingIndex.get(id);
+      if(finding){const resume=el('button','Continue draft',{type:'button','aria-label':`Continue draft for ${draft.title}`});
+        resume.onclick=()=>this.openFinding(finding);actions.append(resume);}
+      else row.append(el('small','This finding is unavailable in the current Review.'));
+      const discard=el('button','Discard draft',{type:'button','aria-label':`Discard draft for ${draft.title}`});
+      discard.onclick=()=>{
+        this.drafts.delete(id);this.renderDrafts();
+        const view=this.inspectionView;
+        if(view?.panel.isConnected&&view.panel.dataset.finding===id)view.select(id,true);
+        (panel.hidden?$('review-close'):$('review-drafts-summary')).focus({preventScroll:true});
+      };
+      actions.append(discard);row.prepend(el('strong',draft.title));
+      const text=el('textarea',null,{readonly:'','aria-label':`Draft reason for ${draft.title}`});text.value=draft.value;
+      row.append(text,actions);rows.push(row);
+    }
+    $('review-draft-items').replaceChildren(...rows);
+  }
+  card(parent,finding,revision,report) {
     const article=el('article',null,{class:'review-finding','data-review-finding':finding.id});
     article.append(el('p',REVIEW_SEVERITY_LABELS[finding.severity],{class:`inspection-severity review-${finding.severity}`}),
       el('h3',finding.title));
@@ -499,22 +544,34 @@ class ArchitectureReview {
     decision.append(el('summary',decisionLabel[finding.triage]||'Review decision'));
     const reasonLabel=el('label','Decision reason (optional)'),reason=el('input',null,{type:'text',name:'review-reason',
       autocomplete:'off',maxlength:'2000',value:finding.reason_saved});reasonLabel.append(reason);decision.append(reasonLabel);
-    if(drafts.has(finding.id)){reason.value=drafts.get(finding.id);decision.open=true;}
-    reason.oninput=()=>{if(reason.value===reason.defaultValue)drafts.delete(finding.id);else drafts.set(finding.id,reason.value);};
+    const draft=this.drafts.get(finding.id),staleDraft=draft&&draft.fingerprint!==finding.fingerprint;
+    if(staleDraft){
+      reason.readOnly=true;decision.open=true;
+      const manage=el('button','Show unsaved decisions',{type:'button'});
+      manage.onclick=()=>{this.panel(true);$('review-drafts').open=true;$('review-drafts-summary').focus();};
+      decision.append(el('p','The evidence changed. Review or discard the earlier draft before making a new decision.',{class:'inspection-caution'}),manage);
+    }else if(draft){reason.value=draft.value;decision.open=true;}
+    reason.oninput=()=>{
+      if(reason.value===reason.defaultValue)this.drafts.delete(finding.id);
+      else this.drafts.set(finding.id,{title:finding.title,value:reason.value,acknowledged:finding.triage!=='active',fingerprint:finding.fingerprint});
+      this.renderDrafts();
+    };
     const controls=el('div',null,{class:'review-actions'}),status=el('p','',{role:'status'});
     const choices=finding.triage==='active'?[['Accept risk','accepted'],['Not relevant','not-relevant']]:[['Reopen','active']];
     for(const [title,stateValue] of choices) {
-      const button=el('button',title,{type:'button'});controls.append(button);
+      const button=el('button',title,{type:'button'});button.disabled=Boolean(staleDraft);controls.append(button);
       button.onclick=async()=>{
         const epoch=state.referenceEpoch,returnFocus=controls.contains(document.activeElement);
+        const submittedDraft=this.drafts.get(finding.id);
         this.saving=(this.saving||0)+1;
-        for(const action of controls.children)action.disabled=true;status.textContent='Saving decision...';
+        reason.disabled=true;for(const action of controls.children)action.disabled=true;status.textContent='Saving decision...';
         try {await this.request({}, {action:'triage',report,revision,finding:finding.id,state:stateValue,reason:reason.value});
-          drafts.delete(finding.id);this.pages.clear();await this.load();
+          if(this.drafts.get(finding.id)===submittedDraft)this.drafts.delete(finding.id);
+          this.pages.clear();await this.load();
           if(epoch===state.referenceEpoch&&returnFocus&&!button.isConnected&&document.activeElement===document.body)
             (state.inspector?.tabs.get('architecture')||$('review-recheck')).focus();
         } catch(error){if(error.name!=='AbortError'&&article.isConnected)status.textContent=error.message;}
-        finally {this.saving--;for(const action of controls.children)action.disabled=false;}
+        finally {this.saving--;reason.disabled=false;for(const action of controls.children)action.disabled=false;}
       };
     }
     decision.append(controls,status);article.append(rule,decision);parent.append(article);

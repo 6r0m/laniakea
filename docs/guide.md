@@ -86,7 +86,8 @@ build for immediate required native extraction. Native work uses an isolated cop
 In **View**, choose **Orbit** for a ring arrangement or **By connection** to place related stars closer together. The map
 reports when By connection uses Orbit because the overview is too large or has no connections between stars. Orbit
 uses the project's declared center for a new arrangement when available. Existing modes keep separate saved positions,
-and **Saved layouts** offers any other saved arrangement. **Map guide** explains star shapes, type icons, trace colors and controls.
+and **More layouts** offers Dependency hierarchy, Grid and the other orbit mode. **Map guide** explains star shapes, type icons,
+trace colors and controls.
 
 | action | result |
 |---|---|
@@ -116,6 +117,8 @@ not junctions; click overlapping wires to choose a named pair and inspect both d
 **Inspector** has two tabs. **Review** lists related findings and opens the selected finding's evidence. Expand **Review
 decision** to record or reopen a decision. **Details** provides source actions, declaration context and recorded relationships.
 Switching tabs retains scroll, loaded pages and unfinished reasons. Use arrow keys, Home or End between tabs.
+**Unsaved decisions** in Review lets you resume, copy or discard draft reasons after leaving an inspection. Drafts stay in
+the current viewer session and survive refreshing findings. If an action would hide the draft, Review asks before discarding it.
 On narrower windows, the findings list and inspector share the available space; reopening either retains the inspection.
 
 **Project** inspects source/configuration context. **Outline project-listed targets** outlines explicitly listed targets, without

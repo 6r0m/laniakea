@@ -12,8 +12,9 @@ async page=>{
     'Queue hides the source files behind repeated module names');
   await page.locator('#review-items button[data-finding]').click();
   const review=page.locator('#inspector-page-architecture');
-  await review.getByText('Duplicated source tokens',{exact:true}).waitFor();
-  check(await review.innerText().then(t=>t.includes('Duplication / 120 tokens / 54 matching ranges')),'Category/count explanation missing');
+  const title=review.getByRole('heading',{name:'Duplicated source tokens',exact:true});
+  await title.waitFor();
+  check(await review.locator('[data-inspection-finding]').innerText().then(t=>t.includes('120 tokens / 54 locations')),'Source finding counts missing');
   check(!requests.some(u=>u.includes('/source?')),'Listing source ranges read source bodies');
   await review.getByText('Locations 1-50 of 54',{exact:true}).waitFor();
   check(await review.locator('a[href^="vscode://file/"]').count()===50,'Source links not bounded to a page');
@@ -21,12 +22,29 @@ async page=>{
   await review.getByText('Locations 51-54 of 54',{exact:true}).waitFor();
   await review.getByRole('button',{name:'Previous source ranges',exact:true}).click();
   await review.getByText('Locations 1-50 of 54',{exact:true}).waitFor();
+  await review.getByText('Review decision',{exact:true}).click();
+  const reason=review.getByLabel('Decision reason (optional)');
+  await reason.fill('Synthetic draft survives refresh');
+  await page.locator('#review-settings > summary').click();
+  await page.getByRole('button',{name:'Refresh findings',exact:true}).click();
+  await title.waitFor();
+  check(await reason.inputValue()==='Synthetic draft survives refresh','Refresh lost the draft reason');
   await review.getByRole('button',{name:'Accept risk',exact:true}).click();
   await page.waitForFunction(()=>state.review.data.counts.candidate===0&&state.review.data.counts.acknowledged===1);
   check(await page.evaluate(()=>state.cy.edges('.review-candidate,.review-violation').length===0),'Source observation created warning wires');
-  await page.locator('#review-settings > summary').click();
-  await page.locator('#review-ack').check();
+  const ack=page.locator('#review-ack');
+  await ack.check();
   await page.locator('#review-items button[data-finding]').click();
+  await review.getByText('Review decision (risk accepted)',{exact:true}).click();
+  await reason.fill('Keep or explicitly discard this change');
+  page.once('dialog',dialog=>dialog.dismiss());await ack.click();
+  check(await ack.isChecked()&&await reason.inputValue()==='Keep or explicitly discard this change',
+    'Cancelling the hide action lost the acknowledged draft');
+  page.once('dialog',dialog=>dialog.accept());await ack.uncheck();
+  await page.waitForFunction(()=>state.review.data.total===0&&!state.review.requests.size);
+  check(await page.evaluate(()=>!liveBlockReason().includes('decision draft')),'Discarded acknowledged draft still blocks live adoption');
+  await ack.check();await page.locator('#review-items button[data-finding]').click();
+  await review.getByText('Review decision (risk accepted)',{exact:true}).click();
   await review.getByRole('button',{name:'Reopen',exact:true}).click();
   await page.waitForFunction(()=>state.review.data.counts.candidate===1);
   await page.locator('#review-close').click();
@@ -40,7 +58,7 @@ async page=>{
   const point=async id=>page.evaluate(id=>{const p=state.cy.getElementById(id).renderedPosition(),b=$('graph').getBoundingClientRect();
     return{x:p.x+b.x,y:p.y+b.y};},id);
   let folderPoint=await point(folder);await page.mouse.click(folderPoint.x,folderPoint.y);
-  await review.getByText('Duplicated source tokens',{exact:true}).waitFor();
+  await title.waitFor();
   check(await page.locator('#inspector-tab-architecture').innerText()==='Review (1)','Folder inspection did not use its exact findings');
   for(let i=0;i<40&&!await page.evaluate(id=>state.universe.expanded.has(id),folder);i++){
     folderPoint=await point(folder);await page.mouse.move(folderPoint.x,folderPoint.y);await page.mouse.wheel(0,-80);
@@ -53,7 +71,7 @@ async page=>{
   const p=await page.evaluate(id=>{const p=state.cy.getElementById(id).renderedPosition(),b=$('graph').getBoundingClientRect();
     return{x:p.x+b.x,y:p.y+b.y};},file);
   await page.mouse.click(p.x,p.y);
-  await review.getByText('Duplicated source tokens',{exact:true}).waitFor();
+  await title.waitFor();
   check(await review.innerText().then(t=>!t.includes('unknown review node')),'File context did not resolve the source finding');
   let arrive,release;
   const arrived=new Promise(r=>arrive=r),hold=new Promise(r=>release=r);

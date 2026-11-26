@@ -34,6 +34,14 @@ async page=>{
   check(await page.locator('#details [data-review-finding]').count()===1,'Loading a refreshed report lost the active finding');
   await card.getByText('Review decision',{exact:true}).click();
   await card.getByLabel('Decision reason (optional)').fill('Unfinished synthetic decision');
+  await page.evaluate(()=>{
+    const review=state.review,data=review.data;review.data=null;review.refreshInspection();
+    if(!liveBlockReason().includes('decision draft'))throw Error('Loading removed the draft guard');
+    review.data=data;review.refreshInspection();
+  });
+  await card.waitFor();
+  check(await card.getByLabel('Decision reason (optional)').inputValue()==='Unfinished synthetic decision',
+    'Refreshing the report discarded the unfinished draft');
   await card.getByRole('button',{name:'Inspect recorded reference',exact:true}).click();await card.locator('li').waitFor();
   await details.click();await page.locator('#inspector-page-details .reference-pager').first().waitFor();
   await page.waitForFunction(()=>!document.querySelector('#inspector-page-details').textContent.includes('Loading references...'));
@@ -51,6 +59,8 @@ async page=>{
   check(await card.getByLabel('Decision reason (optional)').inputValue()==='Unfinished synthetic decision','Tab switching lost the draft');
   check(await card.locator('li').count()===1,'Tab switching lost loaded evidence');
   await page.keyboard.press('Escape');check(await page.locator('#details').isHidden(),'Escape did not close inspection');
+  check(await page.evaluate(()=>state.review.hasInspectionDraft()),'Closing the Inspector lost the draft');
+  await page.waitForFunction(()=>liveBlockReason().includes('decision draft'));
   await page.setViewportSize({width:1000,height:800});
   if(await page.locator('#review').isHidden())await page.locator('#toggle-review').click();
   await page.locator(`#review-items [data-finding="${id}"]`).click();await card.waitFor();
@@ -65,10 +75,28 @@ async page=>{
   await page.setViewportSize({width:1440,height:1000});
   let release,arrive;const gate=new Promise(resolve=>release=resolve),arrived=new Promise(resolve=>arrive=resolve);
   const reviewUrl=await page.evaluate(()=>state.target.review_url),pattern='**'+reviewUrl+'?*';
+  if(await page.locator('#review').isHidden())await page.locator('#toggle-review').click();
+  await page.evaluate(id=>{
+    window.originalDraftFinding=state.review.findingIndex.get(id);
+    state.review.findingIndex.delete(id);state.review.status();
+  },id);
+  await page.locator('#review-drafts-summary').click();
+  const drafts=page.locator('#review-drafts');
+  check(await drafts.getByRole('textbox',{name:/^Draft reason/}).inputValue()==='Unfinished synthetic decision',
+    'A missing finding left its draft inaccessible');
+  check(await drafts.getByRole('button',{name:/^Continue draft/}).count()===0,'A removed finding can still be opened');
+  await drafts.getByRole('button',{name:/^Discard draft/}).click();
+  check(await page.evaluate(()=>!liveBlockReason().includes('decision draft')),'Discard left live adoption blocked');
+  await page.evaluate(id=>state.review.findingIndex.set(id,originalDraftFinding),id);
+  const cycle=await page.evaluate(()=>[...state.review.findingIndex.values()].find(f=>f.kind==='cycles').id);
   await page.route(pattern,async route=>{if(new URL(route.request().url()).searchParams.has('node')){arrive();await gate;}await route.continue();});
-  await page.evaluate(()=>{state.review.pages.clear();state.review.pendingFinding=null;selectNode('A');});await arrived;
+  await page.evaluate(cycle=>{state.review.pages.clear();state.review.pendingFinding=cycle;selectNode('A');},cycle);await arrived;
+  await page.evaluate(()=>{window.delayedInspection=$('inspector-page-architecture');});
+  await page.locator(`#review-items [data-finding="${id}"]`).click();await card.waitFor();
+  check(await page.evaluate(()=>delayedInspection===$('inspector-page-architecture')),'The newer queue selection did not reuse the loading inspection');
   await details.click();release();await page.waitForFunction(()=>!state.review.requests.size);
   check(await details.getAttribute('aria-selected')==='true','A late review response switched tabs');
+  await architecture.click();check(await card.isVisible(),'The initial page overrode the newer queue selection');
   await page.getByRole('button',{name:'Close inspector',exact:true}).click();
   await page.unroute(pattern);
   await page.route(pattern,async route=>new URL(route.request().url()).searchParams.has('node')?

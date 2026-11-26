@@ -65,7 +65,7 @@
           <button id="layout-orbit" type="button" aria-pressed="false">Orbit</button>
           <button id="layout-connections" type="button" aria-pressed="false">By connection</button>
         </fieldset>
-        <details id="saved-layouts" hidden><summary>Saved layouts<span id="saved-layout-current"></span></summary><div id="saved-layout-options"></div></details>
+        <details id="more-layouts"><summary>More layouts<span id="more-layout-current"></span></summary><div id="more-layout-options"></div></details>
         <label id="configuration-option" class="filter" hidden><input id="toggle-configuration" type="checkbox">Outline project-listed targets</label>
         <button id="arrange-files" type="button" hidden title="Arrange interface and implementation files in this scope only">Arrange files</button>
         <button id="reset-layout" type="button" hidden>Reset saved positions</button>
@@ -133,6 +133,7 @@
         <h3>Policy &amp; availability</h3>
         <p id="review-context" class="muted"></p><p id="review-policy"></p><ul id="review-checks"></ul>
       </details>
+      <details id="review-drafts" hidden><summary id="review-drafts-summary">Unsaved decisions</summary><div id="review-draft-items"></div></details>
       <p id="review-status" role="status"></p>
       <div id="review-items"></div><div id="review-pager" class="review-actions"></div>
     </aside>

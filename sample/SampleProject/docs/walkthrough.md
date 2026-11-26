@@ -49,7 +49,8 @@ Open it normally and choose **Run recommended checks** to adopt Auto for that ta
 Saved maps display their recorded runs. To explore changes to the sample, publish a new run. Restart a saved-only viewer
 to load the latest publication.
 
-Open **View** and set **Layout** to **galaxy** for the Engine-centered overview. Wheel into a constellation, hover to
+Open **View** and choose **Orbit** for the Engine-centered overview. If Orbit uses an older saved uncentered arrangement,
+choose **Centered orbit** under **More layouts**. Wheel into a constellation, hover to
 trace connections, and click a wire or star to inspect its evidence. Use **Up** to move up a scope or **Fit overview** to
 return to the overview. **Map guide** lists the controls and symbols.
 

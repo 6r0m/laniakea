@@ -37,6 +37,11 @@ that need attention, then explore a finding or symbol and return to the map.
   - Effect: Establish readable typography, spacing and semantic emphasis. Use the synthetic sample for operator review.
   - Date/source: 2026-11-26 operator implementation request.
 
+- **D5** Address the By connection layout's spacing and performance in a separate follow-up.
+  - Effect: Bound the existing CoSE layout work and spread unpinned stars across the overview. D4 itself leaves layout algorithms outside scope.
+  - Reason: The operator observed a crowded arrangement and slower interaction after opening By connection.
+  - Date/source: 2026-11-26 operator follow-up on By connection.
+
 ### Operator gates
 
 - **Q1 [CLOSED]** The operator requested implementation of the reviewed workspace hierarchy and the copy correction in D4.

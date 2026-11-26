@@ -224,6 +224,11 @@ async function show(id, file, mode) {
     if (navigation !== state.navigation) return;
     const positionCache = changed || !state.positionCache ? await loadPositionCache(id, manifest.entry) : state.positionCache;
     if (navigation !== state.navigation) return;
+    if(changed&&state.review?.confirmDiscardDrafts?.('Switching projects')===false){
+      $('target').value=state.target.id;
+      rememberView();
+      return false;
+    }
     if (changed) { state.hidden = new Set(); state.configuration = {}; state.referencePages?.clear(); }
     const referencePages = changed || !state.referencePages ? referenceReader(target,universe) : state.referencePages;
     const fresh = changed || !state.cy;
@@ -503,17 +508,15 @@ function renderViewOptions() {
   const select=$('layout'),mode=select.value,orbit=orbitLayout();
   $('layout-orbit').setAttribute('aria-pressed',String(mode===orbit));
   $('layout-connections').setAttribute('aria-pressed',String(mode==='cose'));
-  const saved=$('saved-layouts'),options=$('saved-layout-options'),rows=[];
+  const options=$('more-layout-options'),rows=[];
   const current=select.selectedOptions[0];
-  $('saved-layout-current').textContent=mode!==orbit&&mode!=='cose'?`: ${current.textContent}`:'';
+  $('more-layout-current').textContent=mode!==orbit&&mode!=='cose'?`: ${current.textContent}`:'';
   for(const option of select.options){
     if(option.value===orbit||option.value==='cose')continue;
-    if(option.value!==mode&&!Object.keys(state.positionCache.layouts[option.value]||{}).length)continue;
     const button=el('button',option.textContent,{type:'button','aria-pressed':String(option.value===mode)});
     button.onclick=()=>chooseLayout(option.value);
     rows.push(button);
   }
-  saved.hidden=!rows.length;
   options.replaceChildren(...rows);
 }
 

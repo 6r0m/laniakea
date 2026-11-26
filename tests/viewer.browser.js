@@ -64,6 +64,11 @@ async (page) => {
     await page.getByRole('checkbox',{name:'Outline project-listed targets'}).isVisible()&&
     await page.locator('#toggle-details').isHidden()&&await page.locator('#clear').isHidden(),
     'View should present layout and outline settings with contextual selection actions hidden');
+  await page.locator('#more-layouts > summary').click();
+  const alternatives=await page.locator('#more-layout-options button').allTextContents();
+  check(alternatives.includes('Dependency hierarchy')&&alternatives.includes('Grid')&&
+    alternatives.some(label=>/^(Uncentered|Centered) orbit$/.test(label)),
+    'View hides layouts without saved positions');
   await page.keyboard.press('Escape');
   check(await page.evaluate(()=>state.target.id==='sample'&&state.universe.nodes.has('folder:Sample')&&
     state.universe.nodes.has('module:SampleCore')),'This mutation check requires the served synthetic sample');
