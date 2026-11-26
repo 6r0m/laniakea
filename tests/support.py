@@ -54,3 +54,31 @@ def recorded_ubt(project_dir, engine_root, export_error=None):
 
 def by_id(items):
     return {item["id"]: item for item in items}
+
+
+def publish_recorded_sample(base, *, graph=None, demo_policy=False):
+    from laniakea import pipeline, unreal
+    from laniakea.workspace import Workspace, read_json, write_json
+
+    project = copy_sample(base)
+    engine = fake_engine(base)
+    workspace = Workspace(Path(base) / 'analysis')
+    target = workspace.register('sample', unreal.target_fields(project / 'SampleProject.uproject', engine))
+    extract = unreal.extract
+
+    def extract_fixture(*args, **kwargs):
+        recorded_graph, fields = extract(*args, **kwargs)
+        if graph is None:
+            return recorded_graph, fields
+        fields.pop('overview', None)
+        fields['levels'] = sorted({node['level'] for node in graph['nodes']})
+        extra = {edge['type'] for edge in graph['edges']} - {edge['id'] for edge in fields['edge_types']}
+        fields['edge_types'].extend({'id': kind, 'label': kind, 'status': 'resolved'} for kind in sorted(extra))
+        fields['sources'].append({'id': 'compiler', 'name': 'Synthetic compiler fixture', 'version': '1'})
+        return graph, fields
+
+    with recorded_ubt(project, engine), mock.patch.object(unreal, 'extract', side_effect=extract_fixture):
+        pipeline.extract(workspace, target, health_options={'mode': 'off'})
+    if demo_policy:
+        write_json(workspace.target_dir('sample') / 'review' / 'rules.json', read_json(project / 'review.rules.json'))
+    return workspace

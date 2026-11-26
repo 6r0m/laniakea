@@ -556,6 +556,7 @@ footer ul { margin: 8px 0; padding-left: 18px; }
   #browse, #filters { left: 0; }
   #review { left:0; }
   main:has(> :is(#analysis, #review, #browse, #filters):not([hidden])) #map-legend { visibility:hidden; }
+  main:has(> #details:not([hidden])) #hover-card { visibility:hidden; }
   #analysis { left:0; }
   #details { right:0; z-index:6; }
 }

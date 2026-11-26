@@ -8,3 +8,4 @@ tmp/
 # playwright
 .playwright-cli/
 .playwright/
+/tests/node_modules/

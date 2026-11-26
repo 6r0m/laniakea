@@ -99,6 +99,7 @@ async (page) => {
     }
     await layout(page,initialMode);
     await page.evaluate(()=>flyToNode('plugin:SampleDisabled',false));
+    await frames();
     await wheel('plugin:SampleDisabled',true,-120);
     await page.waitForFunction(()=>!state.gestureActive&&!state.viewportFrame);
     check(await page.evaluate(()=>state.cy.getElementById('module:SampleDisabled').length===1&&
@@ -287,30 +288,31 @@ async (page) => {
     const now=await page.evaluate(()=>({...state.universe.positions.get('folder:Experimental')}));
     check(now.x===unaffected.x&&now.y===unaffected.y,'Expanding a folder moved an unrelated constellation');
     check(posts.length===0,'Zooming wrote user pins');
-    await page.waitForFunction(()=>!state.gestureActive);
+    await page.evaluate(()=>frameNode('plugin:SampleGameplay'));
+    await page.waitForFunction(()=>!state.gestureActive&&!state.wheel&&!state.viewportFrame);
     const hover=await point('plugin:SampleGameplay');
+    check(await page.locator('#graph').evaluate((graph,{x,y})=>graph.contains(document.elementFromPoint(x,y)),hover),
+      'The plugin must be inside the canvas before sending hover');
     await page.mouse.move(hover.x,hover.y);await frames();
     check(await page.evaluate(()=>state.cy.edges('.focus').length>0&&state.selection===null),'Hover requires a click or does not trace');
     await page.mouse.move(20,20);await frames();
     check(await page.evaluate(()=>state.cy.elements('.faded,.focus').length===0),'Hover emphasis remained after leaving the star');
     await wheel('plugin:SampleGameplay',true,-120);
     check(await accounted(),'References disappeared while opening the plugin');
+    await page.evaluate(()=>frameNode('plugin:SampleGameplay'));
+    await page.waitForFunction(()=>!state.gestureActive&&!state.wheel&&!state.viewportFrame);
     const groupBefore=await page.evaluate(()=>({child:{...state.universe.positions.get('module:SampleGameplay')},
       group:{...state.universe.positions.get('plugin:SampleGameplay')},
       box:state.cy.getElementById('plugin:SampleGameplay').renderedBoundingBox({includeLabels:false,includeOverlays:false,includeUnderlays:false}),
       graph:$('graph').getBoundingClientRect().toJSON()}));
     const groupPosts=posts.length;
-    await page.waitForFunction(()=>!state.gestureActive);
-    const candidates=await page.evaluate(()=>{
+    const grab=await page.evaluate(()=>{
       const b=state.labelBoxes.get('plugin:SampleGameplay'),g=$('graph').getBoundingClientRect();
-      return b?[{x:g.x+(b.x1+b.x2)/2,y:g.y+(b.y1+b.y2)/2}]:[];
+      return b?{x:g.x+(b.x1+b.x2)/2,y:g.y+(b.y1+b.y2)/2}:null;
     });
-    let grab;
-    for(const candidate of candidates){
-      await page.mouse.move(candidate.x,candidate.y);await frames();
-      if(await page.evaluate(()=>state.cy.getElementById('plugin:SampleGameplay').hasClass('hovered'))){grab=candidate;break;}
-    }
-    check(grab,'No exposed constellation body or label to drag');
+    check(grab&&await page.locator('#graph').evaluate((graph,{x,y})=>graph.contains(document.elementFromPoint(x,y)),grab),
+      'The constellation label must be inside the canvas before dragging');
+    await page.mouse.move(grab.x,grab.y);
     await page.mouse.down();await page.mouse.move(grab.x+30,grab.y+25,{steps:8});await page.mouse.up();
     await page.waitForFunction(()=>state.positionCache.pending===0&&state.positionCache.errors.size===0);
     const groupAfter=await page.evaluate(()=>({child:{...state.universe.positions.get('module:SampleGameplay')},

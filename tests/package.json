@@ -1,0 +1,7 @@
+{
+  "name": "laniakea-browser-acceptance",
+  "private": true,
+  "devDependencies": {
+    "playwright-core": "1.61.1"
+  }
+}

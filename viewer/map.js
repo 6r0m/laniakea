@@ -896,10 +896,14 @@ function grabConstellationLabel(event) {
       const cy=state.cy,family=cy.nodes().filter(n=>state.universe.contains(id,n.id()));
       const edges=family.connectedEdges().not(':selected');
       const hitEdges=cy.edges();
-      state.labelDrag={cy,map:state.universe,selected:cy.nodes(':selected'),pannable:family.filter(n=>n.pannable()),edges,hitEdges};
+      state.labelDrag={cy,map:state.universe,selected:cy.nodes(':selected'),pannable:family.filter(n=>n.pannable()),
+        edges,hitEdges,label:node,labelEvents:node.style('text-events')};
       // Native selected-node dragging uses the renderer's drag layer for the entire visible constellation.
-      // Crossing wires yield hit-testing until the label gesture finishes.
-      cy.batch(()=>{cy.nodes(':selected').unselect();family.unpanify().select();edges.addClass('arranging');hitEdges.style('events','no');});
+      // A trace can disable label hits so a crossing wire remains inspectable.
+      cy.batch(()=>{
+        cy.nodes(':selected').unselect();family.unpanify().select();edges.addClass('arranging');
+        hitEdges.style('events','no');node.style('text-events','yes');
+      });
       return;
     }
   }
@@ -911,6 +915,7 @@ function releaseConstellationLabel(redraw=true) {
   state.labelDrag=null;
   drag.cy.batch(()=>{
     drag.edges.removeClass('arranging');drag.hitEdges.removeStyle('events');drag.pannable.panify();
+    drag.label.style('text-events',drag.labelEvents);
     drag.cy.nodes(':selected').unselect();drag.selected.filter(e=>!e.removed()).select();
   });
   state.labelGeometry=null;

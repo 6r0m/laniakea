@@ -70,6 +70,9 @@ async page=>{
   await page.locator(`#review-items [data-finding="${id}"]`).click();await card.waitFor();
   await page.setViewportSize({width:640,height:800});
   check(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Inspector overflows the narrow window');
+  await page.evaluate(()=>showTraceReadout(ConnectionTrace.node(state.universe,state.shard,state.selection.id)));
+  check(await page.locator('#hover-card').isHidden(),'A map hover card is clipped behind the narrow Inspector');
+  check(await page.locator('#map-tooltip').textContent().then(Boolean),'The narrow Inspector hid the accessible trace text');
   await page.getByRole('button',{name:'Close inspector',exact:true}).click();
   check(await page.locator('#view-summary').evaluate(n=>n===document.activeElement),'Close did not restore toolbar focus');
   await page.setViewportSize({width:1440,height:1000});

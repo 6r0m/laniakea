@@ -164,7 +164,8 @@ reference paging, scroll and unsaved decision reasons, without changing selectio
 when Details first opens. The panel's close button uses the same inspection cancellation as Escape and returns focus to
 the toolbar. At narrow widths, the inspector, findings queue and filters are mutually exclusive;
 opening the queue hides inspection without discarding it. Explicit reinspection reopens the retained dock; background
-projection refresh does not.
+projection refresh does not. When the Inspector overlays the map, the floating hover card is hidden and trace text
+continues to update in the map readout.
 
 ## Visual appearance and motion
 

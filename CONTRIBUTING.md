@@ -38,12 +38,13 @@ the diff for private data or secrets. Follow the [privacy rules](AGENTS.md#priva
 
 ## Verify a viewer change
 
-Run the Node suite, then the relevant [browser acceptance checks](tests/README.md#browser-acceptance).
-Browser checks require manual harness setup. Report automated and manual results separately.
+Run the Node suite, then the relevant [browser acceptance checks](tests/README.md#browser-acceptance). The browser
+launcher prepares disposable synthetic fixtures. Report automated and manual results separately.
 
 ## License
 
-First-party contributions use **AGPL-3.0-or-later**; see [LICENSE](LICENSE). Submit only material you can contribute
-under those terms, and keep the SPDX identifier in source files.
+Contributions to Laniakea use [AGPL-3.0-or-later](LICENSE). Contributions to the authored Unreal relay project under
+`sample/SampleProject/` use the [sample's MIT license](sample/SampleProject/LICENSE). Submit only material you can
+contribute under the license for that part of the repository, and keep the SPDX identifier in source files.
 
 Preserve third-party notices and record provenance and licensing in [THIRD_PARTY.md](THIRD_PARTY.md).

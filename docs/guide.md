@@ -10,46 +10,26 @@ Trace dependencies to source, explore public contracts and inspect the evidence 
 - [Find the public contract and its implementation](#find-the-public-contract-and-its-implementation)
 - [Investigate a suspicious relationship](#investigate-a-suspicious-relationship)
 - [Use architecture review](#use-architecture-review)
+- [Run and recheck analysis](#run-and-recheck-analysis)
+- [Enable C++ usage and references](#enable-c-usage-and-references)
 - [Collect source duplication](#collect-source-duplication)
 - [Account for missing information](#account-for-missing-information)
 
 ## Open a project
 
-Use the [Make shortcuts](../Makefile) (`make help`) to build a map, then open the saved result. For Python commands,
-options and defaults, run `python laniakea.py --help` or `python laniakea.py <command> --help`.
+Follow the [quick start](../README.md#quick-start) to open your own project or the
+[Unreal relay sample walkthrough](../sample/SampleProject/docs/walkthrough.md) to try the same steps on a fictional
+project. On the map, scroll into a constellation, hover a connection to see its direction, and click it to inspect the
+references in **Inspector**. Open **Review** for issues with recorded evidence.
 
-`up` opens the saved map immediately and monitors the selected target. For a new project, the initial build records
-recommended checks and can already collect duplication evidence; `up` starts the remaining available C++ checks in the
-background. Tools must be installed locally, and native indexing needs a usable successful-build receipt. Laniakea does
-not automatically build your project or install tools. A saved run does not prove current sources compiled.
+The first map uses UnrealBuildTool's evaluated module rules. For source-level calls, declarations and implementations,
+[enable C++ usage and references](#enable-c-usage-and-references). Use `python laniakea.py up --no-watch` to open existing
+saved maps without scanning sources or starting checks. The optional [Make shortcuts](../Makefile) provide the same build
+and viewer entry points. Run `python laniakea.py <command> --help` for flags and defaults.
 
-On first opening, **Checks** explains the displayed map's recorded coverage, optional checks that are Off and the next action.
-It waits while you read another panel or interact, and remembers presentation or dismissal for that project in this browser.
-**Recorded checks** lists coverage for the displayed map. Expand a check to see its mode, setup and diagnostics.
-Hover over or focus the question mark beside a description to open a popup about why the check matters and how it collects evidence.
-On a touchscreen, tap the question mark.
-During a run, the panel shows the active phase, progress and
-elapsed job time. C++ unit counts measure
-that phase only; duplication and validation use an indeterminate bar. The Checks control retains progress when the panel closes.
-Recorded coverage stays beside the attempt phase and describes the displayed map.
-The first-opening guide offers **Back to map**. **Skip for now** or **Stop checks** pauses owned background work and
-retains the previous map. These controls do not interrupt the earlier foreground build command.
-Choose **Recheck enabled checks** to resume when inputs have settled. Later source edits or build changes can still supersede a long
-scan. **Retry** retries a failed attempt; unchanged failures otherwise remain recorded.
-Auto uses available prerequisites; On makes a check required; Off explicitly skips it. Choices apply only when a validated
-map publishes. Failed or cancelled attempts keep the previous saved settings. Existing projects retain their recorded
-choices; **Run recommended checks** explicitly applies Auto and requests checks using available prerequisites. It does not
-install tools, build the project or guarantee completion. Off checks have not verified their prerequisites.
-In live mode, expand an optional check to change its mode. **Apply and run** submits edited choices.
-**Recheck enabled checks** keeps the current modes and appears below the recommended action when Auto is available.
-**Recheck enabled checks automatically** monitors enabled checks. A saved-only view shows recorded modes as text.
-Open **Review** from the toolbar to inspect recorded findings.
+The [recorded sample preview](../sample/README.md) lets you explore module-level evidence before installing Unreal.
 
-Keep exploring the recorded map while editing. The footer change summary opens **Checks**, where live **Input changes**
-shows comparable inputs and **Show paths** lists added, modified and removed files. It also explains unmonitored or unavailable
-source coverage; **Changes: limited scope** does not mean all C++ files were checked. **Build evidence** can mean a rewritten
-receipt, not edited code or a successful build. These are recheck
-hints, not architecture findings. Recheck or Retry when ready; paging does not start checks or enable Off modes.
+## Read and navigate the map
 
 The project picker shows the active project's recorded build target, platform and configuration. The scope path starts at
 **Overview**. Use **Browse** to inspect stars and constellations in the current scope, **Filters** to choose which
@@ -58,30 +38,6 @@ connections and outside nodes appear, and **Fit overview** to return to Overview
 opens Inspector directly. The map readout offers **Inspect selection** when the selected item is still active and Inspector
 is closed. Use the readout's close button to clear the selection or trace.
 The footer opens input changes and coverage details.
-
-For duplicated code, choose **Compare matches** in the selected finding to read two ranges together. A file row's eye icon
-previews just that range. The editor and copy icons open VS Code or copy its path. Comparison temporarily covers the central
-workspace, keeping the selected finding in Inspector. The comparison shows the total code locations and the matches currently
-displayed. Use **Previous match** / **Next match** or each pane's selector to reach other locations. **Back to map** or Escape
-returns to the same view. Code is read-only; matching lines are highlighted only when the current file matches its recorded
-hash. Changed or unavailable files explain why code cannot be shown.
-
-Saved changes appear without fitting the camera or losing pins, filters or surviving focus. Updates wait during drags,
-position saves, Check edits and Review drafts. Other registered targets stay inactive until explicitly activated in Checks;
-browsing a deep link alone does not activate them. Stop the foreground viewer with Ctrl+C or `make down`.
-`python laniakea.py up --no-watch` opens saved maps without scanning sources or starting checks.
-
-For C++ depth, register LLVM 21.1.8 tools locally:
-
-```text
-python laniakea.py setup-symbols --libclang <llvm>/bin/libclang.dll --resources <llvm>/lib/clang/21 --compiler <llvm>/bin/clang-cl.exe
-```
-
-The optional compiler enables preprocessing-validated reuse. Use Checks for background acquisition, or `--symbols` on a
-build for immediate required native extraction. Native work uses an isolated copy and can be expensive. See
-[native analysis](architecture/unreal-profile.md#native-symbol-analysis) for isolation and coverage.
-
-## Read and navigate the map
 
 In **View**, choose **Orbit** for a ring arrangement or **By connection** to place related stars closer together. The map
 reports when By connection uses Orbit because the overview is too large or has no connections between stars. Orbit
@@ -105,9 +61,10 @@ trace colors and controls.
 | Fit overview | Return to the overview without moving stars |
 | Reset saved positions | Confirm before clearing the current layout's saved positions |
 
-Search results, Follow, Fit overview and presentation-group breadcrumbs ease to the destination and can be interrupted by
-wheel, drag, clearing the selection, Escape or a newer selection. Wheel and drag themselves remain immediate. Ordinary scope
-breadcrumbs open the target scope directly. With reduced motion enabled, navigation jumps directly.
+Wheel zoom eases around the pointer as detail appears or folds. Dragging moves the map directly. Search results, Follow,
+Fit overview and presentation-group breadcrumbs ease to the destination. Wheel, drag, clearing the selection, Escape or
+a newer selection can interrupt those flights. Ordinary scope breadcrumbs open the target scope directly. With reduced
+motion enabled, wheel and navigation apply directly.
 
 Hover colors are relative to the card's named focus: cyan outgoing, amber incoming, violet within/self. Wire focus
 can change near the opposite endpoint. Idle wires take the colors of the stars at their ends. Find reference types
@@ -130,8 +87,7 @@ Public and implementation bands after confirmation; other scopes and layout mode
 
 ## Trace a dependency to its cause
 
-Open the synthetic project with the [Unreal sample walkthrough](../sample/SampleProject/docs/walkthrough.md). It also shows cross-branch
-dependencies, review policy and duplicate source.
+Open the relay sample from [Open a project](#open-a-project) to follow this example.
 
 1. Open the `SampleGameplay` module and hover its connection toward `SampleCore`. Read the direction and reference types.
 2. Inspect the public module dependency. Open its `Build.cs` link and check the evaluated declaration.
@@ -195,6 +151,55 @@ Apply them to the project's intended boundaries and actual target conditions.
    Adapt the [synthetic policy](../fixtures/review.rules.json); inspect its resolved modules before trusting results.
 
 See [rule meaning, coverage and saved decisions](architecture/review.md).
+
+For duplicated code, choose **Compare matches** in the selected finding to read two ranges together. A file row's eye icon
+previews just that range. The editor and copy icons open VS Code or copy its path. Comparison temporarily covers the central
+workspace, keeping the selected finding in Inspector. The comparison shows the total code locations and the matches currently
+displayed. Use **Previous match** / **Next match** or each pane's selector to reach other locations. **Back to map** or Escape
+returns to the same view. Code is read-only. Matching lines are highlighted only when the current file matches its recorded
+hash. Changed or unavailable files explain why code cannot be shown.
+
+## Run and recheck analysis
+
+`up` opens the saved map and monitors the selected target. A new project's first build records module architecture and can
+collect duplication evidence. The viewer starts available C++ analysis in the background. Install tools and build the target
+separately when a check requires them. A saved map describes the evidence collected in that run.
+
+On first opening, **Checks** explains the displayed coverage, optional checks set to Off and the next action. It waits until
+you finish reading another panel or interacting and remembers dismissal in this browser. Expand a check for its mode, setup
+and diagnostics. Hover over, focus or tap the question mark for an explanation.
+
+**Auto** uses available prerequisites, **On** requires the check, and **Off** skips it. Off checks have unverified
+prerequisites. In live mode, expand a check to change its mode and choose **Apply and run**. Choices take effect when a
+validated map publishes. A failed or cancelled attempt keeps the previous saved choices. **Run recommended checks** applies
+Auto. **Recheck enabled checks** keeps the current modes and appears below the recommended action when it is available.
+**Recheck enabled checks automatically** monitors enabled checks. A saved-only view shows recorded modes as text.
+
+The Checks control keeps showing progress when the panel closes. C++ unit counts measure that phase only. Duplication and
+validation use an indeterminate bar. Recorded coverage describes the map on screen while an attempt is running.
+**Back to map** closes the guidance. **Skip for now** or **Stop checks** pauses background work and keeps the saved map.
+The earlier foreground build is independent of these controls. Source edits or build changes can supersede a long scan.
+Choose **Recheck enabled checks** to resume when inputs settle. A failed attempt stays recorded while inputs are unchanged.
+Choose **Retry** to run it again.
+
+Open the footer's change summary for **Input changes**. **Show paths** lists added, modified and removed comparable files
+and explains **Changes: limited scope** and other comparison limits. **Build evidence** can include a rewritten receipt.
+Use these hints to decide when to recheck. Saved updates retain the camera, pins, filters and surviving focus. Updates wait
+during drags, position saves, Check edits and Review drafts. Activate another target in Checks to monitor it. Stop the viewer
+with Ctrl+C or `make down`.
+
+## Enable C++ usage and references
+
+Native indexing needs a usable receipt from a successful Unreal build. Build the target in Unreal and register LLVM 21.1.8
+tools locally.
+
+```text
+python laniakea.py setup-symbols --libclang <llvm>/bin/libclang.dll --resources <llvm>/lib/clang/21 --compiler <llvm>/bin/clang-cl.exe
+```
+
+The optional compiler enables preprocessing-validated reuse. Use Checks for background acquisition or `--symbols` on a
+build for required native extraction. See [native analysis](architecture/unreal-profile.md#native-symbol-analysis) for
+isolation and coverage.
 
 ## Collect source duplication
 

@@ -15,13 +15,14 @@ python -m unittest discover -s tests -p test_shards.py
 ## Automated checks
 
 ```text
-python -m unittest discover -s tests
-node --test tests/icons.test.cjs tests/sections.test.cjs tests/viewer.test.cjs tests/universe.test.cjs tests/references.test.cjs tests/traces.test.cjs tests/appearance.test.cjs tests/motion.test.cjs
-node --test tests/review.test.cjs
-node --test tests/live.test.cjs tests/analysis.test.cjs
+python -B -m unittest discover -s tests
+node --test "tests/*.test.cjs"
 ```
 
-Python 3.9+ needs no extra packages. Viewer unit tests need Node.js 18+; Node is not a runtime requirement for Laniakea.
+Python 3.9+ needs no extra packages. Use Node.js 22+ for the test glob above. Node is only needed for testing.
+The [Windows CI workflow](../.github/workflows/verify.yml) runs these commands with Python 3.11 and Node.js 24
+on pull requests to `develop` and pushes to `develop`. It also runs the browser baseline below. Real-engine, LLVM and CPD
+checks require their local inputs.
 `test_commands.py` exercises CLI dispatch and, when Make is installed, its aliases and argument forwarding. `test_service.py` verifies owned shutdown,
 foreign-instance refusal, startup/cancellation cleanup and saved-map preservation using loopback synthetic servers.
 Documentation-only edits can use `python -m unittest discover -s tests -p test_documentation.py` for local link/anchor
@@ -68,9 +69,21 @@ Review the tokenized fixture before publishing. Tracked tests use only synthetic
 
 ## Browser acceptance
 
-Browser files are Playwright functions accepting a `page`, not standalone commands. Harness setup is manual;
-there is no committed one-command launcher. Run them against disposable synthetic targets: they can change layouts.
-Source-file fixtures must use the normal pipeline/read index/server and real exact-reference paging.
+From a Windows Git checkout with Python, Node.js and Microsoft Edge, install the locked test tools and run the browser
+baseline. The launcher builds fresh synthetic workspaces, opens each on loopback and removes it when the case ends.
+
+```powershell
+npm.cmd ci --prefix tests --ignore-scripts
+python -B tests/browser_acceptance.py
+```
+
+Use `--help` for the case names or pass `--channel chrome` to use an installed Chrome. For example,
+`python -B tests/browser_acceptance.py inspector source-preview` runs two cases. Unreal, LLVM and CPD are optional for
+local development and are unnecessary for this baseline.
+
+The case files are Playwright functions accepting a `page`. Cases absent from the launcher's help require manual fixture
+setup. Use disposable synthetic targets because browser scenarios can change layouts or source files. Source-file
+fixtures use the normal pipeline, read index, server and exact-reference paging.
 
 | function | acceptance scope |
 |---|---|

@@ -1,29 +1,33 @@
 # Laniakea
 
-Explore an Unreal Engine C++ project as a continuous galaxy, from plugins and modules to source files, classes and
-functions. Trace recorded relationships to source and review architecture concerns with exact evidence.
+Laniakea is an open-source architecture explorer for Unreal Engine C++. Everything runs locally.
 
-Windows, Python 3.9+ and Unreal Engine 5 are needed to analyse a project. Start with:
+- **Understand an unfamiliar project.** Explore how plugins and modules fit together, then follow dependencies to their source.
+- **Plan a refactor.** Trace callers and consumers of public contracts before changing a module.
+- **Review a boundary.** Inspect dependency cycles, rule violations, and matching source ranges, then recheck after edits.
+
+## Quick start
+
+Clone the repository and run the following from its root on Windows with Python 3.9+ and Unreal Engine 5.
 
 ```text
 python laniakea.py build "path/to/YourProject.uproject"
 python laniakea.py up
 ```
 
-The viewer opens at **http://127.0.0.1:8737/**.
+The viewer opens at [http://127.0.0.1:8737/](http://127.0.0.1:8737/). The first map uses evaluated Unreal build rules.
+See the [user and architecture documentation](docs/README.md) for navigation, source analysis prerequisites and system design.
 
-| concern | owner |
-|---|---|
-| commands and options | [CLI](laniakea/cli.py) (`python laniakea.py --help`) |
-| optional Make shortcuts: build, up, down | [Makefile](Makefile) (`make help`) |
-| exploration, setup and architecture | [documentation](docs/README.md) |
-| hands-on exploration with fictional Unreal data | [sample projects](sample/README.md) |
-| checks and browser acceptance | [verification](tests/README.md) |
-| contributions welcome, first steps | [contribution guide](CONTRIBUTING.md) |
-| repository and privacy rules | [AGENTS.md](AGENTS.md) |
-| Laniakea license | [AGPL-3.0-or-later](LICENSE) |
-| dependency licenses and provenance | [third-party notices](THIRD_PARTY.md) |
+## Learn by example
 
-Copyright (C) 2026 6r0m.
+Open the recorded module map with `python -B tests/preview_sample.py`. This preview needs Windows, Git and Python 3.9+.
+The [Unreal relay sample](sample/README.md) shows how to trace a healthy dependency, investigate a deliberate boundary
+problem and follow its recorded evidence to source.
 
-Unreal Engine is a trademark of Epic Games. Laniakea is independent and is not affiliated with or endorsed by Epic Games.
+## Contribute
+
+Start with the [contribution guide](CONTRIBUTING.md) and [verification commands](tests/README.md).
+
+## License
+
+Laniakea is [AGPL-3.0-or-later](LICENSE). The authored Unreal relay sample is MIT. See the [third-party notices](THIRD_PARTY.md).

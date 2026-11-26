@@ -9,7 +9,7 @@ from pathlib import Path
 from laniakea import LaniakeaError, cli, pipeline, schema
 from laniakea.unreal import target_fields
 from laniakea.workspace import Workspace, read_json
-from support import copy_sample, fake_engine, recorded_ubt
+from support import copy_sample, fake_engine, publish_recorded_sample, recorded_ubt
 
 
 class Pipeline(unittest.TestCase):
@@ -28,6 +28,21 @@ class Pipeline(unittest.TestCase):
     def extract(self, symbols=False, **kwargs):
         with recorded_ubt(self.project, self.engine, **kwargs):
             return pipeline.extract(self.workspace, self.target, **({'symbols':True} if symbols else {}))
+
+    def test_preview_replays_module_evidence_and_installs_the_sample_policy(self):
+        from laniakea.server import make_server
+
+        with patch('laniakea.unreal.ubt._run', side_effect=AssertionError('preview launched Unreal')):
+            workspace = publish_recorded_sample(Path(self.temporary.name) / 'preview', demo_policy=True)
+        manifest = read_json(workspace.latest('sample') / 'manifest.json')
+        self.assertIn('module', manifest['levels'])
+        self.assertNotIn('function', manifest['levels'])
+        self.assertNotIn('health', manifest)
+        with make_server(workspace, scan=False, launch_target='sample') as server:
+            report = server.reviews['sample'].page({})
+            self.assertEqual(report['total'], 2)
+            self.assertEqual({(item['kind'], item['severity']) for item in report['items']},
+                             {('cycles', 'violation'), ('forbidden', 'violation')})
 
     def test_module_extraction_ignores_installed_or_broken_symbol_tools_and_source_edits(self):
         tools = self.workspace.root / 'tools/unreal'

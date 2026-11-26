@@ -3,11 +3,11 @@
 The [relay sample](../README.md) uses fictional relay scoring, match coordination and archive data. Follow the exercised
 paths to see which findings come from build rules, static calls, and matching source tokens.
 
-## Open the sample with default checks
+## Open the module map
 
-Run these commands in PowerShell from the root of the Laniakea Git checkout. The copy command uses the working-tree
-contents of tracked sample files and creates a new project directory. Use Windows, Git, Python 3.9+, and the Unreal 5.8
-installation associated with the sample. Add `--engine <engine-root>` to Laniakea's `build` if the association does not resolve.
+Use Windows, Git, Python 3.9+ and Unreal Engine 5.8 with its build prerequisites. Run the commands from the root of the
+Laniakea Git checkout in PowerShell. The copy command creates a disposable project from the working-tree contents of
+tracked sample files. UnrealBuildTool can extract the module map before you compile the sample or set up optional checks.
 
 ```powershell
 $Demo = Join-Path $PWD ('workspace\tmp\r-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
@@ -18,18 +18,8 @@ $Project = Join-Path $Demo 'SampleProject\SampleProject.uproject'
 $Run = Join-Path $Demo 'analysis'
 ```
 
-Optional checks start in Auto for the new `relay-editor` target. To record all three checks, register LLVM and CPD in
-`$Run` with `python laniakea.py --workspace "$Run" setup-symbols` and `python laniakea.py --workspace "$Run" setup-health`.
-Add `--help` to each command for its supported version and required paths. Build `SampleProjectEditor` to create its receipt.
-Set `$EngineRoot` to your installed Engine root before running the Unreal build command. If Unreal reports an action path
-longer than 260 characters, repeat the copy with a shorter absolute `$Demo` path.
-
-```powershell
-& "$EngineRoot/Engine/Build/BatchFiles/Build.bat" SampleProjectEditor Win64 Development "-Project=$Project" -WaitMutex
-if ($LASTEXITCODE -ne 0) { throw 'Unreal sample build failed' }
-```
-
-Publish the map, install the demonstration policy for the new target, and open the normal viewer.
+Publish the map, install the demonstration policy and open the viewer. If the sample's engine association does not resolve,
+append `--engine "$EngineRoot"` to `build` with `$EngineRoot` set to the Unreal installation directory that contains `Engine`.
 
 ```powershell
 python laniakea.py --workspace "$Run" build "$Project" --name relay-editor --target SampleProjectEditor
@@ -41,18 +31,34 @@ Copy-Item -LiteralPath (Join-Path (Split-Path $Project) 'review.rules.json') `
 python laniakea.py --workspace "$Run" up relay-editor --port 0
 ```
 
-The build always records module architecture. With the prerequisites above, it also collects duplicate source and the
-viewer starts native indexing in the background. To begin with a module map, run the publishing block with the tools you
-already have. **Checks** explains any unavailable coverage. An earlier saved sample may have duplication set to Off.
-Open it normally and choose **Run recommended checks** to adopt Auto for that target.
-
-Saved maps display their recorded runs. To explore changes to the sample, publish a new run. Restart a saved-only viewer
-to load the latest publication.
-
 Open **View** and choose **Orbit** for the Engine-centered overview. If Orbit uses an older saved uncentered arrangement,
 choose **Centered orbit** under **More layouts**. Wheel into a constellation, hover to
 trace connections, and click a wire or star to inspect its evidence. Use **Up** to move up a scope or **Fit overview** to
-return to the overview. **Map guide** lists the controls and symbols.
+return to the overview. Open **Review** to inspect the cycle and forbidden dependency, then follow the witnesses to their
+module rules. **Checks** explains available evidence and **Map guide** lists the controls and symbols.
+
+## Add source evidence
+
+For C++ calls, definitions and duplicate source, register the tools in the sample's `$Run` workspace. Set `$LlvmRoot`,
+`$PmdRoot` and `$JavaRoot` to the local installations described in the
+[LLVM setup](../../../docs/guide.md#enable-c-usage-and-references) and [CPD setup](../../../docs/guide.md#collect-source-duplication).
+Set `$EngineRoot` to the same Unreal installation used for the module map. Stop the viewer with Ctrl+C, then run the
+following in the same PowerShell window.
+
+```powershell
+python laniakea.py --workspace "$Run" setup-symbols --libclang "$LlvmRoot/bin/libclang.dll" `
+    --resources "$LlvmRoot/lib/clang/21" --compiler "$LlvmRoot/bin/clang-cl.exe"
+if ($LASTEXITCODE -ne 0) { throw 'LLVM setup failed' }
+python laniakea.py --workspace "$Run" setup-health --pmd "$PmdRoot" --java "$JavaRoot/bin/java.exe"
+if ($LASTEXITCODE -ne 0) { throw 'CPD setup failed' }
+& "$EngineRoot/Engine/Build/BatchFiles/Build.bat" SampleProjectEditor Win64 Development "-Project=$Project" -WaitMutex
+if ($LASTEXITCODE -ne 0) { throw 'Unreal sample build failed' }
+```
+
+If Unreal reports an action path longer than 260 characters, repeat the copy with a shorter absolute `$Demo` path.
+Run `python laniakea.py --workspace "$Run" up relay-editor --port 0` again. In **Checks**, choose **Recheck enabled checks**
+to use the existing modes, or **Run recommended checks** if the source checks are set to Off. Wait for all three checks
+to be recorded before the source-level exercises.
 
 ## Record the relay path
 
@@ -164,7 +170,7 @@ Build the `SampleProject` Game target using the same Unreal command with `Sample
 Publish its map as a separate target, then restart the viewer so its target list includes both runs.
 
 ```powershell
-python laniakea.py --workspace "$Run" build "$Project" --name relay-game --target SampleProject
+python laniakea.py --workspace "$Run" build "$Project" --name relay-game --target SampleProject --engine "$EngineRoot"
 if ($LASTEXITCODE -ne 0) { throw 'Game analysis failed' }
 python laniakea.py --workspace "$Run" down
 python laniakea.py --workspace "$Run" up relay-game --port 0
