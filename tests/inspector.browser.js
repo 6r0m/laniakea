@@ -34,11 +34,16 @@ async page=>{
   check(await page.locator('#details [data-review-finding]').count()===1,'Loading a refreshed report lost the active finding');
   await card.getByText('Review decision',{exact:true}).click();
   await card.getByLabel('Decision reason (optional)').fill('Unfinished synthetic decision');
-  await page.evaluate(()=>{
+  const refreshingReport=await page.evaluate(()=>{
     const review=state.review,data=review.data;review.data=null;review.refreshInspection();
-    if(!liveBlockReason().includes('decision draft'))throw Error('Loading removed the draft guard');
-    review.data=data;review.refreshInspection();
+    if(!review.hasInspectionDraft())throw Error('Loading discarded the draft');
+    return data;
   });
+  await page.waitForFunction(()=>!state.review.data&&liveBlockReason().includes('decision draft'));
+  await page.evaluate(data=>{
+    const review=state.review;
+    review.data=data;review.refreshInspection();
+  },refreshingReport);
   await card.waitFor();
   check(await card.getByLabel('Decision reason (optional)').inputValue()==='Unfinished synthetic decision',
     'Refreshing the report discarded the unfinished draft');

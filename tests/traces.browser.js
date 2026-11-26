@@ -35,11 +35,18 @@ async page => {
       globalThis.traceProof={pins:JSON.stringify(state.positionCache.layouts),positions:JSON.stringify([...state.universe.positions]),
         elements:state.cy.elements().length};
     });
-    const point=async (source,target,fraction=.25)=>page.evaluate(({source,target,fraction})=>{
-      const a=state.cy.getElementById(source).renderedPosition(),b=state.cy.getElementById(target).renderedPosition();
-      const box=$('graph').getBoundingClientRect();
-      return {x:box.x+a.x+(b.x-a.x)*fraction,y:box.y+a.y+(b.y-a.y)*fraction};
-    },{source,target,fraction});
+    const point=async (source,target,fraction=.25)=>{
+      await page.waitForFunction(()=>{
+        const box=$('graph').getBoundingClientRect();
+        return !state.flight&&!state.wheel&&!state.gestureActive&&!state.viewportFrame&&
+          Math.abs(state.mapSize.width-box.width)<1&&Math.abs(state.mapSize.height-box.height)<1;
+      });
+      return page.evaluate(({source,target,fraction})=>{
+        const a=state.cy.getElementById(source).renderedPosition(),b=state.cy.getElementById(target).renderedPosition();
+        const box=$('graph').getBoundingClientRect();
+        return {x:box.x+a.x+(b.x-a.x)*fraction,y:box.y+a.y+(b.y-a.y)*fraction};
+      },{source,target,fraction});
+    };
     const move=async p=>{
       await page.waitForFunction(()=>!state.gestureActive&&!state.viewportFrame);
       await page.mouse.move(p.x,p.y);await frames();
@@ -155,11 +162,16 @@ async page => {
     });
     let overlapKey,overlapBox,overlapFocus;
     for(const fraction of [.3,.4,.6,.7]){
-      await move(await point('a','b',fraction));
-      const key=await page.evaluate(()=>state.trace?.key),box=await page.locator('#hover-card').boundingBox();
-      check(await page.evaluate(()=>state.trace?.kind==='overlap'&&state.trace.pairs.length===2),
-        'Coincident different endpoint pairs must remain discoverable');
-      const focus=await page.evaluate(()=>state.trace.focus.id);
+      const coincident=await point('a','b',fraction);await page.mouse.move(coincident.x,coincident.y);
+      await page.waitForFunction(({x,y})=>{
+        const box=$('graph').getBoundingClientRect(),pointer=state.hoverTarget?.pointer;
+        return pointer&&Math.hypot(pointer.x+box.x-x,pointer.y+box.y-y)<1.5&&
+          !state.hoverFrame&&!state.gestureActive&&!state.viewportFrame;
+      },coincident);
+      const {key,focus,overlap}=await page.evaluate(()=>({key:state.trace?.key,focus:state.trace?.focus?.id,
+        overlap:state.trace?.kind==='overlap'&&state.trace.pairs.length===2}));
+      check(overlap,'Coincident different endpoint pairs must remain discoverable');
+      const box=await page.locator('#hover-card').boundingBox();
       if(overlapKey)check(key===overlapKey,'Native hit changes must not discard other candidates');
       if(overlapFocus===focus)check(box.x===overlapBox.x&&box.y===overlapBox.y,'Card moved without changing focus');
       overlapKey=key;overlapBox=box;overlapFocus=focus;
