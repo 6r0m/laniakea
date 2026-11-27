@@ -29,8 +29,8 @@ function starFamily(node, map) {
 function starPalette(){
   if (nodePalette) return nodePalette;
   const haloOpacity=Number(css('--star-halo-opacity'));
-  const stars=Object.fromEntries(STAR_FAMILIES.map(family=>[family,css('--star-'+family)]));
-  const backdrop=css('--map-atmosphere-core');
+  const stars=Object.fromEntries(STAR_FAMILIES.map(family=>[family,themeColor('--star-'+family)]));
+  const backdrop=themeColor('--map-atmosphere-core');
   nodePalette={fg:css('--fg'),bg:css('--bg'),ink:css('--star-ink'),candidate:css('--review-candidate'),
     violation:css('--review-violation'),stars,
     quietWire:Object.fromEntries(Object.entries(stars).map(([family,color])=>[family,blendLight(color,backdrop,0.53)])),
@@ -181,13 +181,19 @@ function reviewWireTargets(cy) {
   return violations.concat(candidates).slice(0,REVIEW_WIRE_LIMIT);
 }
 
+function themeColor(token) {
+  const value = css(token);
+  if (/^#[\da-f]{3}$/i.test(value)) {
+    return '#' + Array.from(value.slice(1), digit => digit.repeat(2)).join('');
+  }
+  if (!/^#[\da-f]{6}$/i.test(value)) {
+    throw new Error(`Missing or invalid theme color ${token} in app.css`);
+  }
+  return value;
+}
+
 function blendLight(tint,light,amount) {
-  const channels=color=>{
-    if(!color.startsWith('#'))return color.match(/\d+/g).map(Number).slice(0,3);
-    const hex=color.slice(1);
-    const pairs=hex.length===3?[...hex].map(value=>value.repeat(2)):hex.match(/../g);
-    return pairs.slice(0,3).map(value=>parseInt(value,16));
-  };
+  const channels = color => [1, 3, 5].map(index => parseInt(color.slice(index, index + 2), 16));
   const from=channels(tint),to=channels(light);
   const rgb=from.map((value,i)=>Math.round(value*(1-amount)+to[i]*amount));
   return `rgb(${rgb.join(',')})`;

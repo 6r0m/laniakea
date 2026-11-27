@@ -29,6 +29,17 @@ jobs:
       - name: Viewer unit tests
         run: node --test "tests/*.test.cjs"
       - name: Install browser test tools
-        run: npm.cmd ci --prefix tests --ignore-scripts
+        run: |
+          npm.cmd ci --prefix tests --ignore-scripts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node tests/node_modules/playwright-core/cli.js install --only-shell chromium
       - name: Browser acceptance
-        run: python -B tests/browser_acceptance.py
+        run: python -B tests/browser_acceptance.py --channel chromium
+      - name: Upload browser failure traces
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: browser-failure-traces
+          path: workspace/tmp/browser-failures/*.zip
+          if-no-files-found: ignore
+          retention-days: 7

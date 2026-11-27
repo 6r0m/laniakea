@@ -1,22 +1,58 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Serve test_review.fixture through the ordinary pipeline/index/server in a disposable workspace.
-async (page, {waitForViewer})=>{
+async (page, {waitForViewer, injectFault})=>{
   const check=(ok,message)=>{if(!ok)throw Error(message);},errors=[],requests=[],writes=[];
   const openSettings=async()=>{
     if(!await page.locator('#review-settings').evaluate(node=>node.open))await page.locator('#review-settings > summary').click();
   };
+  await page.addInitScript(() => {
+    const NativeObserver = window.ResizeObserver;
+    const resize = window.reviewResize = {held: false};
+    window.ResizeObserver = class extends NativeObserver {
+      constructor(callback) {
+        super((entries, observer) => {
+          if (resize.held && callback.name === 'resizeMap') {
+            resize.release = () => callback(entries, observer);
+          } else {
+            callback(entries, observer);
+          }
+        });
+      }
+    };
+  });
   await page.emulateMedia({reducedMotion:'no-preference'});
   page.on('pageerror',e=>errors.push(e.message));
   page.on('request',r=>{requests.push(r);if(r.method()==='POST'&&r.url().includes('/layout/'))writes.push(r.url());});
   const pins=await page.evaluate(()=>JSON.stringify(state.positionCache.layouts));
   const initial=await page.evaluate(()=>({elements:state.cy.elements().length,url:state.target.review_url}));
-  const clickStar=async id=>{const p=await page.evaluate(id=>{const p=state.cy.getElementById(id).renderedPosition(),b=$('graph').getBoundingClientRect();
-    return{x:p.x+b.x,y:p.y+b.y};},id);await page.mouse.click(p.x,p.y);};
+  const clickStar = async id => {
+    const point = await page.waitForFunction(id => {
+      const {cy, mapSize} = state, bounds = $('graph').getBoundingClientRect();
+      if (!mapSize || Math.abs(bounds.width - mapSize.width) >= 1 || Math.abs(bounds.height - mapSize.height) >= 1 ||
+          state.flight || state.viewportFrame || state.gestureActive || state.zoomFrame) return false;
+      const node = cy.getElementById(id);
+      if (!node.length || !node.visible()) throw new Error(`Expected visible star ${id}`);
+      const position = node.renderedPosition();
+      const x = bounds.x + position.x, y = bounds.y + position.y;
+      window.acceptanceTap = {expected: id, x, y, domTarget: document.elementFromPoint(x, y)?.tagName};
+      cy.one('tap', event => {
+        window.acceptanceTap.graphTarget = event.target === cy ? 'background' : event.target.id();
+      });
+      return {x, y};
+    }, id, {polling: 50});
+    const {x, y} = await point.jsonValue();
+    await page.mouse.click(x, y);
+    await page.waitForFunction(id => state.selection?.id === id && !$('details').hidden, id, {polling: 50});
+  };
   const badgePixels=async()=>page.evaluate(async()=>{
     const cy=state.cy,n=cy.nodes('.expanded').find(n=>n.data('reviewMark')&&state.labelBoxes.has(n.id()))||
       cy.nodes().find(n=>n.data('reviewMark')&&!n.hasClass('expanded')),
       box=state.labelBoxes.get(n.id()),p=n.renderedPosition(),expanded=n.hasClass('expanded'),
       x=expanded?box.x1-33:p.x+n.width()*cy.zoom()/2,y=expanded?(box.y1+box.y2)/2:p.y-n.height()*cy.zoom()/2;
+    const renderer=cy.renderer();
+    // Wait for the renderer's SVG images before sampling its exported pixels.
+    await Promise.all(n.pstyle('background-image').value.filter(url=>url&&url!=='none')
+      .map(url=>renderer.getCachedImage(url,null,()=>{}).decode()));
     const image=new Image();image.src=cy.png({output:'base64uri',scale:1});await image.decode();
     const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;
     const ctx=canvas.getContext('2d');ctx.drawImage(image,0,0);
@@ -215,8 +251,17 @@ async (page, {waitForViewer})=>{
   await page.locator(`#review-items [data-finding="${nativeId}"]`).click();
   await page.locator('#details [data-review-finding]').first().waitFor();
   check(await page.locator('#details [data-review-finding]').count()===1,'Choosing one list finding opened unrelated concerns');
+  // Deliver the panel resize after starting the next canvas interaction.
+  await page.evaluate(() => { window.reviewResize.held = true; });
   await page.getByRole('button',{name:'Close inspector',exact:true}).click();
-  await clickStar('A');
+  await page.waitForFunction(() => window.reviewResize.release &&
+    Math.abs(state.mapSize.width - $('graph').getBoundingClientRect().width) >= 1, null, {polling: 50});
+  await Promise.all([clickStar('A'), page.evaluate(() => {
+    window.reviewResize.held = false;
+    window.reviewResize.release();
+    delete window.reviewResize.release;
+  })]);
+  await Promise.all([nativeChoice.waitFor(), cycleChoice.waitFor()]);
   const native=page.locator('#details .review-finding').filter({hasText:'Native call without recorded module access'});
   await nativeChoice.click();await native.waitFor();
   await native.getByRole('button',{name:'Inspect recorded reference',exact:true}).click();
@@ -256,7 +301,7 @@ async (page, {waitForViewer})=>{
   await page.waitForFunction(()=>state.review.data?.total===2&&!state.review.ack);
   await page.route('**'+initial.url,async route=>{
     if(route.request().method()==='POST'&&route.request().postDataJSON()?.action==='triage')
-      return route.fulfill({status:503,body:'Synthetic write refusal'});
+      return injectFault(route,{status:503,body:'Synthetic write refusal'});
     return route.continue();
   });
   await nativeChoice.click();await native.getByText('Review decision',{exact:true}).click();
@@ -284,7 +329,7 @@ async (page, {waitForViewer})=>{
   await page.waitForFunction(()=>state.review.data?.total===2&&!state.review.requests.size);
   await clickStar('A');await page.locator('#details .review-details').waitFor();
   await page.route('**'+initial.url,async route=>route.request().method()==='POST'&&route.request().postDataJSON()?.action==='recheck'?
-    route.fulfill({status:400,body:'Synthetic invalid policy'}):route.continue());
+    injectFault(route,{status:400,body:'Synthetic invalid policy'}):route.continue());
   if(await page.locator('#review').isHidden())await page.locator('#toggle-review').click();
   await openSettings();
   await page.getByRole('button',{name:'Refresh findings',exact:true}).click();

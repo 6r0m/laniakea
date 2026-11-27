@@ -274,6 +274,7 @@ async function show(id, file, mode) {
 }
 
 function reportError(error) {
+  console.error(error.stack || error);
   $('error').hidden = false;
   $('error').textContent = `Could not load: ${error.message}. Check the local server, then try again.`;
 }

@@ -81,8 +81,22 @@ python -B tests/browser_acceptance.py
 ```
 
 Use `--help` for the case names or pass `--channel chrome` to use an installed Chrome. For example,
-`python -B tests/browser_acceptance.py inspector source-preview` runs two cases. Unreal, LLVM and CPD are optional for
-local development and are unnecessary for this baseline.
+`python -B tests/browser_acceptance.py inspector source-preview` runs two cases. Unreal, LLVM and CPD are unnecessary
+for this baseline.
+
+GitHub Actions uses the Chromium headless shell revision from the locked Playwright package. To reproduce that browser
+locally, install the shell and select its channel:
+
+```powershell
+$env:PLAYWRIGHT_BROWSERS_PATH = Join-Path (Get-Location) 'workspace/tmp/playwright-browsers'
+node tests/node_modules/playwright-core/cli.js install --only-shell chromium
+python -B tests/browser_acceptance.py --channel chromium
+```
+
+On failure, the launcher prints browser exceptions, request failures and viewer state. Intentional HTTP refusals injected
+by the browser cases are marked in the request log. Playwright traces for failed cases stay in `workspace/tmp/browser-failures/`
+after the disposable workspace closes. The workflow attaches them as `browser-failure-traces`. Use Playwright Trace Viewer
+to open a trace ZIP. The acceptance cases use synthetic data. Performance measurements run with tracing disabled.
 
 The case files are Playwright functions accepting a `page`. Cases absent from the launcher's help require manual fixture
 setup. Use disposable synthetic targets because browser scenarios can change layouts or source files. Source-file

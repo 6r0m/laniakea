@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Run against the disposable Review fixture through the normal server and read index.
-async page=>{
+async (page, {injectFault})=>{
   const check=(ok,message)=>{if(!ok)throw Error(message);},errors=[],writes=[],requests=[];
   page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{
     requests.push(r.url());if(r.method()==='POST')writes.push(r.url());
@@ -108,7 +108,7 @@ async page=>{
   await page.getByRole('button',{name:'Close inspector',exact:true}).click();
   await page.unroute(pattern);
   await page.route(pattern,async route=>new URL(route.request().url()).searchParams.has('node')?
-    route.fulfill({status:503,body:'Synthetic inspector refusal'}):route.continue());
+    injectFault(route,{status:503,body:'Synthetic inspector refusal'}):route.continue());
   await page.evaluate(()=>{state.review.pages.clear();selectNode('A');});
   await page.locator('#inspector-page-architecture').getByText(/Synthetic inspector refusal/).waitFor();
   await page.evaluate(()=>state.review.refreshInspection());

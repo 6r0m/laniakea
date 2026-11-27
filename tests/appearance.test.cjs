@@ -34,9 +34,10 @@ function luminance(value){
 }
 function contrast(a,b){const first=luminance(a),second=luminance(b);
   return (Math.max(first,second)+0.05)/(Math.min(first,second)+0.05);}
-function styleRules(){
+function styleRules(overrides = {}){
   const values={};for(const block of themeBlocks())Object.assign(values,tokens(block));
-  const context={css:name=>values[name]||'#888888'};vm.createContext(context);
+  Object.assign(values, overrides);
+  const context={css:name=>values[name]??'#888888'};vm.createContext(context);
   vm.runInContext(appearanceSource,context);
   return context.style();
 }
@@ -49,6 +50,11 @@ test('static Cytoscape appearance has one owner loaded before map.js',()=>{
   assert.ok(appearanceAt>=0&&mapAt>appearanceAt,'index.html must load appearance.js before map.js');
   const supportAppearance=support.indexOf("viewer/appearance.js"),supportMap=support.indexOf("viewer/map.js");
   assert.ok(supportAppearance>=0&&supportMap>supportAppearance,'Node fixtures must load appearance.js before map.js');
+});
+
+test('required map palette colors report the missing or invalid token', () => {
+  assert.throws(() => styleRules({'--star-root': ''}), /theme color --star-root in app\.css/);
+  assert.throws(() => styleRules({'--map-atmosphere-core': 'bad color'}), /theme color --map-atmosphere-core in app\.css/);
 });
 
 test('wire pulse admits visible active findings with priority for violations',()=>{

@@ -79,7 +79,7 @@ def measurement_fixture(case, base):
     return make_server(workspace, scan=False, launch_target='sample')
 
 
-def run(case, base, channel, *, measure=False):
+def run(case, base, channel, trace, *, measure=False):
     if measure:
         server, source = measurement_fixture(case, base), ''
     else:
@@ -88,7 +88,7 @@ def run(case, base, channel, *, measure=False):
     thread.start()
     try:
         url = f'http://127.0.0.1:{server.server_address[1]}/'
-        command = ['node', str(ROOT / 'tests' / 'browser_acceptance.cjs'), case, url, channel, source]
+        command = ['node', str(ROOT / 'tests' / 'browser_acceptance.cjs'), case, url, channel, source, str(trace)]
         if measure:
             command.append('--measure')
         result = subprocess.run(command, cwd=ROOT, timeout=150)
@@ -102,7 +102,7 @@ def run(case, base, channel, *, measure=False):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('cases', nargs='*', metavar='CASE', help=', '.join(CASES) + ' (default: all)')
-    parser.add_argument('--channel', choices=('msedge', 'chrome'), default='msedge')
+    parser.add_argument('--channel', choices=('msedge', 'chrome', 'chromium'), default='msedge')
     parser.add_argument('--measure', action='store_true', help='run performance probes on relay and stress workloads')
     options = parser.parse_args()
     choices = MEASUREMENTS if options.measure else CASES
@@ -113,7 +113,9 @@ def main():
     failures = []
     for case in options.cases or choices:
         with tempfile.TemporaryDirectory(prefix='browser-', dir=scratch) as temporary:
-            if run(case, Path(temporary), options.channel, measure=options.measure):
+            base = Path(temporary)
+            trace = scratch / 'browser-failures' / f'{case}-{base.name}.zip'
+            if run(case, base, options.channel, trace, measure=options.measure):
                 failures.append(case)
     if failures:
         print('Failed browser cases: ' + ', '.join(failures), flush=True)

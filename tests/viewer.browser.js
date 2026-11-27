@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Evaluate this Playwright function on the served synthetic sample.
-async (page, {waitForViewer}) => {
+async (page, {waitForViewer, injectFault}) => {
   const base = page.url().split('/').slice(0,3).join('/');
   const view=async p=>{if(!await p.locator('#view-controls').evaluate(n=>n.open))await p.locator('#view-summary').click();};
   const layout=async(p,mode)=>{await p.evaluate(mode=>chooseLayout(mode),mode);
@@ -41,6 +41,18 @@ async (page, {waitForViewer}) => {
   await waitForViewer(page);
   await frames();
   check(await page.evaluate(()=>$('error').hidden),'Startup reports an error');
+  const styleFailure = await page.context().newPage();
+  await styleFailure.route('**/app.css', route => injectFault(route, {
+    status: 503, body: 'Synthetic stylesheet refusal',
+  }), {times: 1});
+  await styleFailure.goto(base+'/');
+  const message = await waitForViewer(styleFailure).then(() => '', error => error.message);
+  check(message.includes('Missing or invalid theme color --star-root in app.css'),
+    `A missing stylesheet must report the affected theme token. Got ${message}`);
+  check(await styleFailure.evaluate(() => !state.cy), 'An unstyled viewer reported a renderer');
+  await styleFailure.reload();
+  await waitForViewer(styleFailure);
+  await styleFailure.close();
   check(await page.evaluate(()=>{
     const {name,platform,configuration}=state.manifest.target;
     return $('build-context').textContent.includes(name)&&$('build-context').textContent.includes(platform)&&
