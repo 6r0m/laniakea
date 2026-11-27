@@ -2,7 +2,7 @@
 
 **Status:** DONE
 **Scope:** existing Analysis/Review viewer presentation and live acceptance
-**Stable owners:** [viewer](../../docs/architecture/viewer.md), [guide](../../docs/guide.md)
+**Stable owners:** [viewer](../../viewer/docs/architecture/structure.md), [guide](../../docs/guide.md)
 
 ## Goal
 

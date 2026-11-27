@@ -14,18 +14,18 @@ and core-logic contributions; Unreal Engine and LLVM are optional.
    git switch -c improve-map-guide
    ```
 
-2. Run the [first checks](tests/README.md#first-checks) from the repository root; they need no Unreal Engine or LLVM.
+2. Run the [first checks](tests/verification.md#first-checks) from the repository root; they need no Unreal Engine or LLVM.
 3. Keep one problem per change. Discuss broad features or new dependencies in an issue first; small corrections
    need no issue. For bugs, add a regression that fails before the fix when practical.
 4. Run the relevant checks, then open a pull request against `develop`. Explain the problem, resulting behavior,
    reproduction and verification, including checks not run. Use only synthetic screenshots for visual changes.
 
-The [verification guide](tests/README.md) owns test prerequisites, commands and optional native checks.
+The [verification guide](tests/verification.md) owns test prerequisites, commands and optional native checks.
 
 ## Find the right owner
 
-Use the [component map](docs/architecture/structure.md#composition) to locate code and
-[architecture docs](docs/architecture/README.md) for contracts. Update the owning document when a contract changes.
+Use the [system composition](docs/architecture/structure.md#composition) to find the component that owns the
+contract. Each component's architecture links to its code. Update the owning document when a contract changes.
 
 ## Write readable changes
 
@@ -45,7 +45,7 @@ the diff for private data or secrets. Follow the [privacy rules](AGENTS.md#priva
 
 ## Verify a viewer change
 
-Run the Node suite, then the relevant [browser acceptance checks](tests/README.md#browser-acceptance). The browser
+Run the Node suite, then the relevant [browser acceptance checks](tests/verification.md#browser-acceptance). The browser
 launcher prepares disposable synthetic fixtures. Report automated and manual results separately.
 
 ## License

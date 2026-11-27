@@ -1,7 +1,7 @@
 # Diagrams
 
-Views of Laniakea.
+System-level views of Laniakea.
 
-| view | file |
+| View | Owner |
 |---|---|
-| Laniakea's parts and the externals they meet, at the top level | [main.md](main.md) |
+| Runtime components and external participants | [Main view](main.md) |

@@ -20,8 +20,8 @@ Older annotations without access evidence are unverified. Configured dependency 
 
 ## Owners and invariants
 
-- [Unreal profile](../../docs/architecture/unreal-profile.md) owns normalization and coverage.
-- [Review](../../docs/architecture/review.md) owns eligibility, triage and severity.
+- [Unreal profile](../../laniakea/unreal/docs/architecture/structure.md) owns normalization and coverage.
+- [Review](../../laniakea/docs/architecture/review.md) owns eligibility, triage and severity.
 - Existing canonical references, SQLite paging, module-only extraction and viewer projection remain authoritative.
 - No Engine implementation indexing, new parser, schema, service or policy writes.
 

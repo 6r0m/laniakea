@@ -1,7 +1,7 @@
 # Deferred - Engine-internal exploration
 
 **Status:** DEFERRED. Run investigate-change before proposing an implementation; implementation is not authorized.
-**Owner:** Unreal profile. [Current architecture](../docs/architecture/unreal-profile.md).
+**Owner:** Unreal profile. [Current architecture](../laniakea/unreal/docs/architecture/structure.md).
 
 ## Authority register
 

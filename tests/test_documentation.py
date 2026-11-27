@@ -67,9 +67,14 @@ def _issues(root, sample_docs=None):
     root = root.resolve()
     if sample_docs is None:
         sample_docs = (root / "sample").rglob("*.md")
-    files = sorted([*root.glob("*.md"), *(root / "docs").rglob("*.md"), *(root / "todo").rglob("*.md"), *sample_docs])
+    files = set(root.glob("*.md"))
+    for directory in ("docs", "laniakea", "todo", "viewer/docs"):
+        files.update((root / directory).rglob("*.md"))
+    for directory in ("fixtures", "schema", "tests", "viewer"):
+        files.update((root / directory).glob("*.md"))
+    files.update(sample_docs)
     issues = []
-    for path in files:
+    for path in sorted(files):
         source = path.relative_to(root)
         durable = source.parts[0] != "todo" or source == Path("todo/README.md")
         for link in _links(_prose(path)):
@@ -96,6 +101,16 @@ def _issues(root, sample_docs=None):
 
 
 class Documentation(unittest.TestCase):
+    def test_component_markdown_is_checked(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            document = root / "laniakea/unreal/docs/architecture/structure.md"
+            document.parent.mkdir(parents=True)
+            document.write_text("[Missing main view](diagrams/main.md)\n", encoding="ascii")
+            self.assertEqual(_issues(root), [
+                ("laniakea/unreal/docs/architecture/structure.md", "diagrams/main.md", "missing target")
+            ])
+
     def test_sample_owned_markdown_is_checked(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

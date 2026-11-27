@@ -1,7 +1,7 @@
 # Read-only source evidence preview
 
 **Status:** DONE
-**Stable owners:** [viewer](../../docs/architecture/viewer.md), [server](../../laniakea/server.py)
+**Stable owners:** [viewer](../../viewer/docs/architecture/structure.md), [server](../../laniakea/server.py)
 
 ## Goal and authority
 

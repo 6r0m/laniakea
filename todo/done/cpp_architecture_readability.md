@@ -2,8 +2,8 @@
 
 **Status:** DONE - archived execution plan  
 **Scope:** Native C++ ownership/metadata and generic map exploration, hover, search and navigation  
-**Stable documentation owners:** [Unreal profile](../../docs/architecture/unreal-profile.md) and
-[graph/viewer semantics](../../docs/architecture/graph-model.md)
+**Stable documentation owners:** [Unreal profile](../../laniakea/unreal/docs/architecture/structure.md) and
+[graph/viewer semantics](../../laniakea/docs/architecture/graph-model.md)
 
 ## Closure record
 
@@ -117,7 +117,7 @@ project. Do not hide test code or macro-generated declarations by spelling or so
 - [Profile publication](../../laniakea/unreal/__init__.py) advertises class/function levels;
   [compiler coverage](../../laniakea/unreal/compiler.py) counts those levels explicitly.
 - [Universe](../../viewer/universe.js) constructs containment from generic `parent` links, checks cycles and does
-  not restrict child levels. [The graph contract](../../docs/architecture/graph-model.md#nodes) makes a file an
+  not restrict child levels. [The graph contract](../../laniakea/docs/architecture/graph-model.md#nodes) makes a file an
   attribute, never an ownership node.
 - [Native cache preparation](../../laniakea/unreal/symbol_cache.py) includes native adapter code digests in its key.
   An extraction change must not reuse facts which never recorded the missing owners.
@@ -151,8 +151,8 @@ has been proved. The regression matrix below closes those specific gaps before i
 
 ## Current architecture and source of truth
 
-[Graph semantics](../../docs/architecture/graph-model.md) own generic containment and continuous projection.
-[Unreal profile](../../docs/architecture/unreal-profile.md) owns compiler integration and coverage limitations.
+[Graph semantics](../../laniakea/docs/architecture/graph-model.md) own generic containment and continuous projection.
+[Unreal profile](../../laniakea/unreal/docs/architecture/structure.md) owns compiler integration and coverage limitations.
 Native compiler facts flow through `native_index.py`, `symbols.merge()`, profile publication, shards and the
 disposable map index into `Universe`. The extraction adapter owns C++ meaning; the viewer must not infer it
 from qualified names, paths or a list of Unreal class spellings.

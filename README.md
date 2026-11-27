@@ -5,38 +5,22 @@ interactive galaxy, trace dependencies to source, and investigate architectural 
 
 Currently supports Unreal Engine C++ on Windows. Everything runs locally.
 
-## Quick start
+## Get started
 
-### Try the sample &mdash; no Unreal installation required
+- Try the recorded Unreal relay project without installing Unreal. [Sample](sample/README.md)
+- Set up Laniakea, explore a project, or find the system architecture. [Documentation](docs/README.md)
 
-Windows &middot; Git &middot; Python 3.9+
+## Understand the system
 
-```text
-git clone https://github.com/6r0m/laniakea.git
-cd laniakea
-python -B tests/preview_sample.py
-```
+- Analysis, local serving, and language profiles. [Python core](laniakea/README.md)
+- Map navigation, tracing, and inspection. [Browser viewer](viewer/README.md)
+- Canonical data formats. [Graph schema](schema/README.md)
 
-The preview shows recorded module evidence. The [Unreal relay sample](sample/README.md) explains how to collect and
-inspect C++ and duplication evidence with local tools.
+## Develop and contribute
 
-### Explore your own project
+- Verification, browser acceptance, and performance probes. [Tests](tests/README.md)
+- Synthetic data for tests and the sample preview. [Fixtures](fixtures/README.md)
+- Development workflow. [Contributing](CONTRIBUTING.md)
+- Privacy, build, and working conventions. [Repository rules](AGENTS.md)
 
-Windows &middot; Python 3.9+ &middot; Unreal Engine 5
-
-```text
-python laniakea.py build "path/to/YourProject.uproject"
-python laniakea.py up
-```
-
-The viewer opens at [http://127.0.0.1:8737/](http://127.0.0.1:8737/). The first map uses evaluated Unreal build rules.
-C++ declarations and references use a successful build receipt and local LLVM tools. See the
-[user and architecture documentation](docs/README.md) for navigation, setup and system design.
-
-## Contribute
-
-Start with the [contribution guide](CONTRIBUTING.md) and [verification commands](tests/README.md).
-
-## License
-
-Laniakea is [AGPL-3.0-or-later](LICENSE). The authored Unreal relay sample is MIT. See the [third-party notices](THIRD_PARTY.md).
+[AGPL-3.0-or-later](LICENSE) and [third-party notices](THIRD_PARTY.md).

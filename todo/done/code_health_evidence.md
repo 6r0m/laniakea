@@ -2,8 +2,8 @@
 
 **Status:** DONE - strict duplication delivered; complexity deferred by D3
 **Scope:** Delivered optional strict C++ duplication through Review. Complexity clauses below remain deferred investigation history.
-**Stable owners:** [Review](../../docs/architecture/review.md), [Unreal profile](../../docs/architecture/unreal-profile.md),
-[graph presentation](../../docs/architecture/graph-model.md).
+**Stable owners:** [Review](../../laniakea/docs/architecture/review.md), [Unreal profile](../../laniakea/unreal/docs/architecture/structure.md),
+[graph presentation](../../laniakea/docs/architecture/graph-model.md).
 
 ## Contents
 
@@ -205,7 +205,7 @@ source scans on map opening; unqualified Lizard warnings; treating every high me
 | UI | One-click source explanation, all occurrence pages, badges across folding/off-screen views, no invented edges, optional-category isolation, late-close and unchanged pins |
 | Cost | Cold/repeated real-context analysis, peak memory, bounded large synthetic corpus, no tool invocation or extra source hashing during ordinary extraction/map opening |
 
-Use the [existing test routes](../../tests/README.md), including JavaScript, affected browser suites and focused Python tests.
+Use the [existing test routes](../../tests/verification.md), including JavaScript, affected browser suites and focused Python tests.
 Add provider tests only behind explicit optional-tool inputs; a skip is not proof. Before acceptance, demonstrate the chosen
 checks finding useful synthetic concerns while clean controls remain quiet. Public-project suggestions remain manual
 review candidates, never evidence that the whole project has bad architecture.

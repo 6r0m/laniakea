@@ -19,23 +19,30 @@ Trace dependencies to source, explore public contracts and inspect the evidence 
 
 Analyze trusted projects only. Unreal Build Tool evaluates project-supplied build rules and may update its own caches.
 
-Follow the [quick start](../README.md#quick-start) to open your own project or the
-[Unreal relay sample walkthrough](../sample/SampleProject/docs/walkthrough.md) to try the same steps on a fictional
-project. On the map, scroll into a constellation, hover a connection to see its direction, and click it to inspect the
-references in **Inspector**. Open **Review** for issues with recorded evidence.
+To explore your own project, use Windows, Python 3.9+ and Unreal Engine 5. From the Laniakea checkout, run
+
+```text
+python laniakea.py build "path/to/YourProject.uproject"
+python laniakea.py up
+```
+
+Open [the local viewer](http://127.0.0.1:8737/). On the map, scroll into a constellation, hover a connection to see its
+direction, and click it to inspect the references in **Inspector**. Open **Review** for issues with recorded evidence.
 
 The first map uses UnrealBuildTool's evaluated module rules. For source-level calls, declarations and implementations,
 [enable C++ usage and references](#enable-c-usage-and-references). Use `python laniakea.py up --no-watch` to open existing
 saved maps without scanning sources or starting checks. The optional [Make shortcuts](../Makefile) provide the same build
 and viewer entry points. Run `python laniakea.py <command> --help` for flags and defaults.
 
-The [recorded sample preview](../sample/README.md) lets you explore module-level evidence before installing Unreal.
+Start with the [recorded sample preview](../sample/README.md) to explore module-level evidence before installing Unreal.
+The [Unreal relay sample walkthrough](../sample/SampleProject/docs/walkthrough.md) covers live analysis and repair.
 
 ## Read and navigate the map
 
 The overview groups references by visible owners. As you zoom, the viewer opens nearby detail and folds distant detail.
-Inspect a connection to page through its original references. The [viewer contract](architecture/viewer.md) explains
-projection and retention. The [performance probes](../tests/README.md#performance-probes) measure them on synthetic data.
+Inspect a connection to page through its original references. The
+[map and navigation contract](../viewer/docs/architecture/map-navigation.md) explains projection and retention.
+The [performance probes](../tests/verification.md#performance-probes) measure them on synthetic data.
 
 The project picker shows the active project's recorded build target, platform and configuration. The scope path starts at
 **Overview**. Use **Browse** to inspect stars and constellations in the current scope, **Filters** to choose which
@@ -156,7 +163,7 @@ Apply them to the project's intended boundaries and actual target conditions.
    and use **Refresh findings**.
    Adapt the [synthetic policy](../fixtures/review.rules.json); inspect its resolved modules before trusting results.
 
-See [rule meaning, coverage and saved decisions](architecture/review.md).
+See [rule meaning, coverage and saved decisions](../laniakea/docs/architecture/review.md).
 
 For duplicated code, choose **Compare matches** in the selected finding to read two ranges together. A file row's eye icon
 previews just that range. The editor and copy icons open VS Code or copy its path. Comparison temporarily covers the central
@@ -204,7 +211,7 @@ python laniakea.py setup-symbols --libclang <llvm>/bin/libclang.dll --resources 
 ```
 
 The optional compiler enables preprocessing-validated reuse. Use Checks for background acquisition or `--symbols` on a
-build for required native extraction. See [native analysis](architecture/unreal-profile.md#native-symbol-analysis) for
+build for required native extraction. See [native analysis](../laniakea/unreal/docs/architecture/native-analysis.md#native-symbol-analysis) for
 isolation and coverage.
 
 ## Collect source duplication
@@ -234,7 +241,7 @@ wires are invented. Accept/reopen decisions use the existing Review workflow.
 
 Checks can run PMD in the monitored background. Missing tools remain visible as unavailable; no runtime tools are downloaded.
 Use Off in Checks or `--health off` during a build to skip duplication.
-See [collection boundaries and costs](architecture/unreal-profile.md#source-duplication).
+See [collection boundaries and costs](../laniakea/unreal/docs/architecture/source-duplication.md#source-duplication).
 
 ## Account for missing information
 
@@ -249,5 +256,5 @@ remain unclassified.
 
 Calls resolve static declarations, including for virtual calls; runtime/indirect dispatch is not analysed.
 Enum/value and local-variable stars are not indexed. Member summaries and macro provenance are observations, not
-complete coverage. See the [coverage contract](architecture/graph-model.md#coverage) and
-[Unreal profile](architecture/unreal-profile.md).
+complete coverage. See the [coverage contract](../laniakea/docs/architecture/graph-model.md#coverage) and
+[native C++ analysis contract](../laniakea/unreal/docs/architecture/native-analysis.md#native-symbol-analysis).

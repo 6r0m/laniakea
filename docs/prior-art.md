@@ -2,7 +2,7 @@
 
 Tool choices for Windows, evaluated module ownership and semantic code references. The
 [research reports](prior-art-audits.md) record the 2026-11-02 investigation. Current extraction uses LLVM libclang;
-see the [native-analysis contract](architecture/unreal-profile.md#native-symbol-analysis).
+see the [native-analysis contract](../laniakea/unreal/docs/architecture/native-analysis.md#native-symbol-analysis).
 
 | Candidate | License | Verdict |
 |---|---|---|

@@ -93,7 +93,7 @@ ask a question the user can answer from evidence in the viewer and point to the 
   obtains UBT output on a disposable copy, prunes it and tokenizes roots. [Engine tests](../tests/test_engine_integration.py)
 - Real build cycles use evaluated public/private module edges. Policy context and selectors control which recorded evidence
   becomes a violation. Native unsupported access and strict token matches can be Review candidates. An include-only static
-  call or incomplete access closure stays unverified. [Review](../docs/architecture/review.md), [Unreal access analysis](../laniakea/unreal/dependency_access.py)
+  call or incomplete access closure stays unverified. [Review](../laniakea/docs/architecture/review.md), [Unreal access analysis](../laniakea/unreal/dependency_access.py)
 - The viewer groups canonical references at visible endpoints, and its trace code detects reciprocal visible wires.
   The Review evaluator checks canonical module adjacency. These are different levels of evidence. [Viewer trace](../viewer/map.js), [Review evaluator](../laniakea/review.py)
 - The viewer opens a locally registered run in saved-map mode and reads the relevant project files for authorized source
@@ -131,7 +131,7 @@ Original `.uproject`, `.uplugin`, target rules and C++ live below `sample/Sample
 The Unreal profile owns graph and optional source observations, and publishes through the existing pipeline and workspace.
 Review interprets the selected run and its local policy. Viewer exploration and source preview use that run's canonical
 references and validated evidence. The recorded fixture tests reproducibility of the evaluated structure.
-[Unreal profile](../docs/architecture/unreal-profile.md), [Architecture index](../docs/architecture/README.md), [Review policy](../docs/architecture/review.md#policy)
+[Unreal profile](../laniakea/unreal/docs/architecture/structure.md), [Architecture index](../docs/architecture/README.md), [Review policy](../laniakea/docs/architecture/review.md#policy)
 
 ## Problem and root cause
 
@@ -223,7 +223,7 @@ The walkthrough documents the local build and viewer route. D8 reserves a video 
 
 ### Green evidence
 
-1. Run `python -m unittest discover -s tests` and the viewer Node suites documented in [verification](../tests/README.md).
+1. Run `python -m unittest discover -s tests` and the viewer Node suites documented in [verification](../tests/verification.md).
    With a resolved engine or `LANIAKEA_TEST_ENGINE`, require the real engine tests to run. Verify exact edges against the
    regenerated fixture, removal of the existing dependency on a copy, and permitted project writes. Refresh the fixture via
    `python tests/record_fixture.py --engine "$EngineRoot"` only after real rules export. Check privacy and documentation links.
@@ -246,7 +246,7 @@ The walkthrough documents the local build and viewer route. D8 reserves a video 
    resolved modules, absence of extra build cycles, matching clone ranges and visibility of unavailable checks. Run
    [native/health checks](../tests/test_native_health.py) with their documented prerequisites when available. Report any skip.
 4. Use the real loopback viewer to run the following tour and compare against the red evidence. Use applicable
-   [browser checks and performance probes](../tests/README.md#browser-acceptance). Record module extraction, native/CPD
+   [browser checks and performance probes](../tests/verification.md#browser-acceptance). Record module extraction, native/CPD
    timing and saved-map startup on the same machine, plus wheel responsiveness and pin retention against the baseline.
 
    | Stop | What the operator should be able to do |

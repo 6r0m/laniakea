@@ -1,7 +1,7 @@
 # Deferred - Rust and Python profiles
 
 **Status:** DEFERRED. Run investigate-change for each concrete language use case before implementation.
-**Owner:** profile registry. [Language-neutral boundary](../docs/architecture/structure.md#relationships).
+**Owner:** profile registry. [Language-neutral boundary](../laniakea/docs/architecture/structure.md#relationships).
 
 ## Authority register
 

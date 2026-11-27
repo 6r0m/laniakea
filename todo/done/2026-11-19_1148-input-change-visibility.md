@@ -2,8 +2,8 @@
 
 **Status:** DONE
 **Scope:** input-change visibility and contextual recheck guidance through existing monitoring and Checks  
-**Stable owners:** [monitoring](../../docs/architecture/monitoring.md), [Unreal inputs](../../docs/architecture/unreal-profile.md),
-[viewer](../../docs/architecture/viewer.md), [guide](../../docs/guide.md)
+**Stable owners:** [monitoring](../../laniakea/docs/architecture/monitoring.md), [Unreal inputs](../../laniakea/unreal/docs/architecture/structure.md),
+[viewer](../../viewer/docs/architecture/structure.md), [guide](../../docs/guide.md)
 
 ## Contents
 
@@ -125,7 +125,7 @@ scheduler. No prototype, new browser behavior or performance improvement is veri
 | [Snapshots](../../laniakea/snapshots.py) | immutable run/read-context identity; no mutable comparison stored as canonical snapshot facts |
 | [Server](../../laniakea/server.py) | bounded cached metadata and paged paths, with no arbitrary filesystem query |
 | [Analysis](../../viewer/analysis.js), [live](../../viewer/live.js), [app](../../viewer/app.js) | comparison display, cancellation and displayed-run binding; existing banner uses the same projection |
-| [Review](../../docs/architecture/review.md) | findings and decisions remain bound to recorded evidence; no input-event findings |
+| [Review](../../laniakea/docs/architecture/review.md) | findings and decisions remain bound to recorded evidence; no input-event findings |
 
 ## Problem and root cause
 
@@ -278,7 +278,7 @@ depend on full private-project indexing. Existing [Off-mode](../../tests/test_mo
 
 ### Green evidence
 
-Run the exact new failing cases first, followed by affected suites from [verification](../../tests/README.md):
+Run the exact new failing cases first, followed by affected suites from [verification](../../tests/verification.md):
 
 ```text
 python -m unittest discover -s tests -p test_monitor*.py
@@ -305,12 +305,12 @@ python -m unittest discover -s tests -p test_privacy.py
 
 | owner / existing statement | implementation update |
 |---|---|
-| [Monitoring](../../docs/architecture/monitoring.md): input identities, event settling and publication | Own advisory comparison lifecycle, baseline binding, limits and read-only paging |
-| [Unreal profile](../../docs/architecture/unreal-profile.md): source/build/health inputs and receipt limits | Own comparable domains, categories, unrecorded context and conservative recheck meaning |
-| [Viewer](../../docs/architecture/viewer.md): displayed versus ready evidence and panel state | Own Checks presentation, deferred comparison, paging cancellation and form independence |
-| [Graph model](../../docs/architecture/graph-model.md): recorded freshness and monitoring link | Retain its route; do not copy the new monitoring protocol here |
+| [Monitoring](../../laniakea/docs/architecture/monitoring.md): input identities, event settling and publication | Own advisory comparison lifecycle, baseline binding, limits and read-only paging |
+| [Unreal profile](../../laniakea/unreal/docs/architecture/structure.md): source/build/health inputs and receipt limits | Own comparable domains, categories, unrecorded context and conservative recheck meaning |
+| [Viewer](../../viewer/docs/architecture/structure.md): displayed versus ready evidence and panel state | Own Checks presentation, deferred comparison, paging cancellation and form independence |
+| [Graph model](../../laniakea/docs/architecture/graph-model.md): recorded freshness and monitoring link | Retain its route; do not copy the new monitoring protocol here |
 | [Guide](../../docs/guide.md): current Run/Stop/Retry workflow | Add brief change-inspection guidance; link to owners instead of repeating their state contracts |
-| [Verification](../../tests/README.md): suite routes | Update affected browser/worker coverage descriptions |
+| [Verification](../../tests/verification.md): suite routes | Update affected browser/worker coverage descriptions |
 
 No new stable document, router or todo README entry is required. Stable code/docs/tests never depend on this plan.
 

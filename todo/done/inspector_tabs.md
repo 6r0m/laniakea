@@ -21,7 +21,7 @@ Status: DONE.
 
 - A small viewer inspector component owns tab presentation and keyboard interaction; app selection/paging and Review
   retain their existing responsibilities. Stable contracts belong in
-  [graph semantics](../../docs/architecture/graph-model.md) and [operator guide](../../docs/guide.md).
+  [graph semantics](../../laniakea/docs/architecture/graph-model.md) and [operator guide](../../docs/guide.md).
 - Run current viewer/review unit baselines; add executable tab, preservation, routing, failure/late-response and narrow
   browser acceptance before production changes. Prove the initial failure, then run affected browser paths and the
   complete inexpensive JavaScript suite. Check docs/privacy, real map interaction and unchanged layout checksums.

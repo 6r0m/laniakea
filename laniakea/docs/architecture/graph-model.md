@@ -1,7 +1,7 @@
 # Graph model
 
 What graph schema v1 means. The shapes of graph, shard and manifest are owned by
-[schema/graph.v1.schema.json](../../schema/graph.v1.schema.json); this page owns their meaning.
+[schema/graph.v1.schema.json](../../../schema/graph.v1.schema.json); this page owns their meaning.
 
 ## Contents
 
@@ -17,7 +17,7 @@ What graph schema v1 means. The shapes of graph, shard and manifest are owned by
 ## Levels
 
 A profile declares its levels in the manifest; the viewer hardcodes none. Profile-specific levels and containment
-are defined by the [Unreal adapter](unreal-profile.md#from-export-to-graph).
+are defined by the [Unreal adapter](../../unreal/docs/architecture/build-extraction.md#from-export-to-graph).
 
 A scope is one owner's direct children, not a requirement that every child has the same kind. A project can own
 both a source module and folders of plugins. The viewer names each kind and distinguishes collapsed containers
@@ -59,13 +59,13 @@ distinguishable in canonical data and exact pages; repeated observations of the 
 
 The manifest lists what was analysed, what was not (other targets, deeper hops, levels not built), and node and edge
 counts. Missing analysis never establishes absence or proves that configuration disabled a node.
-Presentation is defined by the [viewer contract](viewer.md).
+Presentation is defined by the [map and navigation contract](../../../viewer/docs/architecture/map-navigation.md).
 
 Optional provider acquisition has schema-validated outcomes separate from findings: completed, unavailable, disabled,
 failed or incomplete. Only completed evidence supports a zero-finding claim. Reuse preserves completion with its original
 input/tool identity; it is not a separate coverage state. Older runs without outcomes remain unrecorded where their
 coverage cannot be established. Mandatory input identities cannot be replaced by a later optional-provider sample.
-The [Unreal profile](unreal-profile.md#source-duplication) owns provider-specific modes.
+The [Unreal profile](../../unreal/docs/architecture/source-duplication.md#source-duplication) owns provider-specific modes.
 
 ## Owner-local references
 
@@ -79,7 +79,7 @@ Presentation must not infer classification from names, levels, implicit-referenc
 
 The canonical `graph.json` remains the exhaustive extraction authority. Its disposable read index supplies compact
 topology, weighted endpoint/type groups and exact canonical reference pages. Recorded file membership and provenance
-are derived by [source_files.py](../../laniakea/source_files.py) without parsing source files.
+are derived by [source_files.py](../../source_files.py) without parsing source files.
 
 The server's SQLite read index uses only Python's standard library and is regenerated from graph content and generator
 identity. A validated staging directory is promoted before serving; corruption fails visibly without changing the run.
@@ -117,7 +117,7 @@ the export runs. Saved-only startup does not scan sources and leaves freshness u
 reconciles consumed inputs in a background worker; publishing does not change an open page's immutable context.
 The [background-analysis contract](monitoring.md) owns scheduling and handoff. Explicit freshness checks recompute the
 recorded fingerprints and name changed inputs.
-The Unreal profile owns [which file contents and selection metadata participate](unreal-profile.md#build-context).
+The Unreal profile owns [which file contents and selection metadata participate](../../unreal/docs/architecture/build-extraction.md#build-context).
 
 New runs bind a validated extraction request by digest: target settings and collection intent are immutable parts of that
 run. The latest pointer selects the graph, effective settings and recipe together. Proposed CLI settings are not persisted

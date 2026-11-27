@@ -3,7 +3,7 @@
 **Status** CANDIDATE - operator visual and interaction acceptance pending (Q4)
 
 **Baseline** `c2d88cc` on develop  
-**Stable owner** [Viewer architecture](../docs/architecture/viewer.md#visual-appearance-and-motion)
+**Stable owner** [Viewer architecture](../viewer/docs/architecture/map-navigation.md#visual-appearance-and-motion)
 
 ## Contents
 
@@ -149,7 +149,7 @@ Use Laniakea's own hierarchy, shapes and semantics to express that direction.
   300 rendered pixels and folds the deepest eligible group below 190. Ordinary changes update the projection at the
   current camera. `enterWheelScope()` can change the world scale and pan in one call to align a distinct destination
   with the source marker's former screen position and footprint. It preserves recorded file routing and symbol identity.
-  [Semantic selection](../viewer/universe.js) [File navigation contract](../docs/architecture/viewer.md#source-organization)
+  [Semantic selection](../viewer/universe.js) [File navigation contract](../viewer/docs/architecture/map-navigation.md#source-organization)
 - Trusted Chrome wheel input on the [synthetic source surface](../fixtures/source-surface.graph.json) gave the
   following pre-change sequence for one `deltaY=-120` event per case. The trace samples distinct camera/projection
   states per frame. [Local trace and scene settings](../workspace/tmp/luminous-baseline.json)
@@ -180,7 +180,7 @@ Use Laniakea's own hierarchy, shapes and semantics to express that direction.
   Their assertions cover contracts and do not measure the requested visual quality.
 - `startNavigationFlight()` already establishes a bounded projection and keeps live adoption blocked until
   completion or cancellation. `c2d88cc` recomputes represented references after the staging cut and removes
-  a redundant flight render. Retain that behavior. [Flight lifecycle](../docs/architecture/viewer.md#visual-appearance-and-motion)
+  a redundant flight render. Retain that behavior. [Flight lifecycle](../viewer/docs/architecture/map-navigation.md#visual-appearance-and-motion)
   [Adoption gate](../viewer/live.js) [Projection regression](../tests/universe.test.cjs)
 
 ## Design
@@ -263,10 +263,10 @@ and input. Procedural scenery, parallax, per-node clocks, a second renderer and 
 | Interruption and reduced motion | New wheel state could outlive its renderer or intent | Interrupt wheel with drag, fit, keyboard zoom, explicit navigation, restore and target change, and interrupt a flight with wheel. Include resize, pending live adoption and an injected frame failure. Check immediate reduced motion, no stale effects, settlement and no pin writes. |
 | Radial light and hierarchy | Solid underlay and near-uniform family treatment | Confirm real rendered falloff beyond the core with visible glyph and badge. Compare matched overview, expanded module, file and symbol in both themes, plus a narrow view and dense scene. Demonstrate quiet idle wiring and readable labels, focus and warning states. |
 
-Run the [documented Node suites](../tests/README.md#automated-checks) and
+Run the [documented Node suites](../tests/verification.md#automated-checks) and
 `python -m unittest discover -s tests -p test_documentation.py` from the repository root. Extend
 [appearance browser acceptance](../tests/appearance.browser.js) and [motion browser acceptance](../tests/motion.browser.js)
-where their real-route checks cover the new behavior. Use the [documented browser harness](../tests/README.md#browser-acceptance)
+where their real-route checks cover the new behavior. Use the [documented browser harness](../tests/verification.md#browser-acceptance)
 for icons, traces, readability, endpoints, health, sections, source surface, namespace files, viewer, live, inspector,
 Review and source-navigation comparisons on their disposable targets. Preserve the full focused-projection and
 explicit-flight regressions. Run the [gesture probe](../tests/viewer.performance.js) and
@@ -276,9 +276,9 @@ scene blanking or retained elements blocks acceptance until explained and resolv
 
 ## Documentation plan
 
-Update [Viewer architecture](../docs/architecture/viewer.md#visual-appearance-and-motion) for the durable appearance
+Update [Viewer architecture](../viewer/docs/architecture/map-navigation.md#visual-appearance-and-motion) for the durable appearance
 and shared camera contracts. Update [navigation guidance](../docs/guide.md#read-and-navigate-the-map) if observable
-controls change, and [verification](../tests/README.md#browser-acceptance) for revised executable checks.
+controls change, and [verification](../tests/verification.md#browser-acceptance) for revised executable checks.
 Keep experiments, comparison settings and review decisions here.
 
 ## Completion criteria

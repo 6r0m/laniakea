@@ -2,7 +2,7 @@
 
 **Status:** DONE
 **Scope:** viewer guidance, first-opening lifecycle and evidence labels  
-**Stable owners:** [viewer](../../docs/architecture/viewer.md), [guide](../../docs/guide.md)
+**Stable owners:** [viewer](../../viewer/docs/architecture/structure.md), [guide](../../docs/guide.md)
 
 ## Contents
 
@@ -78,8 +78,8 @@ activation of an existing project's Off checks.
    findings as recorded evidence and includes coverage states. The qualification is less visible than the count.
 6. `inputChangeSummary()` already says "compared inputs" and exposes unmonitored scopes in its detail. The fixed-width
    [context strip](../../viewer/app.css) can truncate the label. The finding is about visibility, not an incorrect freshness calculation.
-7. [Viewer lifecycle](../../docs/architecture/viewer.md#live-snapshots) distinguishes displayed coverage, pending choices and ready
-   updates. [Check policy](../../docs/architecture/monitoring.md#requested-checks) preserves legacy intent and makes missing
+7. [Viewer lifecycle](../../viewer/docs/architecture/live-updates.md#live-snapshots) distinguishes displayed coverage, pending choices and ready
+   updates. [Check policy](../../laniakea/docs/architecture/monitoring.md#requested-checks) preserves legacy intent and makes missing
    tools/prerequisites explicit. Neither boundary needs a behavior change for A1-A4.
 8. `AnalysisControls.panel(true)` closes Review and filters, and closes Inspector at narrow widths. The existing
    `liveBlockReason()` guards gestures and drafts, but not reading an open panel. A synthetic execution of those actual
@@ -254,13 +254,13 @@ and D6 remain unchanged. This UI-only scope does not require expensive Engine/na
 
 ## Documentation plan
 
-- [Viewer](../../docs/architecture/viewer.md#live-snapshots) owns first-opening eligibility, handled preferences, focus and
+- [Viewer](../../viewer/docs/architecture/live-updates.md#live-snapshots) owns first-opening eligibility, handled preferences, focus and
   displayed evidence. Update its existing session-dismissal statement with automatic-versus-manual panel priority and
   independent operational status; do not create a second onboarding document.
 - [Guide](../../docs/guide.md#open-a-project) owns the short operator workflow and exact action name. It already explains Auto,
   Off and zero findings; edit those paragraphs rather than append a duplicate tutorial.
-- [Verification](../../tests/README.md#browser-acceptance) lists the extended scenario. Existing routes remain sufficient.
-- [Monitoring](../../docs/architecture/monitoring.md#requested-checks) and [Review](../../docs/architecture/review.md) retain policy
+- [Verification](../../tests/verification.md#browser-acceptance) lists the extended scenario. Existing routes remain sufficient.
+- [Monitoring](../../laniakea/docs/architecture/monitoring.md#requested-checks) and [Review](../../laniakea/docs/architecture/review.md) retain policy
   and evidence semantics; change them only if implementation demonstrates a direct contract correction is needed.
 
 ## Rollout and rollback

@@ -2,9 +2,9 @@
 
 User and developer documentation.
 
-| what you will find | file |
+| Area | Owner |
 |---|---|
-| exploration and review workflows | [guide.md](guide.md) |
-| architecture contracts | [architecture/README.md](architecture/README.md) |
-| tool comparison | [prior-art.md](prior-art.md) |
-| historical research reports | [prior-art-audits.md](prior-art-audits.md) |
+| Project setup, exploration and review | [User guide](guide.md) |
+| System boundaries and component map | [Architecture](architecture/README.md) |
+| Tool comparison | [Prior art](prior-art.md) |
+| Research history | [Prior art audits](prior-art-audits.md) |

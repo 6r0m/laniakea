@@ -89,7 +89,7 @@ Use the live sample with all three checks recorded. Save review captures and rec
 ## Walk through the Review findings
 
 With the [Editor policy](../review.rules.json) installed and all three Checks recorded, open **Review**. The relay
-sample has one finding for each [supported Review rule](../../../docs/architecture/review.md#rules-and-evidence).
+sample has one finding for each [supported Review rule](../../../laniakea/docs/architecture/review.md#rules-and-evidence).
 
 | Finding | Where to see the evidence |
 |---|---|

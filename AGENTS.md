@@ -24,7 +24,8 @@ This repository is public. An analysed project may be private, and its owner may
 - Python 3.9+ standard library only, so a machine with Unreal installed needs nothing extra.
 - Core, shards, schema and viewer stay language-neutral. Unreal-specific logic lives in `laniakea/unreal/`.
 - The tool writes nothing into an analysed project. The only changes allowed there are Unreal Build Tool's own caches, listed
-  in [docs/architecture/unreal-profile.md](docs/architecture/unreal-profile.md); the engine integration test enforces it.
+  in the [Unreal profile](laniakea/unreal/docs/architecture/build-extraction.md#what-ubt-writes-into-the-project); the engine
+  integration test enforces it.
 - Never run `-Mode=GenerateClangDatabase` against an analysed project. On a launcher engine it rewrites the project's live
   build intermediates.
 - ASCII only in documentation.
@@ -38,5 +39,5 @@ This repository is public. An analysed project may be private, and its owner may
 |---|---|
 | run commands | [Makefile](Makefile), through `make help`; Python options through `python laniakea.py --help` |
 | setup and exploration | [user guide](docs/guide.md) |
-| checks, optional tools and fixture recording | [verification](tests/README.md) |
+| checks, optional tools and fixture recording | [verification](tests/verification.md) |
 | graph and viewer contracts | [architecture](docs/architecture/README.md) |

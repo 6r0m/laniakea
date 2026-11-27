@@ -5,8 +5,8 @@
 The investigation and plan preserve their original evidence. The final review record documents implementation and closure.
 
 **Scope:** continuous monitoring, default code-health collection, safe reuse and validated live map updates  
-**Stable documentation owners:** [Unreal profile](../../docs/architecture/unreal-profile.md),
-[Review](../../docs/architecture/review.md), [viewer](../../docs/architecture/viewer.md), [guide](../../docs/guide.md)
+**Stable documentation owners:** [Unreal profile](../../laniakea/unreal/docs/architecture/structure.md),
+[Review](../../laniakea/docs/architecture/review.md), [viewer](../../viewer/docs/architecture/structure.md), [guide](../../docs/guide.md)
 
 ## Contents
 
@@ -178,7 +178,7 @@ existing local tools. No production code, stable docs, tests or analysed-project
     can therefore leave new settings beside the old map. The prior recipe paragraph did not resolve crash consistency.
     A [synthetic CLI probe](../../workspace/tmp/default-analysis-review/check.py) reproduced registration after an invalid
     health-option request returned 2 without publishing a map: [result](../../workspace/tmp/default-analysis-review/settings-probe.json).
-15. The [Review isolation contract](../../docs/architecture/review.md#lifetimes-and-failure-isolation) makes evaluation
+15. The [Review isolation contract](../../laniakea/docs/architecture/review.md#lifetimes-and-failure-isolation) makes evaluation
     independent of map serving/publication. Current Review construction binds a run/index; evaluation happens later in
     [Review.load()](../../laniakea/review_store.py). [Browser startup](../../viewer/app.js) currently resolves no-URL selection
     through remembered target state. [Startup target indexing](../../laniakea/server.py) checks freshness for registrations;
@@ -231,8 +231,8 @@ the earlier notification API probe does not prove them. Gates 2-3 retain their i
 | bounded source corpus and tool identity | [source inputs](../../laniakea/unreal/source_inputs.py), [SourceTree](../../laniakea/unreal/source_tree.py), [CPD tools](../../laniakea/unreal/cpd_tools.py) |
 | duplication collection and reuse | [CPD collector](../../laniakea/unreal/cpd.py), [Java adapter](../../laniakea/unreal/CpdBridge.java) |
 | immutable source observations | [health](../../laniakea/health.py), [manifest schema](../../schema/graph.v1.schema.json) |
-| findings, applicability and decisions | [Review contract](../../docs/architecture/review.md) |
-| availability and finding presentation | [viewer contract](../../docs/architecture/viewer.md#review-presentation) |
+| findings, applicability and decisions | [Review contract](../../laniakea/docs/architecture/review.md) |
+| availability and finding presentation | [viewer contract](../../viewer/docs/architecture/inspection-review.md#review-presentation) |
 
 Acquisition validates data; Review interprets it. Do not reintroduce a lower-layer dependency on Review policy to share a
 numeric default. D1 and D3 change explicit-only acquisition and reader-only opening, not the ownership of facts.
@@ -428,7 +428,7 @@ immutable read context containing manifest, shards, topology and exact reference
 lazy Review owner to that generation; do not require successful policy loading, cache generation, triage reading or Review
 evaluation for publication, context readiness or browser adoption. Review errors remain explicit in Review while the new
 map stays usable. Even Review-owner preparation failure must not gate the canonical map. This preserves the existing
-[failure-isolation contract](../../docs/architecture/review.md#lifetimes-and-failure-isolation); required acquisition artifact
+[failure-isolation contract](../../laniakea/docs/architecture/review.md#lifetimes-and-failure-isolation); required acquisition artifact
 validation still belongs to publication and is not bypassed by this rule.
 
 Pin all multi-request reads to one generation; old in-flight readers finish on that context. Never return new reference
@@ -685,17 +685,17 @@ all intended input files were processed. Reviewer judgements of usefulness are n
 - [CLI help](../../laniakea/cli.py) owns options; [Makefile](../../Makefile) remains a shortcut. Update runtime recovery hints only
   where their required explicit-health wording changes.
 - [Guide](../../docs/guide.md) owns default live use, saved-only opening, optional setup, coverage, pause/retry and stop.
-- [Unreal profile](../../docs/architecture/unreal-profile.md#source-duplication) owns automatic/off/required acquisition,
+- [Unreal profile](../../laniakea/unreal/docs/architecture/source-duplication.md#source-duplication) owns automatic/off/required acquisition,
   source boundaries, provider failure classification and reuse. The [schema](../../schema/graph.v1.schema.json) owns structured
-  coverage shapes; [graph model](../../docs/architecture/graph-model.md) owns their generic semantics. Replace explicit-only
+  coverage shapes; [graph model](../../laniakea/docs/architecture/graph-model.md) owns their generic semantics. Replace explicit-only
   statements after implementation; do not duplicate outcome shapes in the guide or Review policy.
-- [Review](../../docs/architecture/review.md) owns effective display policy, mode meaning and decision stability;
-  [viewer](../../docs/architecture/viewer.md#review-presentation) owns availability and snapshot-adoption behavior.
+- [Review](../../laniakea/docs/architecture/review.md) owns effective display policy, mode meaning and decision stability;
+  [viewer](../../viewer/docs/architecture/inspection-review.md#review-presentation) owns availability and snapshot-adoption behavior.
 - The coordinator introduces a distinct durable lifecycle contract. During implementation, give input generations, bounded
   work, activation, cancellation and publication handoff one owner at `docs/architecture/live-analysis.md`, routed from the existing
   architecture README. [Structure](../../docs/architecture/structure.md) and the main diagram retain only component boundaries;
   do not repeat the lifecycle in the guide, profile or viewer. Do not create separate watcher/cache/scheduler documents.
-- Preserve [third-party terms](../../THIRD_PARTY.md); no new dependency is proposed. [Verification](../../tests/README.md) owns commands.
+- Preserve [third-party terms](../../THIRD_PARTY.md); no new dependency is proposed. [Verification](../../tests/verification.md) owns commands.
 - Stable docs/code must not link to this task. Archive it under the existing todo lifecycle after approval and completion.
 
 ## Rollout and rollback

@@ -1,49 +1,20 @@
-# Continuous viewer
+# Map and navigation
 
-Presentation, navigation and saved arrangements for the language-neutral map. Extraction and canonical ownership
-remain outside this component. Operator workflows live in the [user guide](../guide.md).
+Graph projection, source organization, camera motion and saved positions in the browser.
 
 ## Contents
 
-- [Composition](#composition)
 - [Continuous map](#continuous-map)
-- [Tracing and inspection](#tracing-and-inspection)
 - [Visual appearance and motion](#visual-appearance-and-motion)
 - [Source organization](#source-organization)
-- [Declaration context and search](#declaration-context-and-search)
 - [External boundaries](#external-boundaries)
 - [Centered overview and configuration](#centered-overview-and-configuration)
 - [Viewport and memory lifetime](#viewport-and-memory-lifetime)
 - [Saved arrangements](#saved-arrangements)
-- [Review presentation](#review-presentation)
-- [Coverage and freshness presentation](#coverage-and-freshness-presentation)
-- [Live snapshots](#live-snapshots)
-
-## Composition
-
-| part | responsibility |
-|---|---|
-| [app.js](../../viewer/app.js) | startup, target selection and HTML controls |
-| [live.js](../../viewer/live.js) | staged snapshot adoption and Monitor transport |
-| [analysis.js](../../viewer/analysis.js) | check coverage, requested modes and acquisition controls |
-| [universe.js](../../viewer/universe.js) | containment, reference projection and world positions |
-| [sections.js](../../viewer/sections.js) | source organization without changing semantic ownership |
-| [traces.js](../../viewer/traces.js) | shared directional calculations |
-| [context.js](../../viewer/context.js) | declaration context and qualified lookup |
-| [map.js](../../viewer/map.js) | canvas geometry, projection and pointer interaction |
-| [appearance.js](../../viewer/appearance.js) | static Cytoscape appearance and luminous states |
-| [app.css](../../viewer/app.css) | theme tokens, map atmosphere and HTML surface styling |
-| [icons.js](../../viewer/icons.js) | type glyphs on existing renderer nodes |
-| [scene.js](../../viewer/scene.js) | camera, hierarchy navigation and cancellable flights |
-| [positions.js](../../viewer/positions.js) | ordered loading and saving of released pins |
-| [references.js](../../viewer/references.js) | reference-page retention and cancellation |
-| [inspector.js](../../viewer/inspector.js) | accessible inspection tabs |
-| [review.js](../../viewer/review.js) | finding presentation and triage controls |
-| [source-preview.js](../../viewer/source-preview.js) | selected-finding source comparison and external-editor actions |
 
 ## Continuous map
 
-Containment and references follow the [graph contract](graph-model.md). A group contains descendants without acquiring
+Containment and references follow the [graph contract](../../../laniakea/docs/architecture/graph-model.md). A group contains descendants without acquiring
 their declared dependencies. Opening it changes the visible projection without changing canonical facts or surrounding
 positions. Startup loads compact topology; inspection requests exact canonical reference pages from the read index.
 
@@ -89,83 +60,9 @@ and references to ancestors remain represented. With no filters, every recorded 
 visible connection, internal-reference count, or explicit count beyond the viewport. Filters have their own count.
 Parallel exact references also share one connection, with every original call site retained in its reference list.
 
-[Owner-local references](graph-model.md#owner-local-references) contribute to internal counts when both displayed
+[Owner-local references](../../../laniakea/docs/architecture/graph-model.md#owner-local-references) contribute to internal counts when both displayed
 endpoints represent that owner. A file frontier can expose their recorded cross-file relationship.
 Authored recursion remains an explicit loop at function detail.
-
-## Tracing and inspection
-
-Wheel zoom reveals a pointed group when its local contents have room on screen; zooming out folds groups at a
-separate threshold to avoid flicker. Other constellations retain their positions. Hover temporarily emphasizes
-connections to a star or a group's descendants. Inspecting a connection lists both directions between its displayed endpoints; following
-one reveals its endpoints without closing other groups. The destination's direct references remain available,
-with remote endpoints grouped until the operator approaches them.
-Bundle counts appear in the trace readout or inspection; the overview keeps the connection lines without a label on every bundle.
-Idle bundle names and colors use manifest metadata. A summary without its own manifest type inherits the exact type's color;
-mixed types use a neutral color and name each recorded type rather than implying one kind of reference.
-
-Tracing uses theme roles defined in CSS: cyan outgoing, amber incoming and violet within/self. Map guide,
-direction words and native arrowheads provide alternatives to color. Node colors keep their existing meaning.
-A node trace names its focus and partitions represented references by canonical endpoints in its containment subtree:
-source inside/target outside is outgoing, the reverse is incoming, and both inside is within. These counts are disjoint
-and retain compact group weights. They describe the architecture projection after configuration exclusion, type,
-boundary and viewport filtering, labelled "In this view". Node inspection separately labels its all-recorded reference scope.
-
-Connection inspection combines all shown families and both directions for the same unordered endpoint pair. A deterministic
-ID order fixes its A/B identities, with full ownership paths and levels. Both directional totals and a bounded
-type breakdown remain stable across native family/direction hits. A one-way pair explicitly reports zero in reverse;
-a real self-loop reports within/self. Coincident reciprocal paths keep their endpoint colors and direction-colored arrows.
-Tracing styles existing edges only: no extra lanes, geometry changes, graph facts, hover requests or saved positions.
-Wire hover titles the endpoint nearest the pointer among the hovered pairs and marks it with a neutral halo. Incoming
-and outgoing colors and counts are relative to that title. A screen-space dead band holds the current viewpoint around
-midpoints; a clearly closer endpoint changes it. The compact card lists peer names and counts in two columns, scoped to
-hovered connections rather than whole-node usage. It clears a nearly horizontal summary wire when space permits.
-Within/self remains separate. Type breakdowns stay in Details.
-When different endpoint pairs overlap, hit testing retains all pairs under a fixed screen-space tolerance. The card
-counts only unique represented references incident to its titled endpoint, and discloses unrelated pairs separately.
-A visual crossing never creates a dependency junction. Peer captions are bounded, with explicit disclosure when either
-column truncates; the readout and Details retain full names. Clicking opens the candidate list in Details; focus or hover
-emphasizes one pair, and choosing it reuses both-direction exact inspection. Longer candidate lists render in batches. Projection changes
-that alter the represented references close stale inspection.
-
-Hit testing uses the rendered paths, including curves, and an ephemeral spatial index of the current rendered edges.
-It is independent of canonical reference indexing and saved positions. Pointer work is coalesced per animation frame;
-unchanged candidate sets reuse their trace. Projection/camera changes invalidate geometry, and gestures clear it.
-The hover card stays anchored while the candidate set and viewpoint remain unchanged. No automatic arrangement occurs on hover.
-During pair tracing, endpoint captions yield native pointer hits to connections so newly revealed text cannot steal
-the click; endpoint glyphs remain interactive. Leaving the trace restores normal caption interaction.
-Clicks inspect the same geometric candidates as hover, using a native edge only when no geometric hit is available.
-Single and double taps on expanded backgrounds give wires priority; constellation labels and empty backgrounds retain
-their group actions. A double tap on a wire does not fold the surrounding constellation.
-The docked, keyboard-focusable readout retains the last summary after pointer exit while emphasis clears. Escape,
-clear, gestures and projection changes reset it. Its reserved height does not change when trace text changes.
-Canvas titles show names only. A nearby hover card provides kind, containment, coverage and direction counts without
-adding lines to those titles. Node cards distinguish outgoing, incoming and within/self references recorded in the snapshot
-from the current projection. Each affected total exposes its numerical "Of which: project configuration" subset,
-included in that total rather than added to it. These weighted subtree totals and subsets do not change with map filters
-or configuration marks. The project root's totals are labelled project/subtree statistics. A filtered-out incoming
-reference is not reported as no recorded users. A zero
-incoming total says "No incoming references recorded in this snapshot", never that runtime use is impossible.
-Cards yield native pointer hits to the graph. They disappear on exit, Escape, gestures or projection changes.
-The persistent readout retains readable counts and full names; inspection supplies exact rows.
-Following an exact architecture reference enables its type and boundary visibility if a current filter would hide it.
-Following an internal reference opens its owner and reference list rather than inventing a visible self-loop.
-Optional click inspection keeps its marker through projection refreshes while that exact item remains visible.
-Pair details retain represented groups with explicitly named A/B directions; hover can orient counts to either endpoint.
-Both totals and shortcuts precede separate
-exact-reference pages per direction, so reaching the reverse list does not require scrolling through the forward list.
-Changing that group set or its weights closes the pair inspection; it never falls back to a single hit family.
-Exact-reference navigation retains its original identity. Hiding an inspected item closes its details instead
-of highlighting a different ancestor. Hover and wheel exploration do not require an inspected item.
-The Inspector's Details tab keeps identity, source and analysis state visible; secondary metadata has a separate disclosure so
-references and navigation remain reachable. Constellation controls track expansion without resetting the reference reader.
-The shared header and native accessible tabs stay outside each page's scroll region. Tab changes retain mounted content,
-reference paging, scroll and unsaved decision reasons, without changing selection or camera. Ordinary reference pages load
-when Details first opens. The panel's close button uses the same inspection cancellation as Escape and returns focus to
-the toolbar. At narrow widths, the inspector, findings queue and filters are mutually exclusive;
-opening the queue hides inspection without discarding it. Explicit reinspection reopens the retained dock; background
-projection refresh does not. When the Inspector overlays the map, the floating hover card is hidden and trace text
-continues to update in the map readout.
 
 ## Visual appearance and motion
 
@@ -221,7 +118,7 @@ place and never snaps back. Selection survives intermediate projection refreshes
 projection; inspection that depends on the destination is applied when the flight reaches it. A graph resize shifts an
 active flight's start and target pan with the same centre delta used by `resizeMap()`. Reduced motion uses the existing
 immediate path. The existing hover and selection state
-owners in [Tracing and inspection](#tracing-and-inspection) remain unchanged.
+owners in [Tracing and inspection](inspection-review.md#tracing-and-inspection) remain unchanged.
 
 ## Source organization
 
@@ -272,23 +169,6 @@ Visible file markers with overlapping glyphs expose a count beside Arrange files
 reuses the caption obstacle index and checks the active source owner, including namespace-local file contexts; it never
 moves pins. This gives older saved arrangements the same scoped repair as a manually crowded layout, without silently
 replacing unrelated positions.
-
-## Declaration context and search
-
-Recorded declaration kind, qualified owner, signature and source context appear in hover and primary inspection;
-access/properties and observed-member coverage appear when supplied by the profile. Names remain the canvas captions.
-An owner with no indexed children is not necessarily an empty source declaration. Missing context is left unknown;
-the Unreal profile owns [compiler metadata and its limits](unreal-profile.md#native-symbol-analysis).
-Inheritance/override hover counts come from the current projected reference groups, respect filters and direction,
-and count references rather than distinct base types. Exact declaration names remain in existing reference pages;
-hover neither fetches those pages nor creates a second relationship-summary store.
-
-Global search matches recorded labels, qualified names, signatures and source-file paths. It presents at most eight ranked choices with
-owner/signature/source context and discloses additional matches so a short ambiguous name does not silently choose an
-unqualified result. Arrow keys choose a result and Enter inspects it. Search uses the existing in-memory nodes.
-Deep scope breadcrumbs keep the immediate parent/current scope visible and place earlier ancestors in a bounded
-disclosure with ordinary navigation links. Long names truncate in the header while full names remain available there
-and through hover/inspection. Neither search nor breadcrumb navigation changes canonical ownership or saved positions.
 
 ## External boundaries
 
@@ -443,158 +323,3 @@ Fit overview restores root navigation and uses canonical top-level world positio
 empty viewport. Reset saved positions is available for the current layout when it has saved positions and requires confirmation.
 Layout updates retain pins absent from the current run, so module-only extraction does not erase native-symbol positions.
 Reset clears the selected mode's pins belonging to the current graph; temporarily unavailable pins remain stored.
-
-## Review presentation
-
-Review starts in the background when a supported target opens, after the map is ready. The list starts closed;
-closing it does not disable findings. Its checkbox clears markers and stops new review requests for the current target session.
-The toolbar distinguishes checking, failure, off, unavailable and recorded finding counts. Zero findings is not
-proof of complete coverage. Review maps affected canonical module IDs onto the current visible
-representatives and decorates their native icons without new graph elements, geometry or pointer targets. Collapsed
-representatives deduplicate finding IDs; multiple participants in one cycle do not multiply the global issue count.
-The accessible Review list retains off-view findings. Map filters do not change rule results or triage.
-
-Source observations add file/module badges through recorded source paths and owners, never fabricated dependency edges.
-Recorded file representatives project their findings through existing presentation folders and regions, including folded
-and namespace-local file routes. Visible containers deduplicate matching findings; clean siblings remain unmarked, and an
-off-screen module does not suppress a visible file's evidence. File-level matches do not assign ownership to classes or
-callables. Container inspection uses its exact finding IDs, while hover distinguishes findings inside a container from
-findings in a file. The Review tab identifies duplication separately from architecture relations and loads matching
-source ranges in bounded pages for the selected finding. Reading range metadata does not read source bodies.
-Current-source links retain a snapshot/staleness warning.
-
-Inspector Review lists related findings and mounts evidence and decision controls for the selected finding. It retains
-unfinished decision reasons in the target's Review controller through transient loads and inspection changes. The Review
-panel lets the reader recover or discard a draft when its finding becomes unavailable. Reasons are restored only against
-the same finding fingerprint. The existing finding index and paged reports populate the list and read selected evidence;
-an initial page selects a default only while the reader has made no newer selection.
-
-Source findings expose Compare matches and file, owner and line-range rows. Preview, external-editor and copy actions are distinct.
-Compare opens up to two numbered read-only panes over the central workspace;
-an individual Preview opens one. The header distinguishes total code locations from the currently displayed match ordinals.
-Each pane names its match number and provides Previous match / Next match controls across page boundaries.
-Occurrence selectors and bounded paging reveal further ranges on demand, including
-different ranges in the same file. Wide views compare side by side; narrow views stack contained, scrollable panes.
-The Inspector retains the finding, scroll and decision draft. The covered workspace and surrounding controls are inert.
-Back to map or Escape disposes the comparison and returns focus to its invoking control. The graph stays mounted at the
-same size underneath: no layout, fit, refresh or duplicate camera state is needed to return. Explicit navigation closes
-comparison; live adoption waits while reading, while status polling and snapshot retention continue.
-
-Matching lines are highlighted only in current text verified against the recorded digest, not a guaranteed historical
-archive. Changed files show no source text or recorded highlight; limits and read failures remain visible. Clipboard
-refusal exposes a selectable path. The [source reader](structure.md) owns authorization and byte verification.
-Requests reuse Review cancellation and inspection generations. Closing or changing the selection, finding, tab or Review
-owner cancels the comparison without taking new focus. Late responses cannot restore it. At most two snippets are retained;
-reopening revalidates their files. No editor dependency or source write is added.
-
-Exact reference-group associations also mark existing projected connections and their revealed endpoints. Amber/red
-halos identify Review warnings and errors independently of direction colors. Fixed-size amber triangle and red stop-sign
-badges remain separate from type icons; counts belong to hover and inspection. Visible stars with active findings
-pulse in their family color. Visible connections pulse at the same cadence, with tint, strength and priority driven
-by their highest active finding. Badges show the highest displayed severity and stay steady. The pulse holds its current brightness
-during camera gestures, and directional flow clears as the camera moves. Reduced motion uses static lighting throughout.
-Wire halos mark connections that contain finding evidence. The map key explains the star badges.
-Warnings follow file, class and callable projection, including a visible line to an off-screen endpoint.
-The halo reflects findings attached to the references that pass the current filters.
-
-Hover shows distinct finding counts and a bounded explanation without fetching analysis or exact rows. Clicking a
-marked wire or clicking/keyboard-inspecting a marked entity opens the Inspector's Review tab. Ordinary inspection
-and explicit Project context open Details. Queue choices focus Review and name the original affected endpoints,
-even when the map represents them through a collapsed owner. The tab's count describes the inspected findings rather than
-the project-wide queue; off, checking, failed and unavailable states do not resemble zero findings.
-A single finding exposes its explanation and decision actions immediately. Exact evidence reuses current reference
-paging and validates original IDs before displaying rows. Connections with several findings use a labelled selector;
-Details retains the existing endpoint navigation and all ordinary references. Closing inspection cancels its presentation;
-a late request cannot reopen the inspector or change its tab. Hover and wheel input never trigger review analysis, fit or
-layout changes. Unchanged report and decision revisions retain draft reasons and loaded evidence. Changed findings update only
-Review, preserving the ordinary reader and paging. Removing a focused decision action returns focus to its tab.
-
-Acknowledged visibility and semantics belong to the [review contract](review.md). The viewer retains one affected-entity
-index, an exact-group association index and at most eight detail pages/8 MiB of serialized page data; parsed-object
-overhead is additional. Report/target changes release pending requests and old pages. Review off releases association
-indices and detail pages and has no reference scans per animation frame. Trace colors, graph counts and saved arrangements
-remain independent.
-
-## Coverage and freshness presentation
-
-Zooming into an outside-target or unanalysed scope leaves a named coverage hint in the docked readout.
-Node hover and inspection also explain that only recorded structure is available. These statuses do not prove that
-configuration disabled the node; the viewer does not infer that cause from target absence.
-
-Checks contains the live input comparison, scoped category counts and paged changed paths. Its compact entry uses the existing
-fixed-height map context strip; asynchronous observations do not insert a banner or refit the camera. Paths and counts belong
-only to the displayed run. A newer baseline is withheld until normal adoption, while paused/degraded observations remain
-explicitly last observed. Missing comparison and known-empty compared domains are distinct; neither implies complete coverage.
-
-Paging is read-only and has its own cancellation epoch, separate from submitted check choices. Close, target and observation
-changes cancel obsolete requests; late replies cannot reopen Checks, replace another target or erase drafts. Unchanged polls
-retain the loaded page and focused source link. Removed/unmapped paths have no invented links; known files open at their start,
-without claiming changed lines. Existing Run/Retry/Auto controls remain the only analysis actions.
-
-When a matching live comparison exists, it replaces the startup banner's duplicate path disclosure. Without it, a scan-enabled
-startup retains its useful stale paths and recovery action. Saved-only opening labels unchecked source freshness in the
-coverage footer rather than implying that the snapshot is fresh. The [monitoring contract](monitoring.md#input-change-comparison)
-owns comparison identity and bounds.
-
-## Live snapshots
-
-The live coordinator polls small session metadata, less often in hidden tabs, and stages manifest, topology, navigation
-index and layouts from one ready generation. Adoption checkpoints the native scene, style overrides and UI nodes before
-rendering. Previous readers and inspection owners remain intact until that synchronous transition succeeds. A render failure
-restores the prior map, camera, URL, Inspector and readers without invoking the failed layout or projection again. Candidate
-requests are cancelled; an unrecoverable renderer error explicitly requires reload rather than claiming successful recovery.
-Invalid or expired data leaves the last good map available with an explicit update error. Review evaluation is independent
-and never delays the map; obsolete Review and exact-page requests are cancelled or ignored by their generation guards.
-When the validated read-index identity and projection hints are unchanged, the coordinator reuses topology and unchanged
-geometry while refreshing generation-bound readers, coverage and Review. A changed identity always prepares a new universe.
-
-Adoption uses the existing scene, position, reference and Inspector components. It retains the camera, layout mode, surviving
-expanded containers, filters, selected entities and Inspector intent. Removed focus falls back through its recorded ancestors with
-an explanation. Exact reference IDs are not carried across generations. Back/Forward and target switching use the adopted
-generation's immutable data URLs.
-
-Dragging, pending or failed position writes, in-flight Review decisions and edited decision reasons defer adoption. A position
-revision change during staging discards that staged copy rather than applying layouts read before a newer move. Independent
-tabs heartbeat their current read contexts through the [monitoring contract](monitoring.md#publication-and-shutdown).
-
-The masthead shows the selected project and the displayed manifest's build target. The scope bar starts at Overview.
-Browse and Filters share a sidebar slot. Browse selects from the rendered scope members and Filters changes graph visibility.
-View groups layout, target outlines and applicable arrangement actions. The Orbit choice uses existing orbit pins first and
-then the declared center when available. All modes are selectable. Secondary modes retain their keys and saved arrangements
-under More layouts. Map guide,
-coverage details and advisory stale-input diagnostics open over the map. The workspace status row and trace area have
-stable heights across status and hover updates. Selection opens Inspector through the existing inspection route.
-Source comparison makes the graph and map actions inert until it closes.
-
-The adoption checkpoint captures the displayed build context, coverage and status controls alongside the scene and
-focused readers. Recovery restores these controls with the previous generation and keeps the native stylesheet installed.
-Checks uses the displayed snapshot's
-coverage alongside the in-progress phase and labels newer results awaiting adoption. Attempt progress and
-requested-versus-applied settings do not replace displayed evidence; removing an adoption block updates coverage with the map.
-Only optional profile checks have mode selectors; the map foundation stays mandatory.
-The Checks panel starts with recorded coverage. During an attempt it shows the phase, optional measured unit count and elapsed job time. Progress remains
-visible in the fixed-height toolbar control when the panel closes. Only validated native unit counts have a determinate
-denominator; preparation, duplication, publication and queued earlier work stay indeterminate. Unit completion never claims
-overall completion or an ETA, and terminal states clear the running bar. Recorded coverage remains separate from attempts.
-Each check has an expandable row with the displayed snapshot's coverage and details for setup, diagnostics and modes.
-Status and form updates keep these controls mounted while the check catalog is stable. Edited choices expose Apply and run.
-The contextual primary action enables recommended checks or rechecks enabled choices, with Stop/Retry for their
-applicable states. Saved-only views show modes as text. Missing/loading/error coverage never becomes a successful zero;
-unavailable check catalogs cannot start work.
-Analysis offers first-opening guidance when displayed check coverage is incomplete, including informational Off choices.
-Automatic opening waits for a visible tab and yields to Review, Inspector, Browse, Filters, View controls, Map guide, graph keyboard focus,
-focused controls, gestures and drafts. It does not
-close a reading panel or move focus/scroll; deferred guidance remains eligible through the existing status lifecycle.
-Manual Checks opening retains normal panel coordination. Presentation or visible dismissal is remembered through the existing
-browser preferences, keyed by target and project-root identity rather than run/index. A quiet render or hiding an already-hidden
-panel does not consume that opportunity. Hidden-tab rendering cannot acknowledge a panel, including one opened before coverage
-arrives; visibility changes reuse the existing status lifecycle. Storage refusal retains an in-memory session guard.
-Handled guidance suppresses introductions only; progress, coverage, failure labels and explanations continue updating.
-Checks distinguishes recorded coverage, Off and unavailable evidence. Review separately shows active errors and
-warnings in recorded evidence. Limited input comparisons are labeled as limited scope.
-Settings drafts defer live adoption; late control responses cannot overwrite another target's form. Recommended checks reuse
-the normal Auto request and cannot replace dirty/submitting choices or start redundant running work. Close/Escape restores the
-primary action's focus. Back to map in the first-opening guide returns focus to the graph without fitting it or starting acquisition.
-Successful adoption restores a detached fixed control's visible equivalent, including the Inspector close control, without
-scrolling or replacing a newer user focus. The scene rollback path remains independent.
-Unavailable, failed, disabled and incomplete checks remain distinct from completed checks and zero findings.

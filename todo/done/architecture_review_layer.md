@@ -138,7 +138,7 @@ architecture bad.
 ## Current architecture and source of truth
 
 The [structure](../../docs/architecture/structure.md), [component view](../../docs/architecture/diagrams/main.md),
-[graph contract](../../docs/architecture/graph-model.md) and [Unreal profile contract](../../docs/architecture/unreal-profile.md)
+[graph contract](../../laniakea/docs/architecture/graph-model.md) and [Unreal profile contract](../../laniakea/unreal/docs/architecture/structure.md)
 own the existing boundaries. The [guide](../../docs/guide.md) currently describes architectural judgement as manual.
 
 The published graph/manifest own recorded facts and context. The read index is disposable. The server advertises a
@@ -357,7 +357,7 @@ edges and compiler annotations; no private project material in fixtures.
 ### Green evidence and runtime acceptance
 
 - Run focused new evaluator, report/cache, triage and projection tests first, then the existing commands in
-  [verification entrypoints](../../tests/README.md). Run documentation/privacy checks after final doc migration.
+  [verification entrypoints](../../tests/verification.md). Run documentation/privacy checks after final doc migration.
 - Extend existing browser functions for the affected controls, then run all existing browser suites with disposable
   synthetic targets. Test keyboard, narrow viewport, Escape/Clear, overlapping wires, gradual inward/outward wheel,
   target switches and delayed responses. These are real input tests, not only direct JavaScript calls.

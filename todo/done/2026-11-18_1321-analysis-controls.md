@@ -2,8 +2,8 @@
 
 **Status:** DONE - implementation and real-project runtime acceptance verified
 **Scope:** first-opening analysis, existing monitor controls, progress and viewer information hierarchy  
-**Stable owners:** [monitoring](../../docs/architecture/monitoring.md), [viewer](../../docs/architecture/viewer.md),
-[Review](../../docs/architecture/review.md), [guide](../../docs/guide.md)
+**Stable owners:** [monitoring](../../laniakea/docs/architecture/monitoring.md), [viewer](../../viewer/docs/architecture/structure.md),
+[Review](../../laniakea/docs/architecture/review.md), [guide](../../docs/guide.md)
 
 ## Contents
 
@@ -325,7 +325,7 @@ UI contracts need failing acceptance evidence before implementation, and changed
 Use existing [command](../../tests/test_commands.py), [monitor](../../tests/test_monitor.py),
 [worker/input](../../tests/test_monitor_inputs.py), [server](../../tests/test_server.py),
 [native/health](../../tests/test_native_health.py), [owned-process](../../tests/test_owned_process.py),
-[live](../../tests/live.test.cjs) and [browser verification](../../tests/README.md) owners. The table specifies new contracts;
+[live](../../tests/live.test.cjs) and [browser verification](../../tests/verification.md) owners. The table specifies new contracts;
 its unimplemented cases are not claimed failing test executions yet.
 
 ### Green evidence
@@ -345,12 +345,12 @@ its unimplemented cases are not claimed failing test executions yet.
 
 ## Documentation plan
 
-- [Monitoring](../../docs/architecture/monitoring.md): requested/default intent, active-target rules, progress, Stop/Skip and failed
+- [Monitoring](../../laniakea/docs/architecture/monitoring.md): requested/default intent, active-target rules, progress, Stop/Skip and failed
   attempt reuse. [Structure](../../docs/architecture/structure.md): narrowly revise native-opt-in wording for D2's path.
-- [Viewer](../../docs/architecture/viewer.md): Analysis/Review/View/selection hierarchy, honest status, responsive and focus behavior.
-- [Review](../../docs/architecture/review.md): retain evaluation ownership and distinguish Refresh findings from acquiring evidence.
+- [Viewer](../../viewer/docs/architecture/structure.md): Analysis/Review/View/selection hierarchy, honest status, responsive and focus behavior.
+- [Review](../../laniakea/docs/architecture/review.md): retain evaluation ownership and distinguish Refresh findings from acquiring evidence.
 - [Guide](../../docs/guide.md): a short first-use and recovery workflow. CLI owns exact setup flags; do not copy a large flag list
-  or provider implementation details into each UI/document. [Verification](../../tests/README.md) owns test routes.
+  or provider implementation details into each UI/document. [Verification](../../tests/verification.md) owns test routes.
 - Existing architecture/documentation routers suffice unless a genuinely new stable owner is necessary. Keep todo/README
   lifecycle-only. No stable file, code comment or test may link to this transient task.
 

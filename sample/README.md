@@ -2,11 +2,19 @@
 
 Fictional projects for exploring Laniakea on public data.
 
-Run `python -B tests/preview_sample.py` from the repository root to explore the committed Unreal relay recording
-without installing Unreal. The preview serves a disposable, saved-only module map. Open **Review** to inspect its two
-module errors, and **Coverage** for the recording's engine version and limits. The preview requires the build rules and
-descriptors that match the recording. Stop the preview with Ctrl+C. Use the walkthrough below to collect fresh evidence
-from an edited sample.
+## Run the preview
+
+On Windows with Git and Python 3.9+, run
+
+```text
+git clone https://github.com/6r0m/laniakea.git
+cd laniakea
+python -B tests/preview_sample.py
+```
+
+The preview serves a disposable, saved-only module map. Open **Review** for the recorded module errors and **Coverage**
+for the engine version and evidence limits. The preview checks that the build rules and descriptors match the recording.
+Stop it with Ctrl+C.
 
 | what you will find | owner |
 |---|---|

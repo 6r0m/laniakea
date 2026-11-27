@@ -3,7 +3,7 @@
 **Status:** DONE
 
 **Scope:** Viewer workspace controls, status presentation and panel layout  
-**Stable documentation owners:** [viewer architecture](../../docs/architecture/viewer.md) and [user guide](../../docs/guide.md)
+**Stable documentation owners:** [viewer architecture](../../viewer/docs/architecture/structure.md) and [user guide](../../docs/guide.md)
 
 ## Contents
 
@@ -89,8 +89,8 @@ real browser zoom and proposed-layout quality require candidate verification.
 | [inspector.js](../../viewer/inspector.js) and [source-preview.js](../../viewer/source-preview.js) | Keyboard tabs, inspection presentation and source comparison |
 | [live.js](../../viewer/live.js) and [positions.js](../../viewer/positions.js) | Generation adoption and rollback, reading focus, and saved arrangements |
 
-The [viewer architecture](../../docs/architecture/viewer.md#live-snapshots) describes existing adoption guards and progress
-presentation. The [Review contract](../../docs/architecture/review.md) owns evidence semantics.
+The [viewer architecture](../../viewer/docs/architecture/live-updates.md#live-snapshots) describes existing adoption guards and progress
+presentation. The [Review contract](../../laniakea/docs/architecture/review.md) owns evidence semantics.
 
 ## Problem and root cause
 
@@ -195,14 +195,14 @@ Design references inform the organization and status vocabulary. The layouts and
 
 After approval, rerun the exact focused cases, `node --test tests/*.test.cjs`, and
 `python -B -m unittest discover -s tests -p test_documentation.py`. Run browser functions with the disposable fixtures
-and real sample described in [browser acceptance](../../tests/README.md#browser-acceptance). The existing
+and real sample described in [browser acceptance](../../tests/verification.md#browser-acceptance). The existing
 [wheel](../../tests/wheel.browser.js) and [explicit navigation](../../tests/motion.browser.js) cases cover unchanged camera
 behavior with the revised map chrome. Use trusted pointer and keyboard events for visual acceptance. Store captures
 outside the checkout. Unreal rebuilding is needed only if the visual sample requires a fresh recorded run.
 
 ## Documentation plan
 
-Update the [viewer architecture](../../docs/architecture/viewer.md) for shell ownership, status semantics and adoption/focus
+Update the [viewer architecture](../../viewer/docs/architecture/structure.md) for shell ownership, status semantics and adoption/focus
 guarantees. Update the [user guide](../../docs/guide.md) for changed control paths. Update the
 [sample tour](../../sample/SampleProject/docs/walkthrough.md) where it names moved controls. Existing documentation routes
 are sufficient.

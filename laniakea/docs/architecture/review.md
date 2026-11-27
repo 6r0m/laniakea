@@ -16,9 +16,9 @@ Review presents the recorded `violation` severity as a red error and `candidate`
 its rule, affected modules, context, limits and exact evidence. Counts of findings, recorded relations and displayed witnesses are
 different quantities. Large findings retain bounded witness samples; other exact references remain in ordinary inspection.
 
-Source duplication uses the optional run-bound observations produced by the [Unreal profile](unreal-profile.md#source-duplication).
-The [artifact validator](../../laniakea/health.py) owns integrity and source ranges independently of Review policy;
-the [evaluator](../../laniakea/review.py) interprets validated observations as findings.
+Source duplication uses the optional run-bound observations produced by the [Unreal profile](../../unreal/docs/architecture/source-duplication.md#source-duplication).
+The [artifact validator](../../health.py) owns integrity and source ranges independently of Review policy;
+the [evaluator](../../review.py) interprets validated observations as findings.
 It does not add canonical nodes or relationships. Evidence remains at file/module scope when the compiler has not proved
 unique function ownership; a nearby function name is insufficient. All matching ranges remain available in bounded pages,
 separate from dependency-reference paging. Raw source matches can span inactive branches or intentional boilerplate.
@@ -50,8 +50,8 @@ change-history analysis and metric thresholds are outside this evaluator.
 
 The viewer shows the target's local policy path under `workspace/targets/<id>/review/`. Edit that JSON and use
 Refresh findings; no extraction or server restart is needed for policy changes. The
-[synthetic policy](../../fixtures/review.rules.json) is an example to adapt, not an automatically selected design.
-[The policy validator](../../laniakea/review_policy.py) owns accepted fields, bounds and matching syntax.
+[synthetic policy](../../../fixtures/review.rules.json) is an example to adapt, not an automatically selected design.
+[The policy validator](../../review_policy.py) owns accepted fields, bounds and matching syntax.
 
 A missing file enables warning-only defaults. An unreadable or malformed file fails review visibly instead of
 silently substituting defaults. Required selectors with missing IDs or no matches are unavailable. Inspection exposes
@@ -116,4 +116,4 @@ The existing localhost server supplies paged findings and accepts same-origin bo
 Review failure does not prevent normal map serving or publication. Review never starts a source analyzer; no native tools load for module-only review.
 All learned information and decisions remain in the ignored workspace, with no runtime network access.
 
-Presentation and inspection are owned by the [viewer contract](viewer.md#review-presentation).
+Presentation and inspection are owned by the [viewer contract](../../../viewer/docs/architecture/inspection-review.md#review-presentation).

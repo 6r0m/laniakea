@@ -1,7 +1,7 @@
 # Direct source-finding comparison
 
 **Status:** DONE
-**Owners:** [viewer](../../docs/architecture/viewer.md), [Review presentation](../../viewer/review.js).
+**Owners:** [viewer](../../viewer/docs/architecture/structure.md), [Review presentation](../../viewer/review.js).
 
 ## Goal and authority
 

@@ -1,19 +1,19 @@
 # Background analysis
 
-Session monitoring prepares immutable runs while the saved map stays available. The [CLI](../../laniakea/cli.py) owns
-activation options; the [viewer](viewer.md#live-snapshots) owns adoption of ready generations.
+Session monitoring prepares immutable runs while the saved map stays available. The [CLI](../../cli.py) owns
+activation options; the [viewer](../../../viewer/docs/architecture/live-updates.md#live-snapshots) owns adoption of ready generations.
 
 ## Ownership
 
-- [Monitor](../../laniakea/monitor.py) owns session activation, debounce, generations and one background job at a time.
-- [Check choices](../../laniakea/unreal/checks.py) own Unreal modes, prerequisites and coverage descriptions.
-- [Progress](../../laniakea/progress.py) projects bounded owned-worker phases into Monitor status.
-- [Profile inputs](../../laniakea/unreal/monitor.py) define consumed files, physical boundaries and watch specifications.
-- [Windows notifications](../../laniakea/notifications.py) multiplex directory reads through one completion port.
-- [Owned processes](../../laniakea/owned_process.py) contain disposable workers and descendants in Windows Job Objects.
-- [Worker](../../laniakea/monitor_worker.py) probes inputs and stages extraction/read indexes; it cannot publish.
-- [Read contexts](../../laniakea/snapshots.py) bind HTTP reads and write validation to immutable runs.
-- [Automatic history](../../laniakea/automatic_history.py) reclaims only tagged background artifacts.
+- [Monitor](../../monitor.py) owns session activation, debounce, generations and one background job at a time.
+- [Check choices](../../unreal/checks.py) own Unreal modes, prerequisites and coverage descriptions.
+- [Progress](../../progress.py) projects bounded owned-worker phases into Monitor status.
+- [Profile inputs](../../unreal/monitor.py) define consumed files, physical boundaries and watch specifications.
+- [Windows notifications](../../notifications.py) multiplex directory reads through one completion port.
+- [Owned processes](../../owned_process.py) contain disposable workers and descendants in Windows Job Objects.
+- [Worker](../../monitor_worker.py) probes inputs and stages extraction/read indexes; it cannot publish.
+- [Read contexts](../../snapshots.py) bind HTTP reads and write validation to immutable runs.
+- [Automatic history](../../automatic_history.py) reclaims only tagged background artifacts.
 
 ## Requested checks
 
@@ -49,7 +49,7 @@ no source scanning or analysis work. Source mounts are revalidated before reads;
 Manual and older runs without a complete automatic input identity require initial reconciliation. Matching canonical source
 hashes alone cannot establish that configuration, tools and all monitored inputs are unchanged.
 
-[Monitor](../../laniakea/monitor.py) settles event bursts with bounded batching before reconciling input identities.
+[Monitor](../../monitor.py) settles event bursts with bounded batching before reconciling input identities.
 The batch limit permits reconciliation during sustained activity; it does not guarantee a quiet period. Neither batching
 nor a quiet interval proves that inputs will stay unchanged throughout a long scan. Changes during staging can supersede
 that candidate, so before/after validation and the controller's generation check remain mandatory.
@@ -101,7 +101,7 @@ until the existing probe establishes the new baseline. The browser only
 shows counts/paths for its displayed baseline; a newer baseline waits for ordinary adoption. A monitoring identity can
 establish that overall context differs, but cannot attribute changes to configuration or tools lacking recorded values.
 An empty comparable path list never certifies the whole project as unchanged. Domain interpretation belongs to
-[the profile](unreal-profile.md#input-comparison-domains); presentation belongs to [the viewer](viewer.md#coverage-and-freshness-presentation).
+[the profile](../../unreal/docs/architecture/build-extraction.md#input-comparison-domains); presentation belongs to [the viewer](../../../viewer/docs/architecture/live-updates.md#coverage-and-freshness-presentation).
 
 ## Publication and shutdown
 
