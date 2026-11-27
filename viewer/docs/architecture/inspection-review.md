@@ -7,6 +7,9 @@ Directional tracing, entity lookup, source evidence and Review decisions in the 
 - [Tracing and inspection](#tracing-and-inspection)
 - [Declaration context and search](#declaration-context-and-search)
 - [Review presentation](#review-presentation)
+  - [Source comparison](#source-comparison)
+  - [Review markers and pulses](#review-markers-and-pulses)
+  - [Finding inspection](#finding-inspection)
 
 ## Tracing and inspection
 
@@ -124,6 +127,8 @@ panel lets the reader recover or discard a draft when its finding becomes unavai
 the same finding fingerprint. The existing finding index and paged reports populate the list and read selected evidence;
 an initial page selects a default only while the reader has made no newer selection.
 
+### Source comparison
+
 Source findings expose Compare matches and file, owner and line-range rows. Preview, external-editor and copy actions are distinct.
 Compare opens up to two numbered read-only panes over the central workspace;
 an individual Preview opens one. The header distinguishes total code locations from the currently displayed match ordinals.
@@ -142,6 +147,8 @@ Requests reuse Review cancellation and inspection generations. Closing or changi
 owner cancels the comparison without taking new focus. Late responses cannot restore it. At most two snippets are retained;
 reopening revalidates their files. No editor dependency or source write is added.
 
+### Review markers and pulses
+
 Exact reference-group associations also mark existing projected connections and their revealed endpoints. Amber/red
 halos identify Review warnings and errors independently of direction colors. Fixed-size amber triangle and red stop-sign
 badges remain separate from type icons; counts belong to hover and inspection. Visible stars with active findings
@@ -151,6 +158,8 @@ during camera gestures, and directional flow clears as the camera moves. Reduced
 Wire halos mark connections that contain finding evidence. The map key explains the star badges.
 Warnings follow file, class and callable projection, including a visible line to an off-screen endpoint.
 The halo reflects findings attached to the references that pass the current filters.
+
+### Finding inspection
 
 Hover shows distinct finding counts and a bounded explanation without fetching analysis or exact rows. Clicking a
 marked wire or clicking/keyboard-inspecting a marked entity opens the Inspector's Review tab. Ordinary inspection

@@ -6,6 +6,7 @@ Graph projection, source organization, camera motion and saved positions in the 
 
 - [Continuous map](#continuous-map)
 - [Visual appearance and motion](#visual-appearance-and-motion)
+  - [Connection color and motion](#connection-color-and-motion)
 - [Source organization](#source-organization)
 - [External boundaries](#external-boundaries)
 - [Centered overview and configuration](#centered-overview-and-configuration)
@@ -119,6 +120,19 @@ projection; inspection that depends on the destination is applied when the fligh
 active flight's start and target pan with the same centre delta used by `resizeMap()`. Reduced motion uses the existing
 immediate path. The existing hover and selection state
 owners in [Tracing and inspection](inspection-review.md#tracing-and-inspection) remain unchanged.
+
+### Connection color and motion
+
+Direction arrows and bundle counts appear on tracing or inspection. Idle wires use the displayed endpoints' family
+colors and fade toward a muted midpoint. Coincident straight summary strokes share an opacity budget, including during
+tracing. Focused and selected wires strengthen their endpoint colors. Arrowheads and the readout carry direction.
+Focused wires breathe subtly. A soft light glides along each eligible direction and repeats on the same cadence as the
+Review star glow. Pulses backed by cycle evidence use the Review severity color and a stronger glow.
+Reciprocal wires show both recorded directions together. Each direction uses its source family's color unless the
+displayed references carry active cycle evidence.
+
+Node and overlap focus share the decoration on coincident summaries and soften the glow as path density grows.
+CSS drives the effect along the geometry used by wire hit testing.
 
 ## Source organization
 
@@ -279,16 +293,7 @@ invalidate measurements, while camera motion translates them. Weak node keys rel
 A previous hover target cannot clear a newer trace.
 Constellation dragging uses Cytoscape's native selected-node drag layer. Moving wires settle on release while the selected
 connection remains visible; reference facts and counts are retained throughout the gesture.
-Native viewport textures and straight summary lines reduce gesture rendering work. Direction arrows and bundle counts
-appear on tracing or inspection. Idle wires use the displayed endpoints' family colors and fade toward a muted
-midpoint. Coincident straight summary strokes share an opacity budget, including during tracing. Focused and
-selected wires strengthen their endpoint colors. Arrowheads and the readout carry direction. Focused wires breathe
-subtly. A soft light glides along each eligible direction and repeats on the same cadence as the Review star glow.
-Pulses backed by cycle evidence use the Review
-severity color and a stronger glow. Reciprocal wires show both recorded directions together. Each direction
-uses its source family's color unless the displayed references carry active cycle evidence.
-Node and overlap focus share the decoration on coincident summaries and soften the glow as path density grows.
-CSS drives the effect along the geometry used by wire hit testing. Label collision work
+Native viewport textures and straight summary lines reduce gesture rendering work. Label collision work
 settles after input pauses; wheel events and viewport
 updates coalesce by animation frame. Renderer rescaling keeps deep zoom numerically useful. A change of renderer units
 updates positions, background dimensions and pixel-sized styles, including configuration outlines, in one batch before

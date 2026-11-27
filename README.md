@@ -5,6 +5,8 @@ interactive galaxy, trace dependencies to source, and investigate architectural 
 
 Currently supports Unreal Engine C++ on Windows. Everything runs locally.
 
+[Features and visual guide](FEATURES.md)
+
 ## Get started
 
 - Try the recorded Unreal relay project without installing Unreal. [Sample](sample/README.md)
