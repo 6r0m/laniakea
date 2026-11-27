@@ -33,12 +33,6 @@ The viewer opens at [http://127.0.0.1:8737/](http://127.0.0.1:8737/). The first 
 C++ declarations and references use a successful build receipt and local LLVM tools. See the
 [user and architecture documentation](docs/README.md) for navigation, setup and system design.
 
-## What you can do
-
-- Understand an unfamiliar project.
-- Trace dependencies before refactoring.
-- Investigate architectural concerns through exact evidence.
-
 ## Contribute
 
 Start with the [contribution guide](CONTRIBUTING.md) and [verification commands](tests/README.md).

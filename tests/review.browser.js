@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Serve test_review.fixture through the ordinary pipeline/index/server in a disposable workspace.
-async page=>{
+async (page, {waitForViewer})=>{
   const check=(ok,message)=>{if(!ok)throw Error(message);},errors=[],requests=[],writes=[];
   const openSettings=async()=>{
     if(!await page.locator('#review-settings').evaluate(node=>node.open))await page.locator('#review-settings > summary').click();
@@ -123,7 +123,8 @@ async page=>{
     check(await page.evaluate(()=>document.activeElement?.id==='inspector-tab-architecture'),
       'Acknowledging the last finding left keyboard focus on the removed action');
     check(await page.evaluate(()=>!state.review.badges.size),'Acknowledged-only entity retained a badge');
-    await page.reload();await page.waitForFunction(()=>state.cy&&state.positionCache);
+    await page.reload();
+    await waitForViewer(page);
     await page.locator('#toggle-review').click();
     await page.waitForFunction(()=>state.review.data?.counts.acknowledged===1);
     await openSettings();
@@ -140,8 +141,9 @@ async page=>{
   const loadingWaiting=new Promise(resolve=>arriveLoading=resolve),loadingGate=new Promise(resolve=>releaseLoading=resolve);
   const loadingPattern='**'+initial.url+'?*';
   await page.route(loadingPattern,async route=>{arriveLoading();await loadingGate;await route.continue();});
-  await page.reload();await loadingWaiting;
-  await page.waitForFunction(()=>state.cy&&state.positionCache);
+  await page.reload();
+  await waitForViewer(page);
+  await loadingWaiting;
   check(await page.locator('#toggle-review').getAttribute('aria-label').then(t=>/checking/i.test(t)),'Pending review is not explicit');
   await clickStar('A');await page.locator('#toggle-review').click();
   await page.waitForFunction(()=>state.mapSize.width===$('graph').getBoundingClientRect().width);

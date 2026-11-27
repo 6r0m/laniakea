@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Evaluate this Playwright function on the served synthetic sample.
-async (page) => {
+async (page, {waitForViewer}) => {
   const base = page.url().split('/').slice(0,3).join('/');
   const view=async p=>{if(!await p.locator('#view-controls').evaluate(n=>n.open))await p.locator('#view-summary').click();};
   const layout=async(p,mode)=>{await p.evaluate(mode=>chooseLayout(mode),mode);
@@ -38,7 +38,7 @@ async (page) => {
   await cdp.send('Emulation.setFocusEmulationEnabled',{enabled:true});
   await page.setViewportSize({width:1440,height:1000});
   await page.goto(`${base}/`);
-  await page.waitForFunction(()=>typeof state!=='undefined'&&state.cy&&state.positionCache);
+  await waitForViewer(page);
   await frames();
   check(await page.evaluate(()=>$('error').hidden),'Startup reports an error');
   check(await page.evaluate(()=>{
@@ -362,7 +362,7 @@ async (page) => {
     const camera=await page.evaluate(()=>({x:(state.cy.width()/2-state.cy.pan('x'))/state.cy.zoom(),
       y:(state.cy.height()/2-state.cy.pan('y'))/state.cy.zoom(),zoom:state.cy.zoom(),expanded:[...state.universe.expanded].sort()}));
     await page.reload();
-    await page.waitForFunction(()=>typeof state!=='undefined'&&state.cy&&state.universe);
+    await waitForViewer(page);
     await frames();
     const restoredCamera=await page.evaluate(()=>({x:(state.cy.width()/2-state.cy.pan('x'))/state.cy.zoom(),
       y:(state.cy.height()/2-state.cy.pan('y'))/state.cy.zoom(),zoom:state.cy.zoom(),expanded:[...state.universe.expanded].sort()}));
@@ -431,7 +431,7 @@ async (page) => {
     const fresh=await page.context().browser().newContext();
     try {
       const p=await fresh.newPage();await p.goto(`${base}/`);
-      await p.waitForFunction(()=>typeof state!=='undefined'&&state.cy&&state.positionCache);
+      await waitForViewer(p);
       await layout(p,initialMode);
       const restored=await p.evaluate(()=>({engine:{...state.universe.positions.get('engine')},
         deep:{...state.universe.positions.get('module:SampleCore')},error:$('error').hidden}));
@@ -527,13 +527,7 @@ async (page) => {
     const galaxyPin=await page.evaluate(()=>({...state.positionCache.layouts.galaxy.engine}));
     check(Math.hypot(galaxyPin.x-center.world.x,galaxyPin.y-center.world.y)>1,'Galaxy drag did not move the center');
     await page.goto(base+'/');
-    // Startup can finish before the reloaded document paints.
-    await page.waitForFunction(() => {
-      const error = document.getElementById('error');
-      return error?.hidden === false || (typeof state !== 'undefined' && state.cy && state.positionCache);
-    }, null, {polling: 100});
-    const startupError = page.locator('#error');
-    check(await startupError.isHidden(), `Bare URL reload failed: ${await startupError.textContent()}`);
+    await waitForViewer(page);
     check(await page.evaluate(({galaxyPin,legacy})=>$('layout').value==='galaxy'&&
       JSON.stringify(state.universe.positions.get('engine'))===JSON.stringify(galaxyPin)&&
       JSON.stringify(Object.fromEntries(Object.entries(state.positionCache.layouts).filter(([key])=>key!=='galaxy')))===legacy,

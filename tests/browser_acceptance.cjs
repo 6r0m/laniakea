@@ -10,6 +10,17 @@ async function loadScenario(name) {
   return vm.runInThisContext(`(${await fs.readFile(filename, 'utf8')}\n)`, {filename});
 }
 
+async function waitForViewer(page) {
+  // The map can initialize while Chromium is withholding animation frames.
+  const outcome = await page.waitForFunction(() => {
+    const error = document.getElementById('error');
+    if (error && !error.hidden) return {error: error.textContent};
+    return typeof state !== 'undefined' && state.cy && state.positionCache && {ready: true};
+  }, null, {polling: 100});
+  const status = await outcome.jsonValue();
+  if (!status.ready) throw new Error(`Viewer startup failed: ${status.error}`);
+}
+
 async function main() {
   const [name, url, channel, source, mode] = process.argv.slice(2);
   const measuring = mode === '--measure';
@@ -32,14 +43,14 @@ async function main() {
     page.setDefaultTimeout(15000);
     const start = performance.now();
     await page.goto(url);
-    await page.waitForFunction(() => typeof state !== 'undefined' && state.cy && state.positionCache);
+    await waitForViewer(page);
     if (measuring) {
       console.log(JSON.stringify({workload: name, browser: browser.version(), channel, viewport: page.viewportSize(),
         platform: os.platform(), logicalCpus: os.cpus().length, viewerReadyMs: Math.round(performance.now() - start)}));
     }
     for (const probe of probes) {
       const scenario = await loadScenario(probe);
-      const result = await scenario(page, {change});
+      const result = await scenario(page, {change, waitForViewer});
       if (measuring) console.log(JSON.stringify({workload: name, probe, ...result}));
     }
     if (errors.length) throw new Error(errors.join('\n'));
