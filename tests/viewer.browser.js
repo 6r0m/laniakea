@@ -83,6 +83,7 @@ async (page) => {
   const observe = request => {if(request.method()==='POST'&&new URL(request.url()).pathname.startsWith('/layout/'))posts.push(request.url());};
   const error = value => errors.push(value.message);
   page.on('request',observe);page.on('pageerror',error);
+  let failure;
   try {
     const initialMode=await page.locator('#layout').inputValue();
     for(const mode of ['auto','galaxy','breadthfirst','cose','grid']) {
@@ -525,7 +526,14 @@ async (page) => {
     await page.waitForFunction(()=>state.positionCache.pending===0&&state.positionCache.layouts.galaxy?.engine);
     const galaxyPin=await page.evaluate(()=>({...state.positionCache.layouts.galaxy.engine}));
     check(Math.hypot(galaxyPin.x-center.world.x,galaxyPin.y-center.world.y)>1,'Galaxy drag did not move the center');
-    await page.goto(base+'/');await page.waitForFunction(()=>typeof state!=='undefined'&&state.cy&&state.positionCache);
+    await page.goto(base+'/');
+    // Startup can finish before the reloaded document paints.
+    await page.waitForFunction(() => {
+      const error = document.getElementById('error');
+      return error?.hidden === false || (typeof state !== 'undefined' && state.cy && state.positionCache);
+    }, null, {polling: 100});
+    const startupError = page.locator('#error');
+    check(await startupError.isHidden(), `Bare URL reload failed: ${await startupError.textContent()}`);
     check(await page.evaluate(({galaxyPin,legacy})=>$('layout').value==='galaxy'&&
       JSON.stringify(state.universe.positions.get('engine'))===JSON.stringify(galaxyPin)&&
       JSON.stringify(Object.fromEntries(Object.entries(state.positionCache.layouts).filter(([key])=>key!=='galaxy')))===legacy,
@@ -539,10 +547,14 @@ async (page) => {
       compactStaleWarning:true,metadataDisclosure:true,liveGroupControl:true,overviewAddress:true,resetRefusal:true,
       interiorConnectionTracing:true,centeredGalaxy:true,configurationSubset:true,primaryNames:true,galaxyPinIsolated:true,
       outsideTargetHint:true,openSteps,errors};
+  } catch (caught) {
+    failure = caught;
+    throw caught;
   } finally {
     page.off('request',observe);page.off('pageerror',error);
     await page.evaluate(async original=>{
       const cache=state.positionCache;
+      if (!cache) throw new Error('The reloaded viewer has no position cache to restore');
       if(!await cache.write(original.mode,null))throw new Error('Could not restore the synthetic layout');
       if(Object.hasOwn(original.layouts,original.mode)&&!await cache.moveMany(original.mode,original.layouts[original.mode]))
         throw new Error('Could not restore the synthetic pins');
@@ -551,6 +563,9 @@ async (page) => {
         if(original.layouts.galaxy&&!await cache.moveMany('galaxy',original.layouts.galaxy))throw new Error('Could not restore synthetic galaxy pins');
       }
       $('layout').value=original.mode;layout();
-    },original);
+    }, original).catch(cleanupError => {
+      if (failure) throw new AggregateError([failure, cleanupError], failure.message);
+      throw cleanupError;
+    });
   }
 }

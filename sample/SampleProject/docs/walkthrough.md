@@ -62,16 +62,17 @@ to be recorded before the source-level exercises.
 
 ## Record the relay path
 
-Save review captures and recording drafts outside the checkout.
+Use the live sample with all three checks recorded. Save review captures and recording drafts outside the checkout.
 
 1. Start at the project overview with Checks and Inspector closed. Hover **Results** to reveal its incoming project
    reference and its outgoing connections to **Session** and **Standings**.
 2. Wheel into **Match** and expand **SampleMatch**. Pause on its five modules. Hover the coordinating module to
    show its links to validation, qualification rules, replay, and the shared result contract.
-3. Search for `CloseRound` to follow the private validation call. Return to the overview, then inspect the
-   **Standings** to **Match** wire to see who consumes the public result contract.
-4. Finish on **Compatibility** or open its Review finding. Compare the two module-rule witnesses with the
-   healthy dependency chain you just followed.
+3. Search for `CloseRound` to follow the private validation call to its source.
+4. Open the cycle finding for **Compatibility** in **Review** and inspect both module-rule witnesses.
+5. Open the duplication warning for `SampleRelayScore.cpp` and `SampleRelayDisplay.cpp`. Choose **Compare matches**
+   and show the two highlighted ranges.
+6. Choose **Back to map** and **Fit overview** to return to the galaxy.
 
 ## Trace the dependencies
 

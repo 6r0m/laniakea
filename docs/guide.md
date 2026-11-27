@@ -17,6 +17,8 @@ Trace dependencies to source, explore public contracts and inspect the evidence 
 
 ## Open a project
 
+Analyze trusted projects only. Unreal Build Tool evaluates project-supplied build rules and may update its own caches.
+
 Follow the [quick start](../README.md#quick-start) to open your own project or the
 [Unreal relay sample walkthrough](../sample/SampleProject/docs/walkthrough.md) to try the same steps on a fictional
 project. On the map, scroll into a constellation, hover a connection to see its direction, and click it to inspect the
@@ -30,6 +32,10 @@ and viewer entry points. Run `python laniakea.py <command> --help` for flags and
 The [recorded sample preview](../sample/README.md) lets you explore module-level evidence before installing Unreal.
 
 ## Read and navigate the map
+
+The overview groups references by visible owners. As you zoom, the viewer opens nearby detail and folds distant detail.
+Inspect a connection to page through its original references. The [viewer contract](architecture/viewer.md) explains
+projection and retention. The [performance probes](../tests/README.md#performance-probes) measure them on synthetic data.
 
 The project picker shows the active project's recorded build target, platform and configuration. The scope path starts at
 **Overview**. Use **Browse** to inspect stars and constellations in the current scope, **Filters** to choose which

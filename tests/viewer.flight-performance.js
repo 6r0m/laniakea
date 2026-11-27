@@ -35,7 +35,7 @@ async page => {
     return {targetLevel:target.level,targetDepth:map.paths.get(target.id).length,before,
       afterPreprojection,callMs,cut,frame};
   });
-  await page.waitForFunction(()=>!state.flight,{timeout:10000});
+  await page.waitForFunction(()=>!state.flight,null,{timeout:10000});
   const result=await page.evaluate(({frame,original})=>{
     const probe=window.__flightPerformance;
     cancelAnimationFrame(frame);probe.observer.disconnect();delete window.__flightPerformance;

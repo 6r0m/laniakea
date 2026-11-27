@@ -21,8 +21,12 @@ function checksSummary(current,target,message='') {
   for(const row of rows)counts[Object.hasOwn(counts,row.status)?row.status:'incomplete']++;
   const done=counts.completed;
   const missing=rows.some(r=>!['completed','disabled'].includes(r.status))||outcomes.some(r=>['incomplete','unavailable'].includes(r.status));
-  const phase=current?.state==='stopping'?'Stopping':busy?'Running':failed?'Failed':
-    current?.degraded?'Monitoring degraded':current?.state==='paused'?'Paused':'';
+  let phase = '';
+  if (current?.state === 'stopping') phase = 'Stopping';
+  else if (busy) phase = 'Running';
+  else if (failed) phase = 'Failed';
+  else if (current?.degraded) phase = 'Monitoring degraded';
+  else if (current?.state === 'paused') phase = 'Paused';
   const breakdown=[[counts.disabled,'off'],[counts.unavailable,'unavailable'],
     [counts.incomplete,'incomplete'],[counts.pending,'queued'],[counts.failed,'failed']]
     .filter(([count])=>count).map(([count,label])=>`${count} ${label}`);

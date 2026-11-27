@@ -22,7 +22,8 @@ node --test "tests/*.test.cjs"
 Python 3.9+ needs no extra packages. Use Node.js 22+ for the test glob above. Node is only needed for testing.
 The [Windows CI workflow](../.github/workflows/verify.yml) runs these commands with Python 3.11 and Node.js 24
 on pull requests to `develop` and pushes to `develop`. It also runs the browser baseline below. Real-engine, LLVM and CPD
-checks require their local inputs.
+checks require their local inputs. Run `py -3.9 -B -m unittest discover -s tests` with Python 3.9 installed to check the
+minimum interpreter version separately.
 `test_commands.py` exercises CLI dispatch and, when Make is installed, its aliases and argument forwarding. `test_service.py` verifies owned shutdown,
 foreign-instance refusal, startup/cancellation cleanup and saved-map preservation using loopback synthetic servers.
 Documentation-only edits can use `python -m unittest discover -s tests -p test_documentation.py` for local link/anchor
@@ -114,8 +115,17 @@ fixtures use the normal pipeline, read index, server and exact-reference paging.
 Other functions use the served [sample](../sample/SampleProject/SampleProject.uproject), with synthetic overlays.
 Keep real-project screenshots outside the clone and other observations in the ignored workspace.
 
-[viewer.performance.js](viewer.performance.js) measures mouse/wheel input, frames, main-thread work and heap through
-Playwright/CDP, restores the camera and checks that positions/pins did not move. [viewer.flight-performance.js](viewer.flight-performance.js)
-measures an explicit deep flight: call/pre-projection time, first visible frame, total completion, cut bounds/zoom,
-peak rendered nodes/edges, final retention, long tasks and pins. Compare matching data, scope, expansion and camera state; record scene differences and
-hardware/load. Reject repeatable, materially worse interaction or unbounded flight retention.
+## Performance probes
+
+With the browser test tools installed, run `python -B tests/browser_acceptance.py --measure`. Both workloads use
+the regular publication, index and viewer. `relay` replays the public module map. `stress` generates 32 modules with
+128 functions each and three cross-module references per function. Neither workload measures live extraction by Unreal,
+LLVM or CPD. Run the probes on an otherwise idle machine and retain the reported browser, viewport and workload counts
+when comparing results.
+
+The launcher reports fixture publication from copy through commit, cold read-index preparation and storage, and bare-URL
+startup through map initialization. [viewer.performance.js](viewer.performance.js) measures mouse/wheel input, frame gaps,
+main-thread work and heap through Playwright/CDP. [viewer.flight-performance.js](viewer.flight-performance.js) measures
+explicit navigation latency, peak rendered elements and final retention. Both probes restore the camera and check that
+saved positions did not move. Compare matching data, scope, expansion and camera state. Record scene differences and host
+load before judging a performance change.

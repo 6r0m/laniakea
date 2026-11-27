@@ -333,13 +333,19 @@ class Monitor:
         self.current=None
 
     def _finish(self,job,response):
-        target_id=job['target'];state=self.states[target_id];now=self.clock()
-        result=response.get('result',{})
+        target_id = job['target']
+        state = self.states[target_id]
+        now = self.clock()
+        result = response.get('result', {})
         if self.stopping or not state['active']:
-            self._discard(target_id,result);return
-        changed=job['generation']!=state['generation'] or self.workspace.latest(target_id).name!=job['run']
+            self._discard(target_id, result)
+            return
+        changed = (job['generation'] != state['generation'] or
+                   self.workspace.latest(target_id).name != job['run'])
         if changed and job['phase']!='discover':
-            self._discard(target_id,result);self._dirty(state);return
+            self._discard(target_id, result)
+            self._dirty(state)
+            return
         if response['status']=='busy':
             attempt=state['attempts'];state['attempts']+=1
             state.update(state='waiting for external build',error=response.get('error'))

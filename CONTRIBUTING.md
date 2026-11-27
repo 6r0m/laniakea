@@ -27,6 +27,13 @@ The [verification guide](tests/README.md) owns test prerequisites, commands and 
 Use the [component map](docs/architecture/structure.md#composition) to locate code and
 [architecture docs](docs/architecture/README.md) for contracts. Update the owning document when a contract changes.
 
+## Write readable changes
+
+Use descriptive names, conventional spacing and explicit control flow for state transitions and failure paths. Keep
+functions with the component that owns the state they change. Add Python annotations where they clarify a caller's
+contract. Explain constraints in comments. Keep readability edits close to the code under change so reviewers can see
+behavior changes clearly.
+
 ## Report a useful issue
 
 Include expected and actual behavior, reproduction steps and relevant tool versions. For map issues, give the target

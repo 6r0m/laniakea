@@ -1,13 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 const fs = require('node:fs/promises');
+const os = require('node:os');
 const path = require('node:path');
 const vm = require('node:vm');
 const {chromium} = require('playwright-core');
 
+async function loadScenario(name) {
+  const filename = path.join(__dirname, name);
+  return vm.runInThisContext(`(${await fs.readFile(filename, 'utf8')}\n)`, {filename});
+}
+
 async function main() {
-  const [name, url, channel, source] = process.argv.slice(2);
-  const filename = path.join(__dirname, `${name}.browser.js`);
-  const scenario = vm.runInThisContext(`(${await fs.readFile(filename, 'utf8')}\n)`, {filename});
+  const [name, url, channel, source, mode] = process.argv.slice(2);
+  const measuring = mode === '--measure';
+  const probes = measuring ? ['viewer.performance.js', 'viewer.flight-performance.js'] : [`${name}.browser.js`];
   const original = source ? await fs.readFile(source) : null;
   const change = async action => {
     if (!original) throw new Error('This fixture has no editable source');
@@ -24,9 +30,18 @@ async function main() {
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     page.setDefaultTimeout(15000);
+    const start = performance.now();
     await page.goto(url);
     await page.waitForFunction(() => typeof state !== 'undefined' && state.cy && state.positionCache);
-    await scenario(page, {change});
+    if (measuring) {
+      console.log(JSON.stringify({workload: name, browser: browser.version(), channel, viewport: page.viewportSize(),
+        platform: os.platform(), logicalCpus: os.cpus().length, viewerReadyMs: Math.round(performance.now() - start)}));
+    }
+    for (const probe of probes) {
+      const scenario = await loadScenario(probe);
+      const result = await scenario(page, {change});
+      if (measuring) console.log(JSON.stringify({workload: name, probe, ...result}));
+    }
     if (errors.length) throw new Error(errors.join('\n'));
     process.stdout.write(`${name} passed\n`);
   } finally {

@@ -28,15 +28,20 @@ def stage(workspace, target, *, symbols=False, health_options=None, automatic=Fa
     previous = read_json(latest / "manifest.json") if latest else None
     run = workspace.begin_run(target["id"])
     try:
-        if automatic:write_json(run/'automatic.json',{'version':1})
+        if automatic:
+            write_json(run / "automatic.json", {"version": 1})
         profile_start = perf_counter()
-        options={'health_options':{**health_options,'tools':workspace.root/'tools/health/cpd'}} if health_options is not None else {}
-        if checks is not None:options['checks']=checks
+        options = {}
+        if health_options is not None:
+            options["health_options"] = {**health_options, "tools": workspace.root / "tools/health/cpd"}
+        if checks is not None:
+            options["checks"] = checks
         graph, fields = profile.extract(target, run, previous,
                                         tools_dir=workspace.root / "tools" / profile.NAME if symbols else None, **options)
-        recipe=fields.pop('recipe',{'symbols':symbols,
-                          'health':{'mode':'required',**health_options} if health_options is not None else {'mode':'off'}})
-        if checks is not None:recipe['checks']=checks
+        default_health = {"mode": "required", **health_options} if health_options is not None else {"mode": "off"}
+        recipe = fields.pop("recipe", {"symbols": symbols, "health": default_health})
+        if checks is not None:
+            recipe["checks"] = checks
         profile_seconds = perf_counter() - profile_start
         schema.validate(graph)
         shards_start = perf_counter()
@@ -67,12 +72,13 @@ def stage(workspace, target, *, symbols=False, health_options=None, automatic=Fa
         manifest["timings_seconds"]["total"] = perf_counter() - start
         schema.validate(manifest, "manifest")
         schema.validate_overview(manifest, graph)
-        if 'health' in manifest:health.load(run,manifest,graph['nodes'])
+        if "health" in manifest:
+            health.load(run, manifest, graph["nodes"])
         write_json(run / "manifest.json", manifest)
     except BaseException as error:
         failed = workspace.fail_run(run)
         if isinstance(error, LaniakeaError):
-            error.args=(str(error).replace(str(run),str(failed)),)
+            error.args = (str(error).replace(str(run), str(failed)),)
         raise
     return run, manifest
 
