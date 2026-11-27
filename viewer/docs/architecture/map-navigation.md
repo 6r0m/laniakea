@@ -236,7 +236,7 @@ configuration subset uses the same original endpoints and containment scope as i
 means explicitly listed, not necessarily compiled or used at runtime. An unmarked node is not evidence of disablement
 or lack of use.
 
-The Project action beside the target selector explicitly opens source, analysed target, recorded metadata and paged
+The **Project details** button beside the target selector opens source, analysed target, recorded metadata and paged
 configuration declarations in the existing Details panel. Whole-project statistics have a separate disclosure. Inspection
 works at any map scope without a project marker or a navigation/camera change. A star click replaces it; Escape,
 Clear selection, empty space and the Details close control close it. Null selection never opens Project details.

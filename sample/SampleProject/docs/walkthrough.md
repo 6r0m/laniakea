@@ -84,7 +84,7 @@ Use the live sample with all three checks recorded. Save review captures and rec
 | Why does Experimental have arrows in both directions? | Open **Experimental** and search for `RunStreakTrial`. It compares the Match baseline against a candidate Gameplay score and passes the result through Telemetry. In the Editor target, `TrialChangesScore` calls into the experiment. Inspect the exact module pairs to see why the arrows between **Sample** and **Experimental** are reciprocal while the module path is acyclic. |
 | Do both arrows between Sample and Presentation imply a cycle? | Inspect the wire and open exact references in each direction. `SampleGameplay` privately imports `SampleHUD`, and `SampleHUD` publicly depends on `SampleCore`. Those three modules form a directed chain. The arrows are reciprocal at folder level because Core and Gameplay are both in **Sample**. |
 | Where is the actual cycle? | Open **Compatibility** and **Legacy**, then drill down to the two modules in `SampleLegacy`. Both modules declare a private dependency on the other. Open the Review finding to inspect the two rule witnesses. The archive calls terminate normally. |
-| What belongs to this build? | **Project** shows the selected Editor target and descriptor context. Under **Experimental**, the active trial has evaluated dependencies and **Off** contains an out-of-target plugin. **Unreal Engine** is an external boundary. The Game export leaves the Editor module and its call into the trial outside the selected target. |
+| What belongs to this build? | **Project details** shows the selected Editor target and descriptor context. Under **Experimental**, the active trial has evaluated dependencies and **Off** contains an out-of-target plugin. **Unreal Engine** is an external boundary. The Game export leaves the Editor module and its call into the trial outside the selected target. |
 
 ## Walk through the Review findings
 
@@ -93,9 +93,9 @@ sample has one finding for each [supported Review rule](../../../laniakea/docs/a
 
 | Finding | Where to see the evidence |
 |---|---|
-| Error: forbidden dependency | Open `SampleGameplay -> SampleHUD` and inspect the private module dependency in **Exact evidence**. |
-| Error: module cycle | Open `SampleLegacySession -> SampleLegacyStats` and inspect the two module-rule witnesses in **Exact evidence**. |
-| Warning: native call without recorded module access | Open `SampleLegacyStats -> SampleCore` and follow the call to the inline helper. |
+| Error: forbidden dependency | Open `SampleGameplay -> SampleHUD` and choose **Inspect recorded reference** under **Exact evidence** to see the private module dependency. |
+| Error: module cycle | Open `SampleLegacySession -> SampleLegacyStats` and choose **Inspect recorded reference** for both witnesses under **Exact evidence**. |
+| Warning: native call without recorded module access | Open `SampleLegacyStats -> SampleCore`, choose **Inspect recorded reference**, and follow the call to the inline helper. |
 | Warning: duplicated code | Open the **Duplication** finding for `SampleRelayScore.cpp` and `SampleRelayDisplay.cpp`. PMD CPD records the token match. **Compare matches** opens both source ranges. |
 
 Use **Review settings > Policy & availability** to verify the selected scope and **Details** to follow the ordinary references.

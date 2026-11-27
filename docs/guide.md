@@ -91,7 +91,7 @@ Switching tabs retains scroll, loaded pages and unfinished reasons. Use arrow ke
 the current viewer session and survive refreshing findings. If an action would hide the draft, Review asks before discarding it.
 On narrower windows, the findings list and inspector share the available space; reopening either retains the inspection.
 
-**Project** inspects source/configuration context. **Outline project-listed targets** outlines explicitly listed targets, without
+**Project details** opens source and configuration context. **Outline project-listed targets** outlines explicitly listed targets, without
 implying compilation or runtime use. Plugin-to-plugin dependencies remain wires.
 Positions save in the workspace per project/layout mode and survive reload, extraction and restarts while IDs remain
 stable. Distant detail is released without losing arrangements. Exact references use Previous/Next pages.
@@ -156,7 +156,8 @@ Apply them to the project's intended boundaries and actual target conditions.
    amber halos mark warnings to investigate. Hover explains the finding, including when the other endpoint is
    off-screen. Click the wire, a marked star or a finding in the Review list. The **Review** tab shows the rule, original
    affected modules, limits and guidance. Its count applies to the current inspection; Review shows the project total.
-   Open **Exact evidence** for source links, or switch to **Details** for ordinary references and endpoint navigation.
+   For dependency and native-call findings, choose **Inspect recorded reference** under **Exact evidence**.
+   Switch to **Details** for ordinary references and endpoint navigation.
 3. Use **Accept risk** or **Not relevant**, optionally recording a reason. The finding leaves active markers/list.
    Open **Review settings** and turn on **Show acknowledged** to inspect or reopen the finding.
 4. For project constraints, find the local JSON path under **Review settings > Policy & availability**. Edit that file
@@ -234,10 +235,9 @@ The default `--health auto` publishes a valid architecture map even if duplicati
 the failed, incomplete, unavailable or disabled check instead of claiming zero findings. `--health off` skips collection.
 Narrow scope explicitly rather than silently ignoring a failed file.
 
-Amber **Duplication** warnings mark recorded files or modules. Click a marked item or Review-list entry, then open
-**Exact evidence** for paged source ranges and editor links. These matches can be intentional or in inactive branches;
-inspect ownership before refactoring. A stale snapshot warns that current coordinates may have moved. No duplication
-wires are invented. Accept/reopen decisions use the existing Review workflow.
+Amber **Duplication** warnings mark recorded files or modules. Select the warning to see paged ranges and editor links
+under **Source locations**. These matches can be intentional or in inactive branches. Inspect ownership before refactoring.
+A stale snapshot warns that current coordinates may have moved. Accept or reopen the warning through Review.
 
 Checks can run PMD in the monitored background. Missing tools remain visible as unavailable; no runtime tools are downloaded.
 Use Off in Checks or `--health off` during a build to skip duplication.

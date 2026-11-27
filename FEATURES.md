@@ -42,7 +42,7 @@ coverage states. Check completion describes evidence availability. Review report
 - **Navigate with the keyboard.** Use map focus, arrow keys, and Enter to move between stars and open groups.
   Use `+` and `-` to zoom or `/` to open search. [Map controls](docs/guide.md#read-and-navigate-the-map)
 - **Inspect build context.** The project picker identifies the recorded target, platform, and configuration.
-  **Project** shows descriptor evidence. Optional outlines identify explicitly listed targets. The map also shows
+  **Project details** shows descriptor evidence. Optional outlines identify explicitly listed targets. The map also shows
   referenced external providers such as Unreal Engine and toolchains when owner evidence is available.
   [Project configuration](viewer/docs/architecture/map-navigation.md#centered-overview-and-configuration) |
   [External boundaries](viewer/docs/architecture/map-navigation.md#external-boundaries)
@@ -75,9 +75,10 @@ configured rule violation. Warnings identify evidence to investigate.
 | **Native call without recorded module access** | Warning when the recorded module-access closure is complete and contains no supporting path. | The static C++ call and recorded access evidence. A legitimate public dependency path can supply access. |
 | **Duplicated code** | Warning for a matching token sequence in the configured scope. | Recorded files and line ranges. Review ownership and context before changing the code. |
 
-Open **Exact evidence** from a finding. **Compare matches** opens up to two source ranges, side by side where space allows.
-Single-range preview, editor links, and path copy are also available. Preview highlights matching lines only when the
-current file matches its recorded hash. A changed or inaccessible file gets an explicit status.
+For dependency and native-call findings, choose **Inspect recorded reference** under **Exact evidence**. For duplication
+findings, **Source locations** lists the recorded ranges, and **Compare matches** opens up to two ranges side by side
+where space allows. Single-range preview, editor links, and path copy are also available. Preview highlights matching lines
+only when the current file matches its recorded hash. A changed or inaccessible file gets an explicit status.
 [Finding inspection](viewer/docs/architecture/inspection-review.md#finding-inspection) |
 [Source comparison](viewer/docs/architecture/inspection-review.md#source-comparison)
 

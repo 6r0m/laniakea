@@ -5,7 +5,7 @@ interactive galaxy, trace dependencies to source, and investigate architectural 
 
 Currently supports Unreal Engine C++ on Windows. Everything runs locally.
 
-[Features and visual guide](FEATURES.md)
+[Features](FEATURES.md)
 
 ## Get started
 
